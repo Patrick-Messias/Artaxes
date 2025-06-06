@@ -6,8 +6,12 @@ import importlib
 from typing import Dict, List, Union, Any, Type, Optional
 from dataclasses import asdict
 
-from classes import Asset, Asset_Portfolio, Strat, Strat_Parameters
+from classes import Asset, Asset_Portfolio, Strat, Strat_Parameters, Money_Management_Algorithm, BaseClass
 from classes import TimeRules, TradeManagementRules, RiskManagementRules, ExecutionRules, DataSettings
+
+# Add Money Management Algo directory to path
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Money Management Algo'))
+from mm_template import MM_Template
 
 class DatabaseManager:
     def __init__(self, db_name='artaxes_data.db'):
@@ -18,30 +22,28 @@ class DatabaseManager:
         self.conn = None
         self.cursor = None
         self._connect()
-        self._create_tables()
-
-        # Mapeamento de classes para informações da tabela e colunas
+        
+        # Define table mappings
         self._table_map = {
             Asset: {
                 'table_name': 'assets',
-                'pk_column': 'name',
-                'columns': ['name', 'type', 'market', 'data_path', 'timeframes', 'params'],
-                'serializer': self._serialize_asset,
-                'deserializer': self._deserialize_asset
+                'serialize': self._serialize_asset,
+                'deserialize': self._deserialize_asset
             },
             Asset_Portfolio: {
-                'table_name': 'asset_portfolios',
-                'pk_column': 'name',
-                'columns': ['name', 'asset_names'],
-                'serializer': self._serialize_asset_portfolio,
-                'deserializer': self._deserialize_asset_portfolio
+                'table_name': 'portfolios',
+                'serialize': self._serialize_asset_portfolio,
+                'deserialize': self._deserialize_asset_portfolio
             },
             Strat: {
                 'table_name': 'strats',
-                'pk_column': 'name',
-                'columns': ['name', 'asset_portfolio_name', 'params', 'template_type'],
-                'serializer': self._serialize_strat,
-                'deserializer': self._deserialize_strat
+                'serialize': self._serialize_strat,
+                'deserialize': self._deserialize_strat
+            },
+            Money_Management_Algorithm: {
+                'table_name': 'money_management',
+                'serialize': self._serialize_money_management,
+                'deserialize': self._deserialize_money_management
             }
         }
         
@@ -77,6 +79,41 @@ class DatabaseManager:
                     
         except Exception as e:
             print(f"Aviso: Erro ao carregar estratégias: {e}")
+            
+        # Adiciona mapeamento para MM_Template e outros MMs
+        try:
+            mm_path = os.path.join(script_dir, "Money Management Algo")
+            if mm_path not in sys.path:
+                sys.path.append(mm_path)
+                
+            # Importa todos os MMs disponíveis
+            mm_files = [f for f in os.listdir(mm_path) if f.endswith('.py') and f != '__init__.py']
+            for mm_file in mm_files:
+                mm_name = os.path.splitext(mm_file)[0]
+                try:
+                    module = __import__(mm_name)
+                    importlib.reload(module)  # Recarrega o módulo para garantir versão mais recente
+                    
+                    # Procura por classes de MM no módulo
+                    for item_name in dir(module):
+                        item = getattr(module, item_name)
+                        if isinstance(item, type) and issubclass(item, Money_Management_Algorithm) and item != Money_Management_Algorithm:
+                            self._table_map[item] = self._table_map[Money_Management_Algorithm].copy()
+                            
+                    # Se existe uma instância de MM, mapeia sua classe também
+                    if hasattr(module, 'money_management'):
+                        mm = module.money_management
+                        mm_class = type(mm)
+                        if mm_class not in self._table_map:
+                            self._table_map[mm_class] = self._table_map[Money_Management_Algorithm].copy()
+                            
+                except ImportError as e:
+                    print(f"Aviso: Não foi possível importar {mm_name}: {e}")
+                    
+        except Exception as e:
+            print(f"Aviso: Erro ao carregar Money Management: {e}")
+            
+        self._create_tables()
 
     def _connect(self):
         """Estabelece uma conexão com o banco de dados"""
@@ -94,67 +131,91 @@ class DatabaseManager:
             self._connect()
 
     def _create_tables(self):
-        """Cria as tabelas se não existirem"""
-        # Tabela para Assets
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS assets (
-                name TEXT PRIMARY KEY,
-                type TEXT,
-                market TEXT,
-                data_path TEXT,
-                timeframes TEXT,
-                params TEXT
-            )
-        ''')
-        # Tabela para Asset_Portfolios
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS asset_portfolios (
-                name TEXT PRIMARY KEY,
-                asset_names TEXT
-            )
-        ''')
-        # Tabela para Strats
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS strats (
-                name TEXT PRIMARY KEY,
-                asset_portfolio_name TEXT,
-                params TEXT,
-                template_type TEXT DEFAULT 'traditional'
-            )
-        ''')
+        """Create necessary tables if they don't exist"""
+        self._ensure_connection()
         
-        # Verifica se a coluna template_type existe na tabela strats
-        self.cursor.execute("PRAGMA table_info(strats)")
-        columns = [col[1] for col in self.cursor.fetchall()]
-        if 'template_type' not in columns:
-            self.cursor.execute('ALTER TABLE strats ADD COLUMN template_type TEXT DEFAULT "traditional"')
-        
-        self.conn.commit()
+        with self.conn:
+            # Create assets table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS assets (
+                    name TEXT PRIMARY KEY,
+                    type TEXT,
+                    market TEXT,
+                    data_path TEXT,
+                    params TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create portfolios table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS portfolios (
+                    name TEXT PRIMARY KEY,
+                    assets TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create strats table
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS strats (
+                    name TEXT PRIMARY KEY,
+                    template_path TEXT,
+                    params TEXT,
+                    template_type TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create money_management table
+            self.cursor.execute('''
+                DROP TABLE IF EXISTS money_management
+            ''')
+            self.cursor.execute('''
+                CREATE TABLE money_management (
+                    name TEXT PRIMARY KEY,
+                    params TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            self.conn.commit()
 
     # ==================== CRUD Operations ====================
 
     def create(self, obj: Any) -> bool:
-        """Cria um novo objeto no banco de dados"""
+        """Create a new object in the database"""
         try:
             self._ensure_connection()
+            
+            # Get table info
             table_info = self._get_table_info(obj)
+            print(f"Creating object in table {table_info['table_name']}")
             
-            # Verifica se já existe
-            self.cursor.execute(f"SELECT 1 FROM {table_info['table_name']} WHERE {table_info['pk_column']} = ?", 
-                              [getattr(obj, table_info['pk_column'])])
+            # Check if object already exists
+            self.cursor.execute(f"SELECT * FROM {table_info['table_name']} WHERE name = ?", (obj.name,))
             if self.cursor.fetchone():
-                print(f"Objeto com nome '{getattr(obj, table_info['pk_column'])}' já existe.")
+                print(f"Object {obj.name} already exists in {table_info['table_name']}")
                 return False
+                
+            # Serialize and insert
+            values = table_info['serialize'](obj)
+            print(f"Serialized values: {values}")
             
-            # Serializa e insere
-            values = table_info['serializer'](obj)
             placeholders = ','.join(['?' for _ in table_info['columns']])
-            self.cursor.execute(f"INSERT INTO {table_info['table_name']} ({','.join(table_info['columns'])}) VALUES ({placeholders})",
-                              values)
+            query = f"INSERT INTO {table_info['table_name']} ({','.join(table_info['columns'])}) VALUES ({placeholders})"
+            print(f"Insert query: {query}")
+            print(f"Values to insert: {values}")
+            
+            self.cursor.execute(query, values)
             self.conn.commit()
+            print(f"Object {obj.name} created successfully in {table_info['table_name']}")
             return True
+            
         except Exception as e:
-            print(f"Erro ao criar objeto: {e}")
+            print(f"Error creating object: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     def read(self, obj_type: Type[Any], name: str) -> Optional[Any]:
@@ -168,7 +229,7 @@ class DatabaseManager:
             row = self.cursor.fetchone()
             
             if row:
-                obj = table_info['deserializer'](row)
+                obj = table_info['deserialize'](row)
                 if obj is None:  # Se a deserialização falhou
                     print(f"Erro ao deserializar objeto do tipo {obj_type.__name__} com nome '{name}'")
                     return None
@@ -199,136 +260,135 @@ class DatabaseManager:
             return False
 
     def list_all(self, obj_type: Type[Any]) -> List[Any]:
-        """Lista todos os objetos de um tipo específico"""
+        """List all objects of a given type from the database"""
         try:
-            info = self._get_table_info(obj_type)
-            self.cursor.execute(f"SELECT {info['pk_column']} FROM {info['table_name']}")
-            results = [row[0] for row in self.cursor.fetchall()]
-            # Exclui Strategy_Template da listagem usando apenas o nome
-            if obj_type == Strat:
-                results = [r for r in results if r != 'Strategy_Template']
-            return results
+            self._ensure_connection()
+            table_info = self._get_table_info(obj_type)
+            print(f"Listing all objects from table {table_info['table_name']}")
+            
+            self.cursor.execute(f"SELECT * FROM {table_info['table_name']}")
+            rows = self.cursor.fetchall()
+            print(f"Found {len(rows)} rows in {table_info['table_name']}")
+            
+            result = []
+            for row in rows:
+                try:
+                    obj = table_info['deserialize'](row)
+                    if obj:
+                        result.append(obj)
+                    else:
+                        print(f"Warning: Could not deserialize row {row}")
+                except Exception as e:
+                    print(f"Error deserializing row {row}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    
+            print(f"Successfully deserialized {len(result)} objects")
+            return result
+            
         except Exception as e:
-            print(f"Erro ao listar objetos: {e}")
+            print(f"Error listing objects: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     # ==================== Detailed View Operations ====================
 
     def get_details(self, obj_type: Type[Any], name: str) -> Dict[str, Any]:
-        """Obtém detalhes completos de um objeto"""
-        try:
-            # Ignora Strategy_Template
-            if name == 'Strategy_Template':
-                return {}
-                
-            obj = self.read(obj_type, name)
-            if obj is None:
-                return {}
-            
-            if isinstance(obj, Asset):
-                return {
-                    'name': obj.name,
-                    'type': obj.type,
-                    'market': obj.market,
-                    'data_path': obj.data_path,
-                    'timeframes': obj.timeframes_list(),
-                    'params': {k: v for k, v in obj.list_values().items() 
-                            if k not in ['name', 'type', 'market', 'data_path', 'data']}
-                }
-            elif isinstance(obj, Asset_Portfolio):
-                return {
-                    'name': obj.name,
-                    'assets': list(obj.assets.keys()),  # Get list of asset names from dict keys
-                    'stats': obj.stats()
-                }
-            elif isinstance(obj, Strat):  # Removido Strategy_Template da verificação
-                details = {
-                    'name': obj.name,
-                    'type': 'template' if hasattr(obj, 'config') else 'traditional'
-                }
-
-                # Adiciona timeframe se disponível
-                if hasattr(obj, 'time_rules') and hasattr(obj.time_rules, 'execution_timeframe'):
-                    details['timeframe'] = obj.time_rules.execution_timeframe
-
-                # Adiciona risco se disponível
-                if hasattr(obj, 'risk_rules') and hasattr(obj.risk_rules, 'trade_risk_default'):
-                    details['risk'] = obj.risk_rules.trade_risk_default
-
-                # Adiciona portfólio se disponível
-                if hasattr(obj, 'asset_portfolio') and obj.asset_portfolio:
-                    details['portfolio'] = obj.asset_portfolio.name
-                else:
-                    details['portfolio'] = None
-
-                # Adiciona caminho do arquivo
-                details['file_path'] = os.path.join("MT5_Strategies/Strategies", f"{obj.name}.py")
-
-                return details
-            return {}
-        except Exception as e:
-            print(f"Erro ao obter detalhes: {e}")
-            return {}
-
-    def modify_attribute(self, obj_type: Type[Any], name: str, attribute: str, new_value: Any) -> bool:
-        """Modifica um atributo específico de um objeto"""
-        obj = self.read(obj_type, name)
-        if obj is None:
-            return False
+        """Get detailed information about an object"""
+        self._ensure_connection()
         
         try:
-            # Para objetos simples
-            if hasattr(obj, attribute):
-                setattr(obj, attribute, new_value)
-            # Para dataclasses aninhadas (como as regras da Strat)
-            elif '.' in attribute:
-                parts = attribute.split('.')
-                parent = obj
-                for part in parts[:-1]:
-                    parent = getattr(parent, part)
-                setattr(parent, parts[-1], new_value)
+            table_info = self._get_table_info(obj_type)
+            table_name = table_info['table_name']
+            pk_column = table_info['pk_column']
             
-            return self.update(obj)
+            query = f"SELECT * FROM {table_name} WHERE {pk_column} = ?"
+            self.cursor.execute(query, (name,))
+            row = self.cursor.fetchone()
+            
+            if row:
+                columns = table_info['columns']
+                return {columns[i]: row[i] for i in range(len(columns))}
+            return None
+            
         except Exception as e:
-            print(f"Erro ao modificar atributo: {e}")
+            print(f"Erro ao obter detalhes: {e}")
+            return None
+
+    def modify_attribute(self, obj_type: Type[Any], name: str, attribute: str, new_value: Any) -> bool:
+        """Modify a specific attribute of an object"""
+        try:
+            self._ensure_connection()
+            
+            # Get table info
+            table_info = self._get_table_info(obj_type)
+            
+            # Get current object
+            self.cursor.execute(f"SELECT * FROM {table_info['table_name']} WHERE name = ?", (name,))
+            row = self.cursor.fetchone()
+            if not row:
+                print(f"Object {name} not found")
+                return False
+                
+            # For Money Management, we need to update the JSON params
+            if obj_type == Money_Management_Algorithm:
+                params = json.loads(row[1])  # params is the second column
+                params[attribute] = new_value
+                
+                # Update the database
+                self.cursor.execute(
+                    f"UPDATE {table_info['table_name']} SET params = ? WHERE name = ?",
+                    (json.dumps(params), name)
+                )
+                
+            else:
+                # For other objects, update the attribute directly
+                self.cursor.execute(
+                    f"UPDATE {table_info['table_name']} SET {attribute} = ? WHERE name = ?",
+                    (new_value, name)
+                )
+                
+            self.conn.commit()
+            return True
+            
+        except Exception as e:
+            print(f"Error updating object: {e}")
+            import traceback
+            traceback.print_exc()
             return False
 
     # ==================== Utility Methods ====================
 
     def _get_table_info(self, obj_or_type: Any) -> Dict[str, Any]:
-        """Obtém informações da tabela para um objeto ou tipo"""
-        try:
-            # Se for uma instância, pega o tipo
-            obj_type = obj_or_type if isinstance(obj_or_type, type) else type(obj_or_type)
-            
-            # Procura a classe exata primeiro
-            if obj_type in self._table_map:
-                return self._table_map[obj_type]
-            
-            # Se não encontrar, procura por herança
-            for base_type, info in self._table_map.items():
-                if issubclass(obj_type, base_type):
-                    # Adiciona o mapeamento para futuras consultas
-                    self._table_map[obj_type] = info.copy()
-                    return info
+        """Get table information for an object or type"""
+        # Se for uma instância, pega seu tipo
+        obj_type = obj_or_type if isinstance(obj_or_type, type) else type(obj_or_type)
+        
+        # Procura a classe base mais próxima que está mapeada
+        for base in obj_type.__mro__:
+            if base in self._table_map:
+                info = self._table_map[base].copy()
+                
+                # Adiciona informações específicas para cada tipo
+                if base == Asset:
+                    info['pk_column'] = 'name'
+                    info['columns'] = ['name', 'type', 'market', 'data_path', 'params']
+                elif base == Asset_Portfolio:
+                    info['pk_column'] = 'name'
+                    info['columns'] = ['name', 'assets']
+                elif base == Strat:
+                    info['pk_column'] = 'name'
+                    info['columns'] = ['name', 'template_path', 'params', 'template_type']
+                elif base == Money_Management_Algorithm:
+                    info['pk_column'] = 'name'
+                    info['columns'] = ['name', 'params']
                     
-            # Se ainda não encontrou, tenta importar o módulo da estratégia
-            try:
-                module_name = obj_type.__name__
-                if module_name not in sys.modules:
-                    module = __import__(module_name)
-                    importlib.reload(module)
-                    
-                    # Se a classe herda de Strat, mapeia para o mesmo formato
-                    if issubclass(obj_type, Strat):
-                        self._table_map[obj_type] = self._table_map[Strat].copy()
-                        return self._table_map[obj_type]
-            except ImportError:
-                pass
-                    
-            raise ValueError(f"Tipo de objeto/classe '{obj_type.__name__}' não mapeado no DatabaseManager.")
-        except Exception as e:
-            raise ValueError(f"Erro ao obter informações da tabela: {e}")
+                # Adiciona debug para verificar o que está sendo retornado
+                print(f"Table info for {obj_type.__name__}: {info}")
+                return info
+                
+        raise ValueError(f"Unsupported object type: {obj_type}")
 
     # ==================== Serialization Methods ====================
 
@@ -376,6 +436,33 @@ class DatabaseManager:
             print(f"Erro na serialização: {e}")
             # Retorna valores padrão em caso de erro
             return [strat.name, None, json.dumps({"name": strat.name}), "traditional"]
+
+    def _serialize_money_management(self, mm: Money_Management_Algorithm) -> List[Any]:
+        """Serializa um Money Management para armazenamento no banco de dados"""
+        try:
+            # Guarda apenas informações básicas
+            basic_info = {
+                "name": mm.name,
+                "position_sizing_type": mm.position_sizing_type,
+                "position_sizing_from": mm.position_sizing_from,
+                "position_sizing_method": mm.position_sizing_method,
+                "init_capital": mm.init_capital,
+                "max_capital_exposure": mm.max_capital_exposure,
+                "max_drawdown": mm.max_drawdown,
+                "trade_risk_default": mm.trade_risk_default,
+                "trade_risk_min": mm.trade_risk_min,
+                "trade_risk_max": mm.trade_risk_max,
+                "trade_max_num_open": mm.trade_max_num_open,
+                "trade_min_num_analysis": mm.trade_min_num_analysis,
+                "confidence_level": mm.confidence_level,
+                "kelly_weight": mm.kelly_weight
+            }
+            
+            return [mm.name, json.dumps(basic_info)]
+        except Exception as e:
+            print(f"Erro na serialização: {e}")
+            # Retorna valores padrão em caso de erro
+            return [mm.name, json.dumps({"name": mm.name})]
 
     # ==================== Deserialization Methods ====================
 
@@ -490,6 +577,51 @@ class DatabaseManager:
             # Retorna uma estratégia básica em caso de erro
             return Strat(Strat_Parameters(name=name or "unknown", assets=None))
 
+    def _deserialize_money_management(self, row: List[Any]) -> Money_Management_Algorithm:
+        """Deserializa um Money Management do banco de dados"""
+        try:
+            name, params_json = row
+            basic_info = json.loads(params_json)
+            
+            # Adiciona o diretório de MM ao path se necessário
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            mm_dir = os.path.join(script_dir, "Money Management Algo")
+            if mm_dir not in sys.path:
+                sys.path.append(mm_dir)
+            
+            # Tenta importar o MM do arquivo
+            try:
+                module = __import__(name)
+                importlib.reload(module)  # Recarrega o módulo para garantir versão mais recente
+                
+                # Primeiro tenta obter a instância money_management
+                if hasattr(module, 'money_management'):
+                    mm = module.money_management
+                    mm_class = type(mm)
+                    # Adiciona o mapeamento da classe se ainda não existir
+                    if mm_class not in self._table_map:
+                        self._table_map[mm_class] = self._table_map[Money_Management_Algorithm].copy()
+                        
+                    # Atualiza os parâmetros
+                    for key, value in basic_info.items():
+                        if hasattr(mm, key):
+                            setattr(mm, key, value)
+                            
+                    return mm
+                else:
+                    raise ImportError(f"Não foi possível encontrar o MM {name} no módulo")
+                
+            except (ImportError, AttributeError) as e:
+                print(f"Aviso: Não foi possível carregar o MM {name} do arquivo: {e}")
+                
+                # Se não conseguir carregar do arquivo, cria uma versão básica
+                return Money_Management_Algorithm(basic_info)
+                
+        except Exception as e:
+            print(f"Erro na deserialização: {e}")
+            # Retorna um MM básico em caso de erro
+            return Money_Management_Algorithm({"name": name or "unknown"})
+
     # ==================== UI Helper Methods ====================
 
     def display_menu(self):
@@ -502,7 +634,8 @@ class DatabaseManager:
                 print("1. Gerenciar Assets")
                 print("2. Gerenciar Portfólios de Assets")
                 print("3. Gerenciar Estratégias")
-                print("4. Sair")
+                print("4. Gerenciar Money Management")
+                print("5. Sair")
                 
                 choice = input("\nEscolha uma opção: ")
                 
@@ -513,6 +646,8 @@ class DatabaseManager:
                 elif choice == '3':
                     self._manage_strats()
                 elif choice == '4':
+                    self._manage_money_management()
+                elif choice == '5':
                     print("\nEncerrando o programa...")
                     break
                 else:
@@ -1170,6 +1305,285 @@ class DatabaseManager:
             else:
                 print("Opção inválida. Tente novamente.")
 
+    def _manage_money_management(self):
+        """Manage Money Management Algorithms"""
+        while True:
+            print("\n=== Gerenciamento de Money Management ===")
+            print("1. Listar Money Management")
+            print("2. Criar Money Management")
+            print("3. Deletar Money Management")
+            print("4. Editar Money Management")
+            print("5. Detalhes do Money Management")
+            print("0. Voltar ao menu principal")
+            
+            choice = input("\nEscolha uma opção: ")
+            
+            if choice == '1':
+                print("\nMoney Management Algorithms:")
+                mms = self.list_all(Money_Management_Algorithm)
+                if mms:
+                    for mm in mms:
+                        if isinstance(mm, Money_Management_Algorithm):
+                            print(f"- {mm.name}")
+                else:
+                    print("Nenhum Money Management encontrado.")
+                    
+            elif choice == '2':
+                print("\nCriar novo Money Management:")
+                print("1. Criar do template")
+                print("2. Carregar MM existente")
+                
+                create_choice = input("\nEscolha uma opção: ")
+                
+                if create_choice == '1':
+                    name = input("Nome do Money Management: ")
+                    
+                    # Verifica se já existe
+                    if self.read(Money_Management_Algorithm, name):
+                        print(f"Money Management '{name}' já existe.")
+                        continue
+                        
+                    try:
+                        # Cria o arquivo do MM
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        mm_dir = os.path.join(script_dir, "Money Management Algo")
+                        mm_file = os.path.join(mm_dir, f"{name}.py")
+                        
+                        # Copia o template
+                        with open(os.path.join(mm_dir, "mm_template.py"), 'r') as f:
+                            template_content = f.read()
+                            
+                        # Substitui o nome da classe e configuração
+                        new_content = template_content.replace("MM_Template", name)
+                        new_content = new_content.replace('name: str = "MM_Template"', f'name: str = "{name}"')
+                        
+                        # Salva o novo arquivo
+                        with open(mm_file, 'w') as f:
+                            f.write(new_content)
+                            
+                        # Importa o novo módulo
+                        sys.path.append(mm_dir)
+                        module = __import__(name)
+                        importlib.reload(module)
+                        
+                        # Cria uma instância do MM
+                        if hasattr(module, name):
+                            mm_class = getattr(module, name)
+                            config = getattr(module, "MoneyManagementConfig")()
+                            config.name = name
+                            mm = mm_class(config)
+                            
+                            # Registra no banco de dados
+                            if self.create(mm):
+                                print(f"Money Management '{name}' criado com sucesso.")
+                            else:
+                                print("Aviso: Não foi possível registrar o Money Management no banco de dados.")
+                        else:
+                            print(f"Erro: Classe {name} não encontrada no módulo.")
+                            
+                    except Exception as e:
+                        print(f"Erro ao criar objeto: {e}")
+                        
+                elif create_choice == '2':
+                    print("\nMoney Management disponíveis:")
+                    script_dir = os.path.dirname(os.path.abspath(__file__))
+                    mm_dir = os.path.join(script_dir, "Money Management Algo")
+                    mm_files = [f[:-3] for f in os.listdir(mm_dir) if f.endswith('.py') and f != '__init__.py' and f != 'mm_template.py']
+                    
+                    for i, mm_file in enumerate(mm_files, 1):
+                        print(f"{i}. {mm_file}")
+                        
+                    if not mm_files:
+                        print("Nenhum Money Management encontrado.")
+                        continue
+                        
+                    try:
+                        idx = int(input("\nEscolha o número do Money Management: ")) - 1
+                        if 0 <= idx < len(mm_files):
+                            mm_name = mm_files[idx]
+                            
+                            # Verifica se já existe no banco
+                            if self.read(Money_Management_Algorithm, mm_name):
+                                print(f"Money Management '{mm_name}' já existe no banco de dados.")
+                                continue
+                                
+                            # Importa o módulo
+                            sys.path.append(mm_dir)
+                            module = __import__(mm_name)
+                            importlib.reload(module)
+                            
+                            # Cria uma instância do MM
+                            if hasattr(module, mm_name):
+                                mm_class = getattr(module, mm_name)
+                                config = getattr(module, "MoneyManagementConfig")()
+                                config.name = mm_name
+                                mm = mm_class(config)
+                                
+                                # Registra no banco de dados
+                                if self.create(mm):
+                                    print(f"Money Management '{mm_name}' registrado com sucesso.")
+                                else:
+                                    print("Aviso: Não foi possível registrar o Money Management no banco de dados.")
+                            else:
+                                print(f"Erro: Classe {mm_name} não encontrada no módulo.")
+                                
+                    except (ValueError, IndexError):
+                        print("Opção inválida.")
+                    except Exception as e:
+                        print(f"Erro ao carregar Money Management: {e}")
+                        
+            elif choice == '3':
+                name = input("Nome do Money Management para deletar: ")
+                if self.delete(Money_Management_Algorithm, name):
+                    # Tenta deletar o arquivo também
+                    try:
+                        script_dir = os.path.dirname(os.path.abspath(__file__))
+                        mm_file = os.path.join(script_dir, "Money Management Algo", f"{name}.py")
+                        if os.path.exists(mm_file):
+                            os.remove(mm_file)
+                            print(f"Arquivo {name}.py deletado com sucesso.")
+                    except Exception as e:
+                        print(f"Aviso: Não foi possível deletar o arquivo {name}.py: {e}")
+                        
+            elif choice == '4':
+                name = input("Nome do Money Management para editar: ")
+                mm = self.read(Money_Management_Algorithm, name)
+                
+                if mm:
+                    while True:
+                        print("\nParâmetros disponíveis:")
+                        print("1. Position Sizing")
+                        print("2. Capital Management")
+                        print("3. Risk Management")
+                        print("4. Advanced Parameters")
+                        print("0. Voltar")
+                        
+                        param_choice = input("\nEscolha uma categoria para editar (0-4): ")
+                        
+                        if param_choice == '0':
+                            break
+                            
+                        elif param_choice == '1':
+                            print("\nPosition Sizing Parameters:")
+                            print(f"1. Type: {mm.position_sizing_type}")
+                            print(f"2. From: {mm.position_sizing_from}")
+                            print(f"3. Method: {mm.position_sizing_method}")
+                            
+                            sub_choice = input("\nEscolha um parâmetro para editar (1-3): ")
+                            
+                            if sub_choice == '1':
+                                value = input("Novo valor (percentage/kelly/confidence): ")
+                                if value in ['percentage', 'kelly', 'confidence']:
+                                    self.modify_attribute(Money_Management_Algorithm, name, 'position_sizing_type', value)
+                            elif sub_choice == '2':
+                                value = input("Novo valor (balance/equity): ")
+                                if value in ['balance', 'equity']:
+                                    self.modify_attribute(Money_Management_Algorithm, name, 'position_sizing_from', value)
+                            elif sub_choice == '3':
+                                value = input("Novo valor (regular/dynamic): ")
+                                if value in ['regular', 'dynamic']:
+                                    self.modify_attribute(Money_Management_Algorithm, name, 'position_sizing_method', value)
+                                    
+                        elif param_choice == '2':
+                            print("\nCapital Management Parameters:")
+                            print(f"1. Initial Capital: {mm.init_capital}")
+                            print(f"2. Max Capital Exposure: {mm.max_capital_exposure}")
+                            print(f"3. Max Drawdown: {mm.max_drawdown}")
+                            
+                            sub_choice = input("\nEscolha um parâmetro para editar (1-3): ")
+                            
+                            if sub_choice == '1':
+                                try:
+                                    value = float(input("Novo valor: "))
+                                    self.modify_attribute(Money_Management_Algorithm, name, 'init_capital', value)
+                                except ValueError:
+                                    print("Valor inválido.")
+                            elif sub_choice == '2':
+                                try:
+                                    value = float(input("Novo valor (0-1): "))
+                                    if 0 <= value <= 1:
+                                        self.modify_attribute(Money_Management_Algorithm, name, 'max_capital_exposure', value)
+                                except ValueError:
+                                    print("Valor inválido.")
+                            elif sub_choice == '3':
+                                try:
+                                    value = float(input("Novo valor (0-1): "))
+                                    if 0 <= value <= 1:
+                                        self.modify_attribute(Money_Management_Algorithm, name, 'max_drawdown', value)
+                                except ValueError:
+                                    print("Valor inválido.")
+                                    
+                        elif param_choice == '3':
+                            print("\nRisk Management Parameters:")
+                            print(f"1. Default Risk: {mm.trade_risk_default}")
+                            print(f"2. Min Risk: {mm.trade_risk_min}")
+                            print(f"3. Max Risk: {mm.trade_risk_max}")
+                            print(f"4. Max Open Trades: {mm.trade_max_num_open}")
+                            print(f"5. Min Analysis Trades: {mm.trade_min_num_analysis}")
+                            
+                            sub_choice = input("\nEscolha um parâmetro para editar (1-5): ")
+                            
+                            if sub_choice in ['1', '2', '3']:
+                                try:
+                                    value = float(input("Novo valor (0-1): "))
+                                    if 0 <= value <= 1:
+                                        param_map = {
+                                            '1': 'trade_risk_default',
+                                            '2': 'trade_risk_min',
+                                            '3': 'trade_risk_max'
+                                        }
+                                        self.modify_attribute(Money_Management_Algorithm, name, param_map[sub_choice], value)
+                                except ValueError:
+                                    print("Valor inválido.")
+                            elif sub_choice in ['4', '5']:
+                                try:
+                                    value = int(input("Novo valor: "))
+                                    if value > 0:
+                                        param_map = {
+                                            '4': 'trade_max_num_open',
+                                            '5': 'trade_min_num_analysis'
+                                        }
+                                        self.modify_attribute(Money_Management_Algorithm, name, param_map[sub_choice], value)
+                                except ValueError:
+                                    print("Valor inválido.")
+                                    
+                        elif param_choice == '4':
+                            print("\nAdvanced Parameters:")
+                            print(f"1. Confidence Level: {mm.confidence_level}")
+                            print(f"2. Kelly Weight: {mm.kelly_weight}")
+                            
+                            sub_choice = input("\nEscolha um parâmetro para editar (1-2): ")
+                            
+                            if sub_choice in ['1', '2']:
+                                try:
+                                    value = float(input("Novo valor (0-1): "))
+                                    if 0 <= value <= 1:
+                                        param_map = {
+                                            '1': 'confidence_level',
+                                            '2': 'kelly_weight'
+                                        }
+                                        self.modify_attribute(Money_Management_Algorithm, name, param_map[sub_choice], value)
+                                except ValueError:
+                                    print("Valor inválido.")
+                else:
+                    print(f"Money Management '{name}' não encontrado.")
+                    
+            elif choice == '5':
+                name = input("Nome do Money Management: ")
+                details = self.get_details(Money_Management_Algorithm, name)
+                if details:
+                    print("\nDetalhes do Money Management:")
+                    for key, value in details.items():
+                        print(f"{key}: {value}")
+                else:
+                    print(f"Money Management '{name}' não encontrado.")
+                    
+            elif choice == '0':
+                break
+                
+            else:
+                print("Opção inválida.")
+
     def close(self):
         """Fecha a conexão com o banco de dados"""
         if self.conn:
@@ -1186,7 +1600,7 @@ class DatabaseManager:
         self._ensure_connection()
         try:
             info = self._get_table_info(obj)
-            values = info['serializer'](obj)
+            values = info['serialize'](obj)
             
             # Verifica se o objeto já existe
             self.cursor.execute(f"SELECT 1 FROM {info['table_name']} WHERE {info['pk_column']} = ?", (values[0],))
@@ -1227,7 +1641,7 @@ class DatabaseManager:
                 return None
                 
             # Deserializa os dados para um objeto
-            return info['deserializer'](row)
+            return info['deserialize'](row)
             
         except Exception as e:
             print(f"Erro ao carregar objeto: {e}")
