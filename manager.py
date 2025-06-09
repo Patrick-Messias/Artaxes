@@ -264,26 +264,34 @@ class DatabaseManager:
         try:
             self._ensure_connection()
             table_info = self._get_table_info(obj_type)
-            print(f"Listing all objects from table {table_info['table_name']}")
             
             self.cursor.execute(f"SELECT * FROM {table_info['table_name']}")
             rows = self.cursor.fetchall()
-            print(f"Found {len(rows)} rows in {table_info['table_name']}")
             
             result = []
             for row in rows:
                 try:
-                    obj = table_info['deserialize'](row)
+                    obj = table_info['deserialize'](row[:len(table_info['columns'])])  # Limita ao número correto de colunas
                     if obj:
                         result.append(obj)
-                    else:
-                        print(f"Warning: Could not deserialize row {row}")
                 except Exception as e:
                     print(f"Error deserializing row {row}: {e}")
                     import traceback
                     traceback.print_exc()
-                    
-            print(f"Successfully deserialized {len(result)} objects")
+            
+            # Display objects in a user-friendly format only for portfolios
+            if obj_type == Asset_Portfolio:
+                print("\nPortfólios disponíveis:")
+                for i, portfolio in enumerate(result):
+                    print(f"{i} - {portfolio.name}")
+            elif obj_type == Asset:
+                print("\nAssets disponíveis:")
+                for i, obj in enumerate(result):
+                    print(f"{i} - {obj.name}")
+            
+            # Return only the names for assets, full objects for others
+            if obj_type == Asset:
+                return [obj.name for obj in result]
             return result
             
         except Exception as e:
@@ -316,42 +324,99 @@ class DatabaseManager:
             print(f"Erro ao obter detalhes: {e}")
             return None
 
-    def modify_attribute(self, obj_type: Type[Any], name: str, attribute: str, new_value: Any) -> bool:
+    def modify_attribute(self, obj_type: Type[Any], name: str, attribute: str = None, new_value: Any = None) -> bool:
         """Modify a specific attribute of an object"""
         try:
             self._ensure_connection()
-            
-            # Get table info
             table_info = self._get_table_info(obj_type)
             
-            # Get current object
+            # Verifica se o objeto existe
             self.cursor.execute(f"SELECT * FROM {table_info['table_name']} WHERE name = ?", (name,))
             row = self.cursor.fetchone()
             if not row:
                 print(f"Object {name} not found")
                 return False
+            
+            # Carrega o objeto atual
+            obj = table_info['deserialize'](row)
+            if not obj:
+                print(f"Error loading object {name}")
+                return False
                 
-            # For Money Management, we need to update the JSON params
-            if obj_type == Money_Management_Algorithm:
-                params = json.loads(row[1])  # params is the second column
-                params[attribute] = new_value
+            if obj_type == Asset:
+                # Lista os atributos disponíveis
+                print("\nAtributos disponíveis para modificação:")
+                print("1. type")
+                print("2. market")
+                print("3. data_path")
+                print("4. tick")
+                print("5. tick_fin_val")
+                print("6. lot_value")
+                print("7. min_lot")
+                print("8. leverage")
+                print("9. comissions")
+                print("10. slippage")
+                print("11. spread")
                 
-                # Update the database
+                if attribute is None:
+                    choice = input("\nEscolha o número do atributo a modificar: ")
+                    attr_map = {
+                        '1': 'type',
+                        '2': 'market',
+                        '3': 'data_path',
+                        '4': 'tick',
+                        '5': 'tick_fin_val',
+                        '6': 'lot_value',
+                        '7': 'min_lot',
+                        '8': 'leverage',
+                        '9': 'comissions',
+                        '10': 'slippage',
+                        '11': 'spread'
+                    }
+                    
+                    if choice not in attr_map:
+                        print("Opção inválida")
+                        return False
+                    
+                    attribute = attr_map[choice]
+                    new_value = input(f"Novo valor para {attribute}: ")
+                
+                # Converte o valor para o tipo correto
+                if attribute in ['tick', 'tick_fin_val', 'lot_value', 'min_lot', 'leverage', 'comissions', 'slippage', 'spread']:
+                    try:
+                        new_value = float(new_value)
+                    except ValueError:
+                        print("Valor inválido. Digite um número.")
+                        return False
+                
+                # Atualiza o atributo
+                setattr(obj, attribute, new_value)
+                
+                # Serializa e salva
+                values = self._serialize_asset(obj)
                 self.cursor.execute(
-                    f"UPDATE {table_info['table_name']} SET params = ? WHERE name = ?",
-                    (json.dumps(params), name)
+                    "UPDATE assets SET type = ?, market = ?, data_path = ?, params = ? WHERE name = ?",
+                    (values[1], values[2], values[3], values[4], values[0])
                 )
                 
+                self.conn.commit()
+                print(f"\nAtributo {attribute} atualizado com sucesso!")
+                return True
+                
             else:
-                # For other objects, update the attribute directly
+                # Para outros tipos de objetos
+                if attribute is None:
+                    print("Atributo não especificado")
+                    return False
+                
                 self.cursor.execute(
                     f"UPDATE {table_info['table_name']} SET {attribute} = ? WHERE name = ?",
                     (new_value, name)
                 )
                 
-            self.conn.commit()
-            return True
-            
+                self.conn.commit()
+                return True
+                
         except Exception as e:
             print(f"Error updating object: {e}")
             import traceback
@@ -385,7 +450,7 @@ class DatabaseManager:
                     info['columns'] = ['name', 'params']
                     
                 # Adiciona debug para verificar o que está sendo retornado
-                print(f"Table info for {obj_type.__name__}: {info}")
+#                print(f"Table info for {obj_type.__name__}: {info}")
                 return info
                 
         raise ValueError(f"Unsupported object type: {obj_type}")
@@ -393,11 +458,31 @@ class DatabaseManager:
     # ==================== Serialization Methods ====================
 
     def _serialize_asset(self, asset: Asset) -> List[Any]:
+        """Serializa um asset para armazenamento no banco de dados"""
+        # Serializa os timeframes
         timeframes = json.dumps(asset.timeframes_list())
-        params_dict = {k: v for k, v in asset.list_values().items() 
-                      if k not in ['name', 'type', 'market', 'data_path', 'data']}
+        
+        # Serializa os parâmetros do asset
+        params_dict = {
+            "tick": asset.tick,
+            "tick_fin_val": asset.tick_fin_val,
+            "lot_value": asset.lot_value,
+            "min_lot": asset.min_lot,
+            "leverage": asset.leverage,
+            "comissions": asset.comissions,
+            "slippage": asset.slippage,
+            "spread": asset.spread
+        }
         params_json = json.dumps(params_dict)
-        return [asset.name, asset.type, asset.market, asset.data_path, timeframes, params_json]
+        
+        # Retorna os valores na ordem correta das colunas
+        return [
+            asset.name,           # name
+            asset.type,          # type
+            asset.market,        # market
+            asset.data_path,     # data_path
+            params_json          # params (inclui timeframes e outros parâmetros)
+        ]
 
     def _serialize_asset_portfolio(self, portfolio: Asset_Portfolio) -> List[Any]:
         """Serializa um portfólio para armazenamento no banco de dados"""
@@ -467,18 +552,40 @@ class DatabaseManager:
     # ==================== Deserialization Methods ====================
 
     def _deserialize_asset(self, row: List[Any]) -> Asset:
-        name, type, market, data_path, timeframes_str, params_json = row
-        timeframe_list = json.loads(timeframes_str) if timeframes_str else []
-        params_dict = json.loads(params_json) if params_json else {}
-        
-        asset = Asset(name=name, type=type, market=market, timeframe=timeframe_list, data_path=data_path)
-        for k, v in params_dict.items():
-            setattr(asset, k, v)
-        return asset
+        """Deserializa um asset do banco de dados"""
+        try:
+            name, type, market, data_path, params_json = row[:5]  # Pega apenas os primeiros 5 campos
+            
+            # Deserializa os parâmetros
+            params_dict = json.loads(params_json) if params_json else {}
+            
+            # Cria o asset com os parâmetros básicos
+            asset = Asset(
+                name=name,
+                type=type,
+                market=market,
+                data_path=data_path
+            )
+            
+            # Atualiza os parâmetros específicos
+            if params_dict:
+                for key, value in params_dict.items():
+                    setattr(asset, key, value)
+            
+            return asset
+            
+        except Exception as e:
+            print(f"Erro ao deserializar asset {row[0] if row else 'unknown'}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
 
     def _deserialize_asset_portfolio(self, row: List[Any]) -> Asset_Portfolio:
         """Deserializa um portfólio do banco de dados"""
         try:
+            if len(row) != 2:  # Verifica se tem exatamente 2 colunas (name e assets)
+                raise ValueError(f"Expected 2 columns but got {len(row)}")
+                
             name, asset_names_str = row
             asset_names = json.loads(asset_names_str) if asset_names_str else []
             
@@ -489,7 +596,7 @@ class DatabaseManager:
                 if asset:
                     asset_dict[asset_name] = asset
                     
-            return Asset_Portfolio(asset_portfolio_params={'name': name, 'assets': asset_dict})
+            return Asset_Portfolio({'name': name, 'assets': asset_dict})
         except Exception as e:
             print(f"Erro ao deserializar portfólio: {e}")
             return None
@@ -635,7 +742,8 @@ class DatabaseManager:
                 print("2. Gerenciar Portfólios de Assets")
                 print("3. Gerenciar Estratégias")
                 print("4. Gerenciar Money Management")
-                print("5. Sair")
+                print("5. Gerenciar Backtests")
+                print("6. Sair")
                 
                 choice = input("\nEscolha uma opção: ")
                 
@@ -648,6 +756,8 @@ class DatabaseManager:
                 elif choice == '4':
                     self._manage_money_management()
                 elif choice == '5':
+                    self._manage_backtest()
+                elif choice == '6':
                     print("\nEncerrando o programa...")
                     break
                 else:
@@ -685,10 +795,8 @@ class DatabaseManager:
             choice = input("\nEscolha uma opção: ")
             
             if choice == '1':
+                # Just call list_all and store the result
                 assets = self.list_all(Asset)
-                print("\nAssets disponíveis:")
-                for asset in assets:
-                    print(f"- {asset}")
                 
             elif choice == '2':
                 asset_name = input("Nome do Asset: ")
@@ -714,41 +822,53 @@ class DatabaseManager:
                     print("Falha ao criar Asset.")
                     
             elif choice == '4':
-                asset_name = input("Nome do Asset a modificar: ")
-                if asset_name not in self.list_all(Asset):
-                    print("Asset não encontrado.")
-                    continue
-                    
-                print("\nAtributos disponíveis para modificação:")
-                details = self.get_details(Asset, asset_name)
-                for k in details.keys():
-                    print(f"- {k}")
+                print("\nModificar Asset:")
+                asset_name = input("Nome do Asset: ")
+                print("\nO que deseja modificar?")
+                print("1. Tipo")
+                print("2. Mercado")
+                print("3. Caminho dos dados")
+                print("4. Parâmetros específicos")
                 
-                attr = input("Atributo a modificar: ")
-                if attr not in details:
-                    print("Atributo inválido.")
-                    continue
-                    
-                new_value = input(f"Novo valor para {attr} (atual: {details[attr]}): ")
-                try:
-                    # Tentar converter para o tipo original
-                    if isinstance(details[attr], bool):
-                        new_value = new_value.lower() in ('true', '1', 't', 'y', 'yes')
-                    elif isinstance(details[attr], int):
-                        new_value = int(new_value)
-                    elif isinstance(details[attr], float):
-                        new_value = float(new_value)
-                    elif isinstance(details[attr], list):
-                        new_value = [x.strip() for x in new_value.split(',')]
-                except ValueError:
-                    print("Valor inválido para o tipo do atributo.")
-                    continue
+                mod_choice = input("\nEscolha uma opção: ")
                 
-                if self.modify_attribute(Asset, asset_name, attr, new_value):
-                    print("Atributo modificado com sucesso!")
-                else:
-                    print("Falha ao modificar atributo.")
+                if mod_choice in ['1', '2', '3']:
+                    attribute = {
+                        '1': 'type',
+                        '2': 'market',
+                        '3': 'data_path'
+                    }[mod_choice]
                     
+                    new_value = input(f"Novo valor para {attribute}: ")
+                    if self.modify_attribute(Asset, asset_name, attribute, new_value):
+                        print("Asset modificado com sucesso!")
+                    else:
+                        print("Falha ao modificar Asset.")
+                        
+                elif mod_choice == '4':
+                    print("\nParâmetros disponíveis:")
+                    print("- tick")
+                    print("- tick_fin_val")
+                    print("- lot_value")
+                    print("- min_lot")
+                    print("- leverage")
+                    print("- comissions")
+                    print("- slippage")
+                    print("- spread")
+                    
+                    param = input("\nQual parâmetro deseja modificar? ")
+                    if param in ['tick', 'tick_fin_val', 'lot_value', 'min_lot', 'leverage', 'comissions', 'slippage', 'spread']:
+                        try:
+                            new_value = float(input(f"Novo valor para {param}: "))
+                            if self.modify_attribute(Asset, asset_name, param, new_value):
+                                print("Parâmetro modificado com sucesso!")
+                            else:
+                                print("Falha ao modificar parâmetro.")
+                        except ValueError:
+                            print("Valor inválido. Digite um número.")
+                    else:
+                        print("Parâmetro inválido.")
+                        
             elif choice == '5':
                 asset_name = input("Nome do Asset a excluir: ")
                 if self.delete(Asset, asset_name):
@@ -757,14 +877,11 @@ class DatabaseManager:
                     print("Falha ao excluir Asset.")
                     
             elif choice == '6':
-                assets = self.list_all(Asset)
+                # Lista todos os assets disponíveis
+                assets = self.list_all(Asset)  # Agora retorna apenas os nomes
                 if not assets:
                     print("\nNenhum Asset cadastrado.")
                     continue
-
-                print("\nAssets disponíveis:")
-                for i, asset_name in enumerate(assets, 1):
-                    print(f"{i}. {asset_name}")
 
                 selected = input("\nEscolha o número do Asset (ou ENTER para ver todos): ").strip()
                 
@@ -772,16 +889,19 @@ class DatabaseManager:
                     try:
                         idx = int(selected) - 1
                         if 0 <= idx < len(assets):
-                            asset = self.read(Asset, assets[idx])
+                            asset_name = assets[idx]
+                            asset = self.read(Asset, asset_name)
                             if asset:
                                 print(f"\nTimeframes disponíveis para {asset.name}:")
-                                asset.timeframes_load_available()
+                                asset.timeframes_load_available()  # Carrega timeframes disponíveis
                                 timeframes = asset.timeframes_list()
                                 if timeframes:
                                     for tf in timeframes:
                                         print(f"- {tf}")
                                 else:
                                     print("Nenhum timeframe encontrado.")
+                            else:
+                                print("Erro ao carregar o Asset.")
                         else:
                             print("Número inválido.")
                     except ValueError:
@@ -792,7 +912,7 @@ class DatabaseManager:
                         asset = self.read(Asset, asset_name)
                         if asset:
                             print(f"\n{asset.name}:")
-                            asset.timeframes_load_available()
+                            asset.timeframes_load_available()  # Carrega timeframes disponíveis
                             timeframes = asset.timeframes_list()
                             if timeframes:
                                 for tf in timeframes:
@@ -834,14 +954,11 @@ class DatabaseManager:
             choice = input("\nEscolha uma opção: ")
             
             if choice == '1':
-                portfolios = self.list_all(Asset_Portfolio)
-                print("\nPortfólios disponíveis:")
-                for port in portfolios:
-                    print(f"- {port}")
+                self.list_all(Asset_Portfolio)
                 
             elif choice == '2':
-                port_name = input("Nome do Portfólio: ")
-                details = self.get_details(Asset_Portfolio, port_name)
+                portfolio_name = input("Nome do Portfólio: ")
+                details = self.get_details(Asset_Portfolio, portfolio_name)
                 if details:
                     print("\nDetalhes do Portfólio:")
                     for k, v in details.items():
@@ -851,122 +968,124 @@ class DatabaseManager:
                     
             elif choice == '3':
                 print("\nCriar novo Portfólio:")
-                portfolio_name = input("Nome do Portfólio: ").strip()
-                if not portfolio_name:
-                    print("Nome do portfólio não pode estar vazio")
-                    continue
+                portfolio_name = input("Nome do Portfólio: ")
                 
-                # Lista assets disponíveis para adicionar
-                assets = self.list_all(Asset)
-                if not assets:
-                    print("Nenhum Asset disponível. Crie Assets primeiro.")
+                # Lista os assets disponíveis
+                available_assets = self.list_all(Asset)
+                if not available_assets:
+                    print("Nenhum Asset disponível para criar o Portfólio.")
                     continue
                     
-                print("\nAssets disponíveis:")
-                for i, asset in enumerate(assets, 1):
-                    print(f"{i}. {asset}")
-                
                 selected = input("\nNúmeros dos Assets a incluir (separados por vírgula): ")
                 try:
-                    indices = [int(x.strip())-1 for x in selected.split(',')]
-                    asset_names = [assets[i] for i in indices if 0 <= i < len(assets)]
-                except:
-                    print("Seleção inválida.")
-                    continue
-                
-                # Carrega os objetos Asset
-                asset_objs = {}  # Changed from list to dict
-                for name in asset_names:
-                    asset = self.read(Asset, name)
-                    if asset:
-                        asset_objs[name] = asset  # Store as dict with name as key
-                
-                if not asset_objs:
-                    print("Nenhum Asset válido selecionado.")
-                    continue
-                
-                new_port = Asset_Portfolio(asset_portfolio_params={'name': portfolio_name, 'assets': asset_objs})
-                if self.create(new_port):
-                    print(f"Portfólio '{portfolio_name}' criado com sucesso!")
-                else:
-                    print("Falha ao criar Portfólio.")
+                    indices = [int(x.strip()) for x in selected.split(',')]
+                    selected_assets = {}
+                    
+                    for idx in indices:
+                        if 0 <= idx < len(available_assets):
+                            asset_name = available_assets[idx]
+                            asset = self.read(Asset, asset_name)
+                            if asset:
+                                selected_assets[asset_name] = asset
+                            else:
+                                print(f"Erro ao carregar Asset {asset_name}")
+                        else:
+                            print(f"Índice inválido ignorado: {idx}")
+                    
+                    if selected_assets:
+                        portfolio = Asset_Portfolio({
+                            'name': portfolio_name,
+                            'assets': selected_assets
+                        })
+                        if self.create(portfolio):
+                            print("Portfólio criado com sucesso!")
+                        else:
+                            print("Falha ao criar Portfólio.")
+                    else:
+                        print("Nenhum Asset válido selecionado. Portfólio não criado.")
+                except ValueError:
+                    print("Entrada inválida. Use números separados por vírgula (ex: 0,1,2)")
+                except Exception as e:
+                    print(f"Erro ao criar portfólio: {e}")
+                    import traceback
+                    traceback.print_exc()
                     
             elif choice == '4':
-                port_name = input("Nome do Portfólio a modificar: ")
-                if port_name not in self.list_all(Asset_Portfolio):
+                print("\nModificar Portfólio:")
+                portfolio_name = input("Nome do Portfólio: ")
+                portfolio = self.read(Asset_Portfolio, portfolio_name)
+                
+                if not portfolio:
                     print("Portfólio não encontrado.")
                     continue
                     
-                print("\nOpções de modificação:")
-                print("1. Adicionar Asset")
-                print("2. Remover Asset")
+                print("\nO que deseja fazer?")
+                print("1. Adicionar Assets")
+                print("2. Remover Assets")
                 
-                sub_choice = input("Escolha: ")
+                mod_choice = input("\nEscolha uma opção: ")
                 
-                if sub_choice == '1':
-                    # Lista assets disponíveis
-                    current_port = self.read(Asset_Portfolio, port_name)
-                    current_assets = list(current_port.assets.keys())
+                if mod_choice == '1':
+                    # Lista assets disponíveis que não estão no portfólio
+                    available_assets = self.list_all(Asset)
+                    current_assets = set(portfolio.assets.keys())
+                    available_assets = [a for a in available_assets if a not in current_assets]
                     
-                    all_assets = self.list_all(Asset)
-                    available = [a for a in all_assets if a not in current_assets]
-                    
-                    if not available:
-                        print("Todos os Assets já estão no portfólio.")
+                    if not available_assets:
+                        print("Não há Assets disponíveis para adicionar.")
                         continue
                         
-                    print("\nAssets disponíveis para adicionar:")
-                    for i, asset in enumerate(available, 1):
-                        print(f"{i}. {asset}")
-                    
-                    selected = input("Número do Asset a adicionar: ")
+                    print("\nAssets disponíveis:")
+                    for i, asset_name in enumerate(available_assets, 1):
+                        print(f"{i}. {asset_name}")
+                        
+                    choice = input("\nEscolha o número do Asset para adicionar: ")
                     try:
-                        idx = int(selected)-1
-                        if 0 <= idx < len(available):
-                            asset_name = available[idx]
+                        idx = int(choice) - 1
+                        if 0 <= idx < len(available_assets):
+                            asset_name = available_assets[idx]
                             asset = self.read(Asset, asset_name)
                             if asset:
-                                current_port.assets[asset_name] = asset
-                                if self.update(current_port):
-                                    print("Asset adicionado com sucesso!")
+                                portfolio.asset_add(asset)
+                                if self.update(portfolio):
+                                    print(f"Asset {asset_name} adicionado com sucesso!")
                                 else:
                                     print("Falha ao atualizar Portfólio.")
+                            else:
+                                print("Erro ao carregar Asset.")
                         else:
                             print("Número inválido.")
-                    except:
+                    except ValueError:
                         print("Entrada inválida.")
                         
-                elif sub_choice == '2':
-                    current_port = self.read(Asset_Portfolio, port_name)
-                    if not current_port.assets:
-                        print("Portfólio vazio.")
+                elif mod_choice == '2':
+                    if not portfolio.assets:
+                        print("Portfólio não possui Assets para remover.")
                         continue
                         
-                    print("\nAssets no portfólio:")
-                    asset_names = list(current_port.assets.keys())
-                    for i, asset_name in enumerate(asset_names, 1):
+                    print("\nAssets no Portfólio:")
+                    assets_list = list(portfolio.assets.keys())
+                    for i, asset_name in enumerate(assets_list, 1):
                         print(f"{i}. {asset_name}")
-                    
-                    selected = input("Número do Asset a remover: ")
+                        
+                    choice = input("\nEscolha o número do Asset para remover: ")
                     try:
-                        idx = int(selected)-1
-                        if 0 <= idx < len(asset_names):
-                            asset_name = asset_names[idx]
-                            removed_asset = current_port.assets.pop(asset_name)
-                            if self.update(current_port):
-                                print(f"Asset {removed_asset.name} removido com sucesso!")
+                        idx = int(choice) - 1
+                        if 0 <= idx < len(assets_list):
+                            asset_name = assets_list[idx]
+                            portfolio.asset_remove(asset_name)
+                            if self.update(portfolio):
+                                print(f"Asset {asset_name} removido com sucesso!")
                             else:
                                 print("Falha ao atualizar Portfólio.")
                         else:
                             print("Número inválido.")
-                    except:
+                    except ValueError:
                         print("Entrada inválida.")
-                else:
-                    print("Opção inválida.")
-                    
+                        
             elif choice == '5':
-                port_name = input("Nome do Portfólio a excluir: ")
-                if self.delete(Asset_Portfolio, port_name):
+                portfolio_name = input("Nome do Portfólio a excluir: ")
+                if self.delete(Asset_Portfolio, portfolio_name):
                     print("Portfólio excluído com sucesso!")
                 else:
                     print("Falha ao excluir Portfólio.")
@@ -1583,6 +1702,224 @@ class DatabaseManager:
                 
             else:
                 print("Opção inválida.")
+
+    def run_backtest(self, strategy_name: str, asset_name: str = None, stateless: bool = True) -> Optional[Dict[str, Any]]:
+        """
+        Executa backtest para uma estratégia
+        
+        Args:
+            strategy_name: Nome da estratégia
+            asset_name: Nome do ativo específico ou None para todos
+            stateless: Se True, não mantém estado entre execuções
+        """
+        try:
+            # Carrega a estratégia
+            strategy = self.read(Strat, strategy_name)
+            if not strategy:
+                print(f"Estratégia {strategy_name} não encontrada")
+                return None
+            
+            # Gera/atualiza sinais
+            signals = strategy.generate_signals(asset_name)
+            if not signals:
+                return None
+            
+            # Cria instância do Backtest
+            backtest = Backtest(stateless=stateless)
+            
+            # Executa backtest para cada ativo
+            results = {}
+            if isinstance(signals, dict):
+                for name, df in signals.items():
+                    print(f"\nExecutando backtest para {name}...")
+                    result = backtest.run(df, strategy)
+                    results[name] = result
+            else:
+                name = asset_name or next(iter(strategy.asset_portfolio.assets.keys()))
+                print(f"\nExecutando backtest para {name}...")
+                results[name] = backtest.run(signals, strategy)
+            
+            return results
+            
+        except Exception as e:
+            print(f"Erro ao executar backtest: {e}")
+            return None
+
+    def run_backtest_setup(self, strat_name: str, portfolio_name: str = None, asset_name: str = None) -> bool:
+        """
+        Prepara e executa um backtest para uma estratégia
+        
+        Args:
+            strat_name: Nome da estratégia
+            portfolio_name: Nome do portfólio (opcional)
+            asset_name: Nome do ativo específico no portfólio (opcional)
+        """
+        try:
+            # 1. Carrega a estratégia
+            strategy = self.read(Strat, strat_name)
+            if not strategy:
+                print(f"Estratégia {strat_name} não encontrada")
+                return False
+            
+            # 2. Carrega/cria portfólio
+            if portfolio_name:
+                portfolio = self.read(Asset_Portfolio, portfolio_name)
+                if not portfolio:
+                    print(f"Portfólio {portfolio_name} não encontrado")
+                    return False
+            else:
+                # Se não foi especificado um portfólio, verifica se a estratégia já tem um
+                if hasattr(strategy, 'asset_portfolio') and strategy.asset_portfolio:
+                    portfolio = strategy.asset_portfolio
+                else:
+                    print("Nenhum portfólio especificado ou associado à estratégia")
+                    return False
+                
+            # 3. Verifica/carrega Money Management
+            mm = None
+            if hasattr(strategy, 'risk_rules'):
+                # Cria um MM genérico baseado nas regras de risco da estratégia
+                mm = Money_Management_Algorithm({
+                    'name': f"{strat_name}_mm",
+                    'position_sizing_type': strategy.risk_rules.position_sizing_type,
+                    'position_sizing_from': strategy.risk_rules.position_sizing_from,
+                    'position_sizing_method': strategy.risk_rules.position_sizing_method,
+                    'trade_risk_default': strategy.risk_rules.trade_risk_default,
+                    'trade_risk_min': strategy.risk_rules.trade_risk_min,
+                    'trade_risk_max': strategy.risk_rules.trade_risk_max
+                })
+            
+            # 4. Gera sinais
+            if asset_name:
+                # Para um ativo específico
+                if asset_name not in portfolio.assets:
+                    print(f"Ativo {asset_name} não encontrado no portfólio")
+                    return False
+                df = strategy.generate_signals(asset_name)
+                
+                # 5. Mostra o DataFrame com os sinais
+                print(f"\nDataFrame com sinais para {asset_name}:")
+                print("\nPrimeiras linhas:")
+                print(df.head())
+                print("\nÚltimas linhas:")
+                print(df.tail())
+                
+                # Mostra colunas relevantes
+                signal_cols = [col for col in df.columns if 'signal' in col.lower()]
+                if signal_cols:
+                    print("\nColunas de sinais:")
+                    print(df[signal_cols].describe())
+                
+            else:
+                # Para todos os ativos no portfólio
+                for curr_asset_name in portfolio.assets:
+                    df = strategy.generate_signals(curr_asset_name)
+                    
+                    print(f"\nDataFrame com sinais para {curr_asset_name}:")
+                    print("\nPrimeiras linhas:")
+                    print(df.head())
+                    print("\nÚltimas linhas:")
+                    print(df.tail())
+                    
+                    # Mostra colunas relevantes
+                    signal_cols = [col for col in df.columns if 'signal' in col.lower()]
+                    if signal_cols:
+                        print("\nColunas de sinais:")
+                        print(df[signal_cols].describe())
+            
+            return True
+            
+        except Exception as e:
+            print(f"Erro ao preparar backtest: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+    def _manage_backtest(self):
+        """Menu para gerenciar Backtests"""
+        while True:
+            print("\n" + "-"*50)
+            print("Gerenciamento de Backtest")
+            print("-"*50)
+            print("1. Preparar e Verificar Backtest")
+            print("2. Voltar")
+            
+            choice = input("\nEscolha uma opção: ")
+            
+            if choice == '1':
+                # Lista estratégias disponíveis
+                strats = self.list_all(Strat)
+                if not strats:
+                    print("Nenhuma estratégia disponível")
+                    continue
+                
+                print("\nEstratégias disponíveis:")
+                for i, strat in enumerate(strats, 1):
+                    print(f"{i}. {strat}")
+                
+                try:
+                    strat_idx = int(input("\nEscolha o número da estratégia: ")) - 1
+                    if not (0 <= strat_idx < len(strats)):
+                        print("Número inválido")
+                        continue
+                    
+                    strat_name = strats[strat_idx]
+                    
+                    # Lista portfólios disponíveis
+                    portfolios = self.list_all(Asset_Portfolio)
+                    if portfolios:
+                        print("\nPortfólios disponíveis:")
+                        print("0. Usar portfólio da estratégia")
+                        for i, port in enumerate(portfolios, 1):
+                            print(f"{i}. {port}")
+                        
+                        port_idx = int(input("\nEscolha o número do portfólio (0 para usar o da estratégia): "))
+                        portfolio_name = None if port_idx == 0 else portfolios[port_idx-1]
+                    else:
+                        portfolio_name = None
+                    
+                    # Pergunta se quer testar um ativo específico
+                    test_specific = input("\nTestar um ativo específico? (s/N): ").lower() == 's'
+                    asset_name = None
+                    
+                    if test_specific:
+                        if portfolio_name:
+                            portfolio = self.read(Asset_Portfolio, portfolio_name)
+                        else:
+                            strategy = self.read(Strat, strat_name)
+                            portfolio = strategy.asset_portfolio
+                            
+                        if portfolio:
+                            print("\nAtivos disponíveis:")
+                            assets = list(portfolio.assets.keys())
+                            for i, asset in enumerate(assets, 1):
+                                print(f"{i}. {asset}")
+                                
+                            asset_idx = int(input("\nEscolha o número do ativo: ")) - 1
+                            if 0 <= asset_idx < len(assets):
+                                asset_name = assets[asset_idx]
+                            else:
+                                print("Número inválido")
+                                continue
+                        else:
+                            print("Portfólio não encontrado")
+                            continue
+                    
+                    # Executa o backtest
+                    if self.run_backtest_setup(strat_name, portfolio_name, asset_name):
+                        print("\nPreparação do backtest concluída com sucesso!")
+                    else:
+                        print("\nErro na preparação do backtest")
+                    
+                except ValueError:
+                    print("Entrada inválida")
+                except Exception as e:
+                    print(f"Erro: {e}")
+            
+            elif choice == '2':
+                break
+            else:
+                print("Opção inválida")
 
     def close(self):
         """Fecha a conexão com o banco de dados"""
