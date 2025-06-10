@@ -23,27 +23,35 @@ class DatabaseManager:
         self.cursor = None
         self._connect()
         
-        # Define table mappings
+        # Define table mappings with complete information including columns
         self._table_map = {
             Asset: {
                 'table_name': 'assets',
                 'serialize': self._serialize_asset,
-                'deserialize': self._deserialize_asset
+                'deserialize': self._deserialize_asset,
+                'pk_column': 'name',
+                'columns': ['name', 'type', 'market', 'data_path', 'params']
             },
             Asset_Portfolio: {
                 'table_name': 'portfolios',
                 'serialize': self._serialize_asset_portfolio,
-                'deserialize': self._deserialize_asset_portfolio
+                'deserialize': self._deserialize_asset_portfolio,
+                'pk_column': 'name',
+                'columns': ['name', 'assets']
             },
             Strat: {
                 'table_name': 'strats',
                 'serialize': self._serialize_strat,
-                'deserialize': self._deserialize_strat
+                'deserialize': self._deserialize_strat,
+                'pk_column': 'name',
+                'columns': ['name', 'template_path', 'params', 'template_type']
             },
             Money_Management_Algorithm: {
                 'table_name': 'money_management',
                 'serialize': self._serialize_money_management,
-                'deserialize': self._deserialize_money_management
+                'deserialize': self._deserialize_money_management,
+                'pk_column': 'name',
+                'columns': ['name', 'params']
             }
         }
         
@@ -65,14 +73,26 @@ class DatabaseManager:
                     for item_name in dir(module):
                         item = getattr(module, item_name)
                         if isinstance(item, type) and issubclass(item, Strat) and item != Strat:
-                            self._table_map[item] = self._table_map[Strat].copy()
+                            self._table_map[item] = {
+                                'table_name': 'strats',
+                                'serialize': self._serialize_strat,
+                                'deserialize': self._deserialize_strat,
+                                'pk_column': 'name',
+                                'columns': ['name', 'template_path', 'params', 'template_type']
+                            }
                             
                     # Se existe uma instância de estratégia, mapeia sua classe também
                     if hasattr(module, 'strategy'):
                         strategy = module.strategy
                         strategy_class = type(strategy)
                         if strategy_class not in self._table_map:
-                            self._table_map[strategy_class] = self._table_map[Strat].copy()
+                            self._table_map[strategy_class] = {
+                                'table_name': 'strats',
+                                'serialize': self._serialize_strat,
+                                'deserialize': self._deserialize_strat,
+                                'pk_column': 'name',
+                                'columns': ['name', 'template_path', 'params', 'template_type']
+                            }
                             
                 except ImportError as e:
                     print(f"Aviso: Não foi possível importar {strategy_name}: {e}")
@@ -98,14 +118,26 @@ class DatabaseManager:
                     for item_name in dir(module):
                         item = getattr(module, item_name)
                         if isinstance(item, type) and issubclass(item, Money_Management_Algorithm) and item != Money_Management_Algorithm:
-                            self._table_map[item] = self._table_map[Money_Management_Algorithm].copy()
+                            self._table_map[item] = {
+                                'table_name': 'money_management',
+                                'serialize': self._serialize_money_management,
+                                'deserialize': self._deserialize_money_management,
+                                'pk_column': 'name',
+                                'columns': ['name', 'params']
+                            }
                             
                     # Se existe uma instância de MM, mapeia sua classe também
                     if hasattr(module, 'money_management'):
                         mm = module.money_management
                         mm_class = type(mm)
                         if mm_class not in self._table_map:
-                            self._table_map[mm_class] = self._table_map[Money_Management_Algorithm].copy()
+                            self._table_map[mm_class] = {
+                                'table_name': 'money_management',
+                                'serialize': self._serialize_money_management,
+                                'deserialize': self._deserialize_money_management,
+                                'pk_column': 'name',
+                                'columns': ['name', 'params']
+                            }
                             
                 except ImportError as e:
                     print(f"Aviso: Não foi possível importar {mm_name}: {e}")
@@ -169,10 +201,7 @@ class DatabaseManager:
             
             # Create money_management table
             self.cursor.execute('''
-                DROP TABLE IF EXISTS money_management
-            ''')
-            self.cursor.execute('''
-                CREATE TABLE money_management (
+                CREATE TABLE IF NOT EXISTS money_management (
                     name TEXT PRIMARY KEY,
                     params TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -273,31 +302,38 @@ class DatabaseManager:
                 try:
                     obj = table_info['deserialize'](row[:len(table_info['columns'])])  # Limita ao número correto de colunas
                     if obj:
-                        result.append(obj)
+                        result.append((obj, row))  # Store the row with the object
                 except Exception as e:
                     print(f"Error deserializing row {row}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    continue  # Skip this row and continue with the next
             
-            # Display objects in a user-friendly format only for portfolios
+            # Display objects in a user-friendly format
             if obj_type == Asset_Portfolio:
                 print("\nPortfólios disponíveis:")
-                for i, portfolio in enumerate(result):
+                for i, (portfolio, _) in enumerate(result):
                     print(f"{i} - {portfolio.name}")
             elif obj_type == Asset:
                 print("\nAssets disponíveis:")
-                for i, obj in enumerate(result):
+                for i, (obj, _) in enumerate(result):
                     print(f"{i} - {obj.name}")
+            elif obj_type == Strat or issubclass(obj_type, Strat):
+                print("\nEstratégias disponíveis:")
+                for obj, row in result:
+                    try:
+                        details = json.loads(row[2]) if len(row) > 2 else {}  # params está na coluna 3
+                        strat_type = details.get('type', 'traditional')
+                        print(f"- {obj.name} ({strat_type})")
+                    except Exception as e:
+                        # If we can't get the type, just show the name
+                        print(f"- {obj.name}")
             
             # Return only the names for assets, full objects for others
             if obj_type == Asset:
-                return [obj.name for obj in result]
-            return result
+                return [obj.name for obj, _ in result]
+            return [obj for obj, _ in result]  # Return only the objects, not the rows
             
         except Exception as e:
             print(f"Error listing objects: {e}")
-            import traceback
-            traceback.print_exc()
             return []
 
     # ==================== Detailed View Operations ====================
@@ -343,7 +379,23 @@ class DatabaseManager:
                 print(f"Error loading object {name}")
                 return False
                 
-            if obj_type == Asset:
+            if obj_type == Money_Management_Algorithm:
+                # Get current parameters
+                params = json.loads(row[1]) if row[1] else {}
+                
+                # Update the specific parameter
+                params[attribute] = new_value
+                
+                # Update in database
+                self.cursor.execute(
+                    "UPDATE money_management SET params = ? WHERE name = ?",
+                    (json.dumps(params), name)
+                )
+                self.conn.commit()
+                print(f"\nParâmetro {attribute} atualizado com sucesso!")
+                return True
+                
+            elif obj_type == Asset:
                 # Lista os atributos disponíveis
                 print("\nAtributos disponíveis para modificação:")
                 print("1. type")
@@ -442,15 +494,13 @@ class DatabaseManager:
                 elif base == Asset_Portfolio:
                     info['pk_column'] = 'name'
                     info['columns'] = ['name', 'assets']
-                elif base == Strat:
+                elif base == Strat or issubclass(obj_type, Strat):
                     info['pk_column'] = 'name'
                     info['columns'] = ['name', 'template_path', 'params', 'template_type']
                 elif base == Money_Management_Algorithm:
                     info['pk_column'] = 'name'
                     info['columns'] = ['name', 'params']
                     
-                # Adiciona debug para verificar o que está sendo retornado
-#                print(f"Table info for {obj_type.__name__}: {info}")
                 return info
                 
         raise ValueError(f"Unsupported object type: {obj_type}")
@@ -687,47 +737,32 @@ class DatabaseManager:
     def _deserialize_money_management(self, row: List[Any]) -> Money_Management_Algorithm:
         """Deserializa um Money Management do banco de dados"""
         try:
-            name, params_json = row
-            basic_info = json.loads(params_json)
+            if not row or len(row) < 2:
+                raise ValueError("Invalid row data")
+
+            name = row[0]
+            params_json = row[1]
             
-            # Adiciona o diretório de MM ao path se necessário
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            mm_dir = os.path.join(script_dir, "Money Management Algo")
-            if mm_dir not in sys.path:
-                sys.path.append(mm_dir)
-            
-            # Tenta importar o MM do arquivo
+            # Parse the parameters
             try:
-                module = __import__(name)
-                importlib.reload(module)  # Recarrega o módulo para garantir versão mais recente
-                
-                # Primeiro tenta obter a instância money_management
-                if hasattr(module, 'money_management'):
-                    mm = module.money_management
-                    mm_class = type(mm)
-                    # Adiciona o mapeamento da classe se ainda não existir
-                    if mm_class not in self._table_map:
-                        self._table_map[mm_class] = self._table_map[Money_Management_Algorithm].copy()
-                        
-                    # Atualiza os parâmetros
-                    for key, value in basic_info.items():
-                        if hasattr(mm, key):
-                            setattr(mm, key, value)
-                            
-                    return mm
-                else:
-                    raise ImportError(f"Não foi possível encontrar o MM {name} no módulo")
-                
-            except (ImportError, AttributeError) as e:
-                print(f"Aviso: Não foi possível carregar o MM {name} do arquivo: {e}")
-                
-                # Se não conseguir carregar do arquivo, cria uma versão básica
-                return Money_Management_Algorithm(basic_info)
+                params = json.loads(params_json) if params_json else {}
+            except:
+                params = {}
+            
+            # Ensure we have at least the name
+            params['name'] = name
+            
+            # Create and return the MM instance
+            return Money_Management_Algorithm(params)
                 
         except Exception as e:
             print(f"Erro na deserialização: {e}")
-            # Retorna um MM básico em caso de erro
-            return Money_Management_Algorithm({"name": name or "unknown"})
+            # Return a basic MM with just the name if we can extract it
+            try:
+                name = row[0] if row and len(row) > 0 else "unknown"
+                return Money_Management_Algorithm({"name": name})
+            except:
+                return Money_Management_Algorithm({"name": "unknown"})
 
     # ==================== UI Helper Methods ====================
 
@@ -1112,18 +1147,8 @@ class DatabaseManager:
             
             if choice == '1':
                 try:
-                    strats = self.list_all(Strat)
-                    if not strats:
-                        print("\nNenhuma estratégia encontrada.")
-                    else:
-                        print("\nEstratégias disponíveis:")
-                        for strat in strats:
-                            try:
-                                details = self.get_details(Strat, strat)
-                                strat_type = details.get('type', 'traditional')
-                                print(f"- {strat} ({strat_type})")
-                            except Exception as e:
-                                print(f"- {strat} (erro ao obter detalhes: {e})")
+                    # Just call list_all and let it handle the display
+                    self.list_all(Strat)
                 except Exception as e:
                     print(f"Erro ao listar estratégias: {e}")
                     
