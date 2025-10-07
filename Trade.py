@@ -29,3 +29,12 @@ class Trade(BaseClass):
             self.profit_r = price_diff / risk if risk != 0 else 0
 
 
+    def get_trades_returns(self, trades: dict[Trade], type: str='perc'):
+        trade_returns=[]
+        
+        for trade in trades:
+            trade_returns.append(trade.)
+
+        return trade_returns
+
+

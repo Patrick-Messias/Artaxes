@@ -1,10 +1,19 @@
+"""
+# System Management Algorithm (SMA) - Base class for all System Management
+Função: orquestrar o comportamento do sistema em tempo de execução.
+Liga/desliga Strats ou Models conforme regras globais.
+Define quais combinações (Model + Asset + Strat) estão ativas.
+Pode implementar lógica de auto-adaptação (ex: desativar modelos com drawdown alto).
+Atua sobre os níveis superiores (controla quem “fala” com o PMM e o TM).
+🔹 Pense nele como o “cérebro administrativo” do sistema.
+"""
+
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
 import BaseClass, Indicator
-from System_Management_Algorithm import System_Management_Algorithm
 
 @dataclass
-class PMA_Parameters():
+class System_Management_Algorithm_Parameters():
     name: str='unnamed_pma'
     
     model_hierarchy: str='default'
@@ -15,8 +24,8 @@ class PMA_Parameters():
     indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) # For Model/Asset Balancing
     pma_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-class Portfolio_Manager_Algorithm(System_Management_Algorithm): # Manages portfolio's model hierarchy 
-    def __init__(self, pma_params: PMA_Parameters):
+class System_Management_Algorithm(BaseClass): 
+    def __init__(self, pma_params: System_Management_Algorithm_Parameters):
         super().__init__()
         self.name = pma_params.name
         
@@ -28,35 +37,3 @@ class Portfolio_Manager_Algorithm(System_Management_Algorithm): # Manages portfo
         # Custom Rules
         self.indicators = pma_params.indicators
         self.pma_rules = pma_params.pma_rules
-
-    def update_model_hierarchy(self): # Updates the hierarchy of the models enside the portfolio
-
-        # Checks pma_rules on how to rebalance
-
-        # Analyses current hierarchy and models performance based on rebalancing rules
-
-        # Updates hierachy
-
-        return 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

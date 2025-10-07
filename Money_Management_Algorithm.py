@@ -1,9 +1,19 @@
+"""
+# Money Management Algorithm (SMM / MMM / PMM) - Base class for all Money Management
+Função: controlar risco, exposição e alocação de capital.
+Camadas:
+SMM (Strategy Money Management): define quanto alocar por trade dentro da estratégia (ex: 2% por sinal).
+MMM (Model Money Management): define quanto cada estratégia do modelo recebe (ex: Strat A = 60%, Strat B = 40%).
+PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio (ex: Model Momentum = 70%, Model MeanReversion = 30%).
+🔹 Dominância: apenas o nível mais alto ativo (ex: PMM) sobrepõe os inferiores. Se PMM está ativo, ele comanda e os demais seguem as proporções internas.
+"""
+
 from typing import Dict, Optional, Union, List, Callable
 from dataclasses import dataclass, field
 import BaseClass, Indicator
 
 @dataclass
-class BaseMoneyManagementParams:
+class Money_Management_Algorithm_Params:
     """Parâmetros para configurar o Money Management"""
     name: str='unnamed_mma'
     
@@ -11,6 +21,7 @@ class BaseMoneyManagementParams:
     init_capital: float = 100000.0
     max_capital_exposure: float = 1.0
     leverage: float = 1.0
+    compounding = None #'regular'
     
     # Trade Risk - Trade Management
     position_sizing_type: str = 'percentage'  # 'percentage', 'kelly', 'confidence'
@@ -37,8 +48,8 @@ class BaseMoneyManagementParams:
     indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) # For Model/Asset Balancing
     mma_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-class Base_Management_Algorithm(BaseClass): # Base class for MMA, MMM and PMM
-    def __init__(self, mma_params: BaseMoneyManagementParams): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
+class Money_Management_Algorithm(BaseClass): # Base class for MMA, MMM and PMM
+    def __init__(self, mma_params: Money_Management_Algorithm_Params): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
         super().__init__()
         self.name = mma_params.name
         
@@ -71,7 +82,33 @@ class Base_Management_Algorithm(BaseClass): # Base class for MMA, MMM and PMM
         # Custom Rules
         self.indicators = mma_params.indicators
         self.mma_rules = mma_params.mma_rules
-        
+
+    def calculate_kelly_criterion(self, trades: dict[Trade], weight: int=0.1):
+        return None
+
+    def calculate_var(self):
+        return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

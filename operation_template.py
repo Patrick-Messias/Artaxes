@@ -6,6 +6,8 @@ from Portfolio import Portfolio, Portfolio_Parameters
 from Backtest import Backtest, Backtest_Parameters
 from Operation import Operation, Operation_Parameters
 
+# NOTE Should be able to create a Trading Model Portfolio with multiple Strategies taking trades or a simple model that rebalances between a few stocks without "trading"
+
 def test():
     Params = {
         'AT15': {
@@ -45,7 +47,7 @@ def test():
             execution=ExecutionSettings(order_type='market', offset=0.0),
             data_settings=DataSettings(fill_method='ffill', fillna=0)
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
-            time_settings=TimeSettings(execution_timeframe=Asset_Mapping['Asset1']['timeframe'], # 'H1'
+            time_settings=TimeSettings(
                             day_trade=False, 
                             timeTI=None, timeEF=None, timeTF=None, 
                             next_index_day_close=False, friday_close=False, 
@@ -89,7 +91,8 @@ def test():
             assets='FOREX',
             strat={
                 'AT15': AT15#, 'AT13': AT13
-            }
+            },
+            execution_timeframe=Asset_Mapping['Asset1']['timeframe']
         )
     )
     """
@@ -100,7 +103,8 @@ def test():
             assets='FOREX',
             strat={
                 'AT20': AT20
-            }
+            },
+            execution_timeframe=Asset_Mapping['Asset2']['timeframe']
         )
     )
     """
@@ -112,7 +116,7 @@ def test():
                 #'Model_2': model_2
             },
             pma = None, #Portfolio_Manager_Algorithm(PMA_Parameters(name='pma_1')),
-            pmm = None, #Portfolio_Money_Management(PMM_Parameters(name='pmm_1')),
+            pmm = None #Portfolio_Money_Management(PMM_Parameters(name='pmm_1')),
         )
     )
     backtest = Backtest(

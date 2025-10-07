@@ -12,7 +12,6 @@ class ExecutionSettings:
 
 @dataclass
 class TimeSettings:
-    #execution_timeframe: str = 'M15'
     day_trade: bool = False
     timeTI: Optional[list[int]] = None
     timeEF: Optional[list[int]] = None

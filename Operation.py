@@ -7,6 +7,37 @@ import BaseClass
 # Then add a latent variable like trend (bull, sideways, bear) to add new states [high_bull, high_sideways, etc.]
 # 2. Criar uma def que roda vários Assets e identifica o HMM mais adequado para aquele grupo de Assets
 
+# CONFIGURAR TUDO, PRINCIPALMENTE MM, TM e SM para JSON para otimização e evitar recompilação
+
+""" # Order of Execution
+Operation:
+
+    1. Data Preload
+        - loads all unique data to memory cache
+        - calculates all unique Indicators for all Strats
+        - generates all signals for all Strats
+        - runs preliminary backtest with all param combinations and saves to use for WF
+
+    2. Operation Execution
+    for datetime in all_unique_datetimes:
+        
+        # 1. Atualizar posições abertas
+        for trade in trades:
+            - check_exit_signals (tf/sl/tp/breakeven/etc.)
+        
+        # 2. Gerar sinais de entrada
+        for asset in all_unique_assets:
+            for model in models:
+                for strat in model.strats:
+                    - generate_entry_signals (long/short/opcionalmente com ranking)
+        
+        # 3. Aplicar regras de portfólio (PMA)
+        - portfolio_rebalancing (definir o que realmente entra/sai do portfólio)
+        
+        # 4. Executar ordens
+        - execute_orders (abrir/fechar trades com base nos sinais + rebalanceamento)
+"""
+
 @dataclass
 class Operation_Parameters():
     name: str='unnamed_operation'
@@ -40,6 +71,8 @@ class Operation(BaseClass):
         self._signal_cache = {}             # {(model_name, strat_name, asset_name, timeframe, params)}
         self._preliminary_result_cache = {} # {(model_name, strat_name, asset_name, timeframe, params)}
 
+        self._operation_result = {}         # {(model_name, strat_name, asset_name)}
+
     def get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
             return {self.data.name: self.data}
@@ -71,11 +104,31 @@ class Operation(BaseClass):
             strats[name] = model.strat
         return strats
 
+    def get_all_unique_datetimes(self, assets_cache=None): # Returns all unique datetimes from a Asset dict
+        all_unique_datetimes = set()
+
+        if not assets_cache: return []
+
+        for (asset_name, tf), df in assets_cache.items():
+            if df is None or df.empty: continue
+
+            if 'datetime' in df.columns:
+                datetimes = pd.to_datetime(df['datetime'], errors='coerse')
+            elif 'date' in df.columns:
+                datetimes = pd.to_datetime(df['date'], errors='coerse')
+            else: 
+                continue
+
+            datetimes = datetimes.dt.normalize()
+            all_unique_datetimes.update(datetimes.dropna().unique())
+
+        return sorted(all_unique_datetime)
+
     def calculates_indicators(self): # Calculates all Indicators for all Models with their own Assets, saves to _indicators_cache
         models = self.get_all_models()
 
         for name, model in models.items():
-            strats = model.strat
+            # strats = model.strat
             assets = {}
 
             if isinstance(model.assets, Asset): 
@@ -117,34 +170,7 @@ class Operation(BaseClass):
         return None
 
 
-    """ # Order of Execution
-    Operation:
 
-        1. Data Preload
-            - loads all unique data to memory cache
-            - calculates all unique Indicators for all Strats
-            - generates all signals for all Strats
-            - runs preliminary backtest with all param combinations and saves to use for WF
-
-        2. Operation Execution
-        for datetime in all_unique_datetimes:
-            
-            # 1. Atualizar posições abertas
-            for trade in trades:
-                - check_exit_signals (tf/sl/tp/breakeven/etc.)
-            
-            # 2. Gerar sinais de entrada
-            for asset in all_unique_assets:
-                for model in models:
-                    for strat in model.strats:
-                        - generate_entry_signals (long/short/opcionalmente com ranking)
-            
-            # 3. Aplicar regras de portfólio (PMA)
-            - portfolio_rebalancing (definir o que realmente entra/sai do portfólio)
-            
-            # 4. Executar ordens
-            - execute_orders (abrir/fechar trades com base nos sinais + rebalanceamento)
-    """
 
 
     

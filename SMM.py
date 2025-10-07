@@ -1,6 +1,6 @@
 from typing import Dict, Optional, Union, List, Callable
 from dataclasses import dataclass, field
-from BMM import Base_Management_Algorithm
+from Money_Management_Algorithm import Money_Management_Algorithm
 import Indicator
 
 @dataclass
@@ -8,8 +8,8 @@ class Strategy_Management_Algorithm_Params:
     """Parâmetros para configurar o Money Management"""
     name: str='unnamed_mma'
 
-class Strategy_Management_Algorithm(Base_Management_Algorithm): # Manages Strat's risk and money management
-    def __init__(self, mma_params: Money_Management_Algorithm_Params): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
+class Strategy_Management_Algorithm(Money_Management_Algorithm): # Manages Strat's risk and money management
+    def __init__(self, mma_params: Strategy_Management_Algorithm_Params): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
         super().__init__()
         self.name: mma_params.name
 
