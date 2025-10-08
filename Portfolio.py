@@ -1,11 +1,11 @@
 # Holds >1 models, doesn't define Assets, Server uniquely to Manage Positions between multiple models has to dominate over all MMM and MMA
 
 from dataclasses import dataclass
-import BaseClass
+import BaseClass, uuid
 
 @dataclass
 class Portfolio_Parameters():
-    name: str='unnamed_portfolio'
+    name: str=f'portfolio_{str(uuid.uuid4())}'
     models: dict=None
     pma: Portfolio_Manager_Algorithm=None
     pmm: Portfolio_Money_Management=None

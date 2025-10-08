@@ -1,6 +1,6 @@
 from typing import Union, Dict, Optional
 from dataclasses import dataclass, field
-import BaseClass
+import BaseClass, Persistance, uuid
 
 # NOTE -> Tirar daqui -> 
 # 1. Criar um HMM para modelar transição de estados de volatilidade [high, med, low]. 
@@ -40,7 +40,7 @@ Operation:
 
 @dataclass
 class Operation_Parameters():
-    name: str='unnamed_operation'
+    name: str=f'operation_{str(uuid.uuid4())}'
     data: Union[Model, Portfolio]=None # Can make an operation with a single model or portfolio
     operation: Union[Backtest, Optimization, Walkforward]=None 
 
@@ -52,7 +52,7 @@ class Operation_Parameters():
     date_start: str=None
     date_end: str=None
     
-class Operation(BaseClass):
+class Operation(BaseClass, Persistance):
     def __init__(self, op_params: Operation_Parameters):
         super().__init__()
         self.name = op_params.name
@@ -62,8 +62,6 @@ class Operation(BaseClass):
         self.operation_timeframe = op_params.operation_timeframe
         self.date_start = op_params.date_start
         self.date_end = op_params.date_end
-
-        Acho naõ ser necessário o operation_map, só usar os caches para se organizar #self._operation_map = {}
 
         # Caches organize and save data for general use in various defs
         self._assets_data_cache = {}        # {(asset_name, timeframe)}
@@ -167,6 +165,14 @@ class Operation(BaseClass):
         return None
 
     def run(self):
+
+        # 1. Data Preload
+        self.calculate_indicators()
+        self.generate_signals()
+        self.preliminary_backtest()
+
+        # 2. Operation Execution
+
         return None
 
 

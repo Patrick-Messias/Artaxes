@@ -10,12 +10,12 @@ PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio
 
 from typing import Dict, Optional, Union, List, Callable
 from dataclasses import dataclass, field
-import BaseClass, Indicator
+import BaseClass, Indicator, uuid
 
 @dataclass
 class Money_Management_Algorithm_Params:
     """Parâmetros para configurar o Money Management"""
-    name: str='unnamed_mma'
+    name: str=f'mm_{str(uuid.uuid4())}'
     
     # Capital Management
     init_capital: float = 100000.0

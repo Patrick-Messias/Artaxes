@@ -10,19 +10,20 @@ Atua sobre os níveis superiores (controla quem “fala” com o PMM e o TM).
 
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-import BaseClass, Indicator
+import BaseClass, Indicator, uuid
 
 @dataclass
 class System_Management_Algorithm_Parameters():
-    name: str='unnamed_pma'
+    name: str=f'sm_{str(uuid.uuid4())}'
     
     model_hierarchy: str='default'
     rebalance_frequency: str='weekly'
+    close_open_trades_on_rebalance: bool=False
 
     external_data: Dict[str, pd.DataFrame] = field(default_factory=dict)=None
 
     indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) # For Model/Asset Balancing
-    pma_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
+    pma_rules: Optional[Dict[str, Callable]] = field(default_factory=dict) 
 
 class System_Management_Algorithm(BaseClass): 
     def __init__(self, pma_params: System_Management_Algorithm_Parameters):

@@ -1,11 +1,11 @@
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-import BaseClass, Indicator
+import BaseClass, Indicator, uuid
 from System_Management_Algorithm import System_Management_Algorithm
 
 @dataclass
 class PMA_Parameters():
-    name: str='unnamed_pma'
+    name: str=f'pma_{str(uuid.uuid4())}'
     
     model_hierarchy: str='default'
     rebalance_frequency: str='weekly'

@@ -3,11 +3,11 @@
  
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-import BaseClass, Indicator
+import BaseClass, Indicator, uuid
 
 @dataclass
 class Model_Parameters():
-    name: str='unnamed_model'
+    name: str=f'model_{str(uuid.uuid4())}'
     description: str=None
 
     assets: Union[Asset, Asset_Portfolio]=None # Asset(s) that the model will trade with it's strat(s)
@@ -31,7 +31,7 @@ class Model(BaseClass):
 
         # Custom Rules
         self.indicators = model_params.indicators
-        self.model_rules = model_params.model_rules
+        self.model_rules = model_params.model_rules # Regime filters can be added here
 
 
 
