@@ -13,28 +13,18 @@ from dataclasses import dataclass, field
 import BaseClass, Indicator, uuid
 
 @dataclass
-class System_Management_Algorithm_Parameters():
-    name: str=f'sm_{str(uuid.uuid4())}'
+class SystemManagerParameters():
+    name: str = field(default_factory=lambda: f'sm_{uuid.uuid4()}')
     
-    model_hierarchy: str='default'
-    rebalance_frequency: str='weekly'
-    close_open_trades_on_rebalance: bool=False
+    external_data: Dict[str, pd.DataFrame] = field(default_factory=dict)
+    indicators: Optional[Dict[str, 'Indicator']] = field(default_factory=dict)
+    rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-    external_data: Dict[str, pd.DataFrame] = field(default_factory=dict)=None
-
-    indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) # For Model/Asset Balancing
-    pma_rules: Optional[Dict[str, Callable]] = field(default_factory=dict) 
-
-class System_Management_Algorithm(BaseClass): 
-    def __init__(self, pma_params: System_Management_Algorithm_Parameters):
-        super().__init__()
-        self.name = pma_params.name
+class SystemManager(BaseClass): 
+    def __init__(self, system_params: SystemManagerParameters):
+        self.name = system_params.name
         
-        self.model_hierarchy = pma_params.model_hierarchy
-        self.rebalance_frequency = pma_params.rebalance_frequency
-
-        self.external_data = pma_params.external_data # For external data like CDT
-
         # Custom Rules
-        self.indicators = pma_params.indicators
-        self.pma_rules = pma_params.pma_rules
+        self.external_data = dict(system_params.external_data) # For external data like CDT not present during Strat or Model construction
+        self.indicators = dict(system_params.indicators)
+        self.rules = dict(system_params.rules)

@@ -1,8 +1,10 @@
-import pandas as pd, numpy as np, itertools, importlib, TA, BaseClass
+import pandas as pd, numpy as np, itertools, importlib
 from typing import Dict, Optional, Union, List, Callable
 from dataclasses import dataclass
+from BaseClass import BaseClass
+from finta import TA
 
-from MMA import MoneyManagementParams
+from MoneyManager import MoneyManager, MoneyManagerParams
 import Indicator
 
 @dataclass
@@ -47,7 +49,7 @@ class Strat_Parameters():
 
     execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
     data_settings: DataSettings = field(default_factory=DataSettings)
-    mma_settings: MoneyManagementParams = field(default_factory=MoneyManagementParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+    mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
     time_settings: TimeSettings = field(default_factory=TimeSettings)
     indicators: Dict[str, Indicator] = field(default_factory=dict)
 
@@ -58,7 +60,7 @@ class Strat_Parameters():
     be_pos_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
     be_neg_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
 
-                                                   MOVE FUNCTIONS BELOW TO MODEL OR OPERATION WHERE THINGS WILL ACTUALLY HAPPEN
+                                                   #MOVE FUNCTIONS BELOW TO MODEL OR OPERATION WHERE THINGS WILL ACTUALLY HAPPEN
 
 def _generate_param_comb(params: dict) -> list: # Gera as combinações possíveis de parametros
     param_values = []

@@ -1,5 +1,6 @@
 import pandas as pd, numpy as np, datetime
 from Model import Model_Parameters, Model
+from Asset import Asset, AssetParams, Asset_Portfolio
 from Strat import Strat, Strat_Parameters, ExecutionSettings, DataSettings, TimeSettings
 from Indicator import Indicator
 from Portfolio import Portfolio, Portfolio_Parameters
@@ -45,7 +46,7 @@ def test():
             asset_mapping=Asset_Mapping, # With what will the model define the rules
 
             execution=ExecutionSettings(order_type='market', offset=0.0),
-            data_settings=DataSettings(fill_method='ffill', fillna=0)
+            data_settings=DataSettings(fill_method='ffill', fillna=0),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             time_settings=TimeSettings(
                             day_trade=False, 
@@ -53,7 +54,7 @@ def test():
                             next_index_day_close=False, friday_close=False, 
                             timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
             indicators={
-                'ma': Indicator(name='SMA', Asset_Mapping['Asset1']['timeframe'], params={'window': list(Params['AT15']['param1'])}, func_path='TA.SMA')
+                'ma': Indicator(name='SMA', timeframe=Asset_Mapping['Asset1']['timeframe'], params={'window': list(Params['AT15']['param1'])}, func_path='TA.SMA')
             },
             
             entry_rules=entry_rules,
@@ -63,23 +64,21 @@ def test():
             be_pos_rules=be_pos_rules,
             be_neg_rules=be_neg_rules,
             nb_exit_rules=nb_exit_rules
-            
-            """
-            trade=TradeManagementRules( # TradeManagementRules Eliminated, it must check in Strat's generate_signals() with the checks below
-                LONG='entry_long' in entry_rules,
-                SHORT='entry_short' in entry_rules,
-                TF=bool(tf_exit_rules),
-                SL=bool(sl_exit_rules),  # Ou definir sl_exit_rules
-                TP=bool(tp_exit_rules), # Ou definir tp_exit_rules
-                BE_pos=bool(be_pos_rules),
-                BE_neg=bool(be_neg_rules),
-                NB=list(nb_exit_rules) # Exit by number of bars
-            )
-            """
         )
     )
 
-
+    """
+    trade=TradeManagementRules( # TradeManagementRules Eliminated, it must check in Strat's generate_signals() with the checks below
+        LONG='entry_long' in entry_rules,
+        SHORT='entry_short' in entry_rules,
+        TF=bool(tf_exit_rules),
+        SL=bool(sl_exit_rules),  # Ou definir sl_exit_rules
+        TP=bool(tp_exit_rules), # Ou definir tp_exit_rules
+        BE_pos=bool(be_pos_rules),
+        BE_neg=bool(be_neg_rules),
+        NB=list(nb_exit_rules) # Exit by number of bars
+    )
+    """
 
 
 

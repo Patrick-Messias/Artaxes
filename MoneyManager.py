@@ -6,6 +6,10 @@ SMM (Strategy Money Management): define quanto alocar por trade dentro da estrat
 MMM (Model Money Management): define quanto cada estratégia do modelo recebe (ex: Strat A = 60%, Strat B = 40%).
 PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio (ex: Model Momentum = 70%, Model MeanReversion = 30%).
 🔹 Dominância: apenas o nível mais alto ativo (ex: PMM) sobrepõe os inferiores. Se PMM está ativo, ele comanda e os demais seguem as proporções internas.
+
+IMPORTANTE: Strat, Model e Portfolio Manager são opcionais em cada nível, para economizar memória pode usar alguns ou nenhum, com um método basico para testar /
+    criar na hora de verificar o StratMoneyManager na hora de realizar os backtests e usar um padrão fixo
+
 """
 
 from typing import Dict, Optional, Union, List, Callable
@@ -13,9 +17,9 @@ from dataclasses import dataclass, field
 import BaseClass, Indicator, uuid
 
 @dataclass
-class Money_Management_Algorithm_Params:
+class MoneyManagerParams:
     """Parâmetros para configurar o Money Management"""
-    name: str=f'mm_{str(uuid.uuid4())}'
+    name: str = field(default_factory=lambda: f'sm_{uuid.uuid4()}')
     
     # Capital Management
     init_capital: float = 100000.0
@@ -48,9 +52,8 @@ class Money_Management_Algorithm_Params:
     indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) # For Model/Asset Balancing
     mma_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-class Money_Management_Algorithm(BaseClass): # Base class for MMA, MMM and PMM
-    def __init__(self, mma_params: Money_Management_Algorithm_Params): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
-        super().__init__()
+class MoneyManager(BaseClass): # Base class for MMA, MMM and PMM
+    def __init__(self, mma_params: MoneyManagerParams): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
         self.name = mma_params.name
         
         # Capital Management
@@ -73,7 +76,7 @@ class Money_Management_Algorithm(BaseClass): # Base class for MMA, MMM and PMM
         self.drawdown_global = mma_params.drawdown_global
         self.drawdown_monthly = mma_params.drawdown_monthly
         self.drawdown_weekly = mma_params.drawdown_weekly
-        self.drawdown_daily = mma_params.drawdown_weekly
+        self.drawdown_daily = mma_params.drawdown_daily
         
         # Advanced Parameters
         self.confidence_level = mma_params.confidence_level

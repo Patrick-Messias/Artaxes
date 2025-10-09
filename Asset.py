@@ -1,4 +1,5 @@
-import pandas as pd, os, re, import BaseClass
+import pandas as pd, os, re
+from BaseClass import BaseClass
 from dataclasses import dataclass
 
 @staticmethod

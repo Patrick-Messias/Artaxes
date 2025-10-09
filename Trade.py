@@ -1,6 +1,6 @@
 import BaseClass, datetime, uuid
 
-class Trade(BaseClass):
+class Trade(BaseClass): # Each Trade represents 1 Position too
     def __init__(self, params: dict): 
         super().__init__()
         self.id = params.get('id', str(uuid.uuid4()))

@@ -1,9 +1,12 @@
  # Holds 1+ Strat with 1+ Asset, uses Model Management Algorith to select from entries from multiple Strat or Asset positions (if either >1) 
  # and Model Money Management to manage Risk, Exposition, etc.
  
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, Callable, Union
 from dataclasses import dataclass, field
-import BaseClass, Indicator, uuid
+from Asset import Asset, AssetParams, Asset_Portfolio
+from Indicator import Indicator
+from BaseClass import BaseClass
+import uuid
 
 @dataclass
 class Model_Parameters():
@@ -31,7 +34,7 @@ class Model(BaseClass):
 
         # Custom Rules
         self.indicators = model_params.indicators
-        self.model_rules = model_params.model_rules # Regime filters can be added here
+        self.model_rules = model_params.model_rules # Regime filters can be added here ALSO STRAT?
 
 
 

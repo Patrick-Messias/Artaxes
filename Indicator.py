@@ -1,3 +1,4 @@
+import pandas as pd, numpy as np
 from typing import Optional, List
 from dataclasses import dataclass
 
@@ -14,7 +15,6 @@ class Indicator: # Indicador class utilizado apenas para organizar, os calculos 
     output_name_template: Optional[str] = None     # ex: "{name}[alpha={alpha},len={sliced_data_length}]"
 
 
-TODO BELOW
 def calculate_indicator(df: pd.DataFrame, ind: Indicator, params: dict) -> pd.DataFrame:
     # Must use indicator name to search for the function to calculate it in files or TA
 
