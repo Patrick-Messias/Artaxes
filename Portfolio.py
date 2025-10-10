@@ -5,7 +5,7 @@ import BaseClass, uuid
 
 @dataclass
 class Portfolio_Parameters():
-    name: str=f'portfolio_{str(uuid.uuid4())}'
+    name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     models: dict=None
     pma: Portfolio_Manager_Algorithm=None
     pmm: Portfolio_Money_Management=None

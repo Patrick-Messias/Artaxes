@@ -14,7 +14,7 @@ import BaseClass, Indicator, uuid
 
 @dataclass
 class Trade_Management_Parameters():
-    name: str=f'tm_{str(uuid.uuid4())}'
+    name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     trades: dict[Trade]={}
 
 class Trade_Management(BaseClass): 

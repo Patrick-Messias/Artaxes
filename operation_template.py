@@ -6,6 +6,7 @@ from Indicator import Indicator
 from Portfolio import Portfolio, Portfolio_Parameters
 from Backtest import Backtest, Backtest_Parameters
 from Operation import Operation, Operation_Parameters
+from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
 
 # NOTE Should be able to create a Trading Model Portfolio with multiple Strategies taking trades or a simple model that rebalances between a few stocks without "trading"
 
@@ -91,7 +92,8 @@ def test():
             strat={
                 'AT15': AT15#, 'AT13': AT13
             },
-            execution_timeframe=Asset_Mapping['Asset1']['timeframe']
+            execution_timeframe=Asset_Mapping['Asset1']['timeframe'],
+            model_money_manager=ModelMoneyManager(MoneyManagerParams(name="AT15_MM"))
         )
     )
     """
@@ -103,7 +105,8 @@ def test():
             strat={
                 'AT20': AT20
             },
-            execution_timeframe=Asset_Mapping['Asset2']['timeframe']
+            execution_timeframe=Asset_Mapping['Asset2']['timeframe'],
+            model_money_manager=ModelMoneyManager(MoneyManagerParams(name="AT20_MM"))
         )
     )
     """

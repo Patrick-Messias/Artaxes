@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class BacktestParams():
-    name: str=f'backtest_{str(uuid.uuid4())}'
+    name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
 
 class Backtest(BaseClass)
     def __init__(self, backtest_params: BacktestParams):
