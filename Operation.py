@@ -94,31 +94,7 @@ class Operation(BaseClass, Persistance):
         elif isinstance(self.data, Portfolio): # Portfolio
             return self.data._get_all_models()
         else: return {}
-    """
-    def _get_all_assets(self) -> dict: # Returns all Asset(s) from Models
-        models = self._get_all_models()
-        assets={}
-        for name, model in models.items():
-            if isinstance(model.assets, Asset): # Asset
-                if model.assets.name not in assets: 
-                    assets[model.assets.name] = model.assets
 
-            elif isinstance(model.assets, Asset_Portfolio): # Asset_Portfolio
-                for asset_name, asset in model.assets.assets.items():
-                    if asset_name not in assets:
-                        assets[asset_name] = asset
-
-            else: print(f"⚠️ Warning: model '{name}' has no valid assets (neither Asset nor Asset_Portfolio)")
-
-        return assets
-
-    def _get_all_strats(self) -> dict: # Returns all Strat(s) from Models
-        models = self._get_all_models()
-        strats={}
-        for name, model in models.items():
-            strats[name] = model.strat
-        return strats
-    """
     def _get_all_unique_datetimes(self, assets_cache=None): # Returns all unique datetimes from a Asset dict
         all_unique_datetimes = set()
 
@@ -332,38 +308,67 @@ class Operation(BaseClass, Persistance):
         return results
 
     # III - Data Pre-Processing
-    def _calculates_indicators(self): # Calculates all Indicators for all Models with their own Assets, saves to _indicators_cache
-        models = self._get_all_models()
+    def _calculates_indicators(self): # Calculates all indicators using mapped structure
+        try:
+            portfolio_data = self._operation_result.get_result("portfolio")
+        except KeyError:
+            print("❌ No portfolio mapping found. Run _mapping() first.")
+            return None
+        
+        models = portfolio_data.get('models', {})
 
-        for name, model in models.items():
-            # strats = model.strat
-            assets = {}
+        for model_name, model_data in models.items(): # Processes each Strat in each Model
+            strats = model_data.get('strats', {})
 
-            if isinstance(model.assets, Asset): 
-                assets[model.assets.name] = model.assets
-            elif isinstance(model.assets, Asset_Portfolio): 
-                for asset_name, asset in model.assets.assets.items(): 
-                    assets[asset_name] = asset
-            else: print(f"⚠️ Warning: model has no valid assets (neither Asset nor Asset_Portfolio)")
+            for strat_name, strat_data in strats.items(): # Get any indicators and asset_mapping already mapped
+                indicators = strat_data.get('indicators', {})
+                asset_mapping = strat_data.get('asset_mapping', {})
 
-            for asset_name, asset in assets.items():
-
-                # 1. Add exception if operational_timeframe != ind.timeframe, OR add this later in signals
-
-                for strat in strats:
-                    for ind in strat.indicators:
-                        if (asset.name, ind.timeframe) in self._assets_data_cache:
-                            data = self._assets_data_cache[(asset.name, ind.timeframe)] # Saves ind.timeframe because it is the timeframe the ind will use, usually the Strats tf
-                        else: 
-                            data = asset.data_get(ind.timeframe)
-                            self._assets_data_cache[(asset.name, ind.timeframe)] = data
-                        
-                        for param_name, param_value in ind.params.items():
-                            cache_key = (ind.name, asset.name, ind.timeframe, param_value)
-
-                            if cache_key not in self._indicators_cache:
-                                self._indicators_cache[cache_key] = ind.calculate_indicator(data, param_value)
+                # Calculates indicators based on mapping
+                self._calculate_strat_indicators(model_name, strat_name, indicators, asset_mapping)
         return None
+
+    def _calculates_strat_indicators(self, model_name: str, strat_name: str, indicators: dict, asset_mapping: dict): # Calculates indicators for a specific Strat using mapped data
+        for asset_key, asset_config in asset_mapping.items():
+            asset_name = asset_config.get('name')
+            timeframe = asset_config.get('timeframe')
+
+            if not asset_name or not timeframe: continue
+
+            # Gets the real object (not mapped metadata)
+            asset_obj = self._get_asset_object(model_name, asset_name)
+            if not asset_obj: continue
+
+            # Loads Asset data
+            try:
+                data = asset_obj.data_get(timeframe)
+                if data is None or data.empty: continue
+            except Exception as e:
+                print(f"⚠️ Error loading data for {asset_name}: {e}")
+                continue
+
+            # Calculates each indicator
+            for ind_name, indicator in indicators.items():
+                if indicator.timeframe != timeframe: continue
+
+                # Calculates and stores results
+                result_path = f"portfolio.models.{model_name}.strats.{strat_name}.results.indicators.{asset_name}.{timeframe}.{ind_name}"
+                calculated_data = self._calculate_indicator_data(data, indicator)
+                
+                self._operation_result.set_result(result_path, calculated_data)
+
+    def _get_asset_object(self, model_name, asset_name: str): # Gets the real Asset object (not mapped metadata)
+        models = self._get_all_models()
+        model = models.get(model_name)
+
+        if not model: return None
+
+        if isinstance(model.assets, Asset):
+            return model.assets if model.assets.name == asset_name else None
+        elif isinstance(model.assets, Asset_Portfolio):
+            return model.assets.assets.get(asset_name)
+        return None
+
 
     def _generate_signals(self):
         return None
@@ -432,6 +437,66 @@ class Operation(BaseClass, Persistance):
 
 
 
+""" OLD BELOW, DELETE AFTER
+
+  
+    def _get_all_assets(self) -> dict: # Returns all Asset(s) from Models
+        models = self._get_all_models()
+        assets={}
+        for name, model in models.items():
+            if isinstance(model.assets, Asset): # Asset
+                if model.assets.name not in assets: 
+                    assets[model.assets.name] = model.assets
+
+            elif isinstance(model.assets, Asset_Portfolio): # Asset_Portfolio
+                for asset_name, asset in model.assets.assets.items():
+                    if asset_name not in assets:
+                        assets[asset_name] = asset
+
+            else: print(f"⚠️ Warning: model '{name}' has no valid assets (neither Asset nor Asset_Portfolio)")
+
+        return assets
+
+    def _get_all_strats(self) -> dict: # Returns all Strat(s) from Models
+        models = self._get_all_models()
+        strats={}
+        for name, model in models.items():
+            strats[name] = model.strat
+        return strats
+    
+    def _calculates_indicators(self): # Calculates all Indicators for all Models with their own Assets, saves to _indicators_cache
+        models = self._get_all_models()
+
+        for name, model in models.items():
+            # strats = model.strat
+            assets = {}
+
+            if isinstance(model.assets, Asset): 
+                assets[model.assets.name] = model.assets
+            elif isinstance(model.assets, Asset_Portfolio): 
+                for asset_name, asset in model.assets.assets.items(): 
+                    assets[asset_name] = asset
+            else: print(f"⚠️ Warning: model has no valid assets (neither Asset nor Asset_Portfolio)")
+
+            for asset_name, asset in assets.items():
+
+                # 1. Add exception if operational_timeframe != ind.timeframe, OR add this later in signals
+
+                for strat in strats:
+                    for ind in strat.indicators:
+                        if (asset.name, ind.timeframe) in self._assets_data_cache:
+                            data = self._assets_data_cache[(asset.name, ind.timeframe)] # Saves ind.timeframe because it is the timeframe the ind will use, usually the Strats tf
+                        else: 
+                            data = asset.data_get(ind.timeframe)
+                            self._assets_data_cache[(asset.name, ind.timeframe)] = data
+                        
+                        for param_name, param_value in ind.params.items():
+                            cache_key = (ind.name, asset.name, ind.timeframe, param_value)
+
+                            if cache_key not in self._indicators_cache:
+                                self._indicators_cache[cache_key] = ind.calculate_indicator(data, param_value)
+        return None
 
 
+"""
     
