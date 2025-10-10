@@ -260,12 +260,13 @@ class Operation(BaseClass, Persistance):
                         {}
                     )
 
-            # Shared indicators in the model
-            if hasattr(model, 'indicators'):
-                self._operation_result.set_result(
-                    f"{model_path}.shared_indicators", 
-                    model.indicators
-                )
+            # DELETED BECAUSE STRAT.INDICATORS != MODEL.INDICATORS | SEE IF WANT TO KEEP HERE OR MIGRATE TO MSM
+            # # Shared indicators in the model 
+            # if hasattr(model, 'indicators'):
+            #     self._operation_result.set_result(
+            #         f"{model_path}.shared_indicators", 
+            #         model.indicators
+            #     )
 
     def _get_model_assets(self, model) -> Dict[str, Any]: # Optimally extracts assets from a model
         asset_info={}
@@ -368,7 +369,6 @@ class Operation(BaseClass, Persistance):
         elif isinstance(model.assets, Asset_Portfolio):
             return model.assets.assets.get(asset_name)
         return None
-
 
     def _generate_signals(self):
         return None
