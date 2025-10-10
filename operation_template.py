@@ -1,4 +1,4 @@
-import pandas as pd, numpy as np, datetime
+import pandas as pd, numpy as np, datetime, json
 from Model import Model_Parameters, Model
 from Asset import Asset, AssetParams, Asset_Portfolio
 from Strat import Strat, Strat_Parameters, ExecutionSettings, DataSettings, TimeSettings
@@ -136,10 +136,24 @@ def test():
             data=portfolio,
             operation=backtest,
             metrics=metrics,
-            operation_timeframe=next(iter(model_1.strat.values())).time_settings.execution_timeframe,
+            operation_timeframe='M15',  # Using default timeframe from Asset_Mapping
             date_start=None, date_end=None
         )
     )
+
+    # Durante execução
+    results = operation.run()
+
+    # Acesso otimizado
+    model_results = results.get_model_results("Model_1")
+    strat_results = results.get_strat_results("Model_1", "AT15")
+
+    # Salvar/carregar
+    filepath = results.save_results()
+    results.load_results(filepath)
+
+    # Serialização para JSON (apenas estrutura, não dados comprimidos)
+    json_data = json.dumps(results.to_dict(), indent=2)
 
 def main():
     test()

@@ -1,4 +1,4 @@
-from typing import Union, Dict, Optional
+from typing import Union, Dict, Optional, Any
 from dataclasses import dataclass, field
 import BaseClass, Persistance, uuid
 import pandas as pd
@@ -8,6 +8,8 @@ from Backtest import Backtest
 from Optimization import Optimization
 from Walkforward import Walkforward
 from Asset import Asset, Asset_Portfolio
+from Persistance import save, load
+from OptimizedOperationResult import OptimizedOperationResult
 
 # NOTE -> Tirar daqui -> 
 # 1. Criar um HMM para modelar transição de estados de volatilidade [high, med, low]. 
@@ -75,12 +77,16 @@ class Operation(BaseClass, Persistance):
         self.save = op_params.save
 
         # Caches organize and save data for general use in various defs
-        self._assets_data_cache = {}        # {(asset_name, timeframe)}
-        self._indicators_cache = {}         # {(ind_name, asset_name, timeframe, params)}
-        self._signal_cache = {}             # {(model_name, strat_name, asset_name, timeframe, params)}
-        self._preliminary_result_cache = {} # {(model_name, strat_name, asset_name, timeframe, params)}
+        #self._assets_data_cache = {}        # {(asset_name, timeframe)}
+        #self._indicators_cache = {}         # {(ind_name, asset_name, timeframe, params)}
+        #self._signal_cache = {}             # {(model_name, strat_name, asset_name, timeframe, params)}
+        #self._preliminary_result_cache = {} # {(model_name, strat_name, asset_name, timeframe, params)}
 
-        self._operation_result = {}         # {(model_name, strat_name, asset_name)}
+        # Cache otimizado
+        self._memory_cache = {}
+        self._cache_size_limit = 100 * 1024 * 1024  # 100MB limit
+
+        self._operation_result = OptimizedOperationResult() # {(model_name, strat_name, asset_name)}
 
     def _get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
@@ -88,7 +94,7 @@ class Operation(BaseClass, Persistance):
         elif isinstance(self.data, Portfolio): # Portfolio
             return self.data._get_all_models()
         else: return {}
-
+    """
     def _get_all_assets(self) -> dict: # Returns all Asset(s) from Models
         models = self._get_all_models()
         assets={}
@@ -112,7 +118,7 @@ class Operation(BaseClass, Persistance):
         for name, model in models.items():
             strats[name] = model.strat
         return strats
-
+    """
     def _get_all_unique_datetimes(self, assets_cache=None): # Returns all unique datetimes from a Asset dict
         all_unique_datetimes = set()
 
@@ -134,7 +140,7 @@ class Operation(BaseClass, Persistance):
         return sorted(all_unique_datetimes)
 
 
-
+    # I - Init and Validation
     def _validate_operation(self):
         """
         Validates the operation configuration before execution.
@@ -239,8 +245,93 @@ class Operation(BaseClass, Persistance):
         print("✅ Operation validation passed")
         return True
 
+    # II - Hierarchical Mapping
+    def _mapping(self): # Creates an optmized hierarchical mapping of the results
+        models = self._get_all_models()
 
+        # Base Structure
+        portfolio_name = getattr(self.data, 'name', 'default_portfolio')
 
+        for model_name, model in models.items():
+            model_path = f'portfolio.models.{model_name}'
+
+            # Model's Assets
+            assets = self._get_model_assets(model)
+            self._operation_result.set_result(f"{model_path}.assets", assets)
+
+            # Model's Strats
+            if hasattr(model, 'strat') and model.strat:
+                for strat_name, strat in model.strat.items():
+                    strat_path = f"{model_path}.strats.{strat_name}"
+
+                    # Strat's Indicators
+                    if hasattr(strat, 'indicators'):
+                        self._operation_result.set_result(
+                            f"{strat_path}.indicators",
+                            strat.indicators
+                        )
+
+                    # Strat's Asset Mapping
+                    if hasattr(strat, 'asset_mapping'):
+                        self._operation_result.set_result(
+                            f"{strat_path}.asset_mapping",
+                            strat.asset_mapping
+                        )
+
+                    # Strat's Results PLACEHOLDER
+                    self._operation_result.set_result(
+                        f'{strat_path}.results',
+                        {}
+                    )
+
+            # Shared indicators in the model
+            if hasattr(model, 'indicators'):
+                self._operation_result.set_result(
+                    f"{model_path}.shared_indicators", 
+                    model.indicators
+                )
+
+    def _get_model_assets(self, model) -> Dict[str, Any]: # Optimally extracts assets from a model
+        asset_info={}
+
+        if isinstance(model.assets, Asset):
+            assets_info[model.assets.name] = {
+                'type': model.assets.type,
+                'market': model.assets.market,
+                'timeframes': list(model.assets.data.keys())
+            }
+        elif isinstance(model.assets, Asset_Portfolio):
+            for asset_name, asset in model.assets.assets.items():
+                assets_info[asset_name] = {
+                    'type': asset.type,
+                    'market': asset.market,
+                    'timeframes': list(asset.data.keys())
+                }
+        return assets_info
+
+    # Helper methos for fast access
+    def get_model_results(self, model_name: str) -> Dict[str, Any]: # Fast access for Models results
+        return self._operation_result.get_result(f"portfolio.models.{model_name}")
+
+    def get_strat_results(self, model_name: str, strat_name: str) -> Dict[str, Any]: # Fast access for Strat results
+        return self._operation_result.get_result(f"portfolio.models.{model_name}.strats.{strat_name}.results")
+
+    def set_strat_result(self, model_name: str, strat_name: str, result_type: str, data: Any) -> None: # Defines a Strat's results
+        path = f"portfolio.models.{model_name}.strats.{strat_name}.results.{result_type}"
+        self._operation_result.set_result(path, data)
+
+    def get_all_strat_results(self) -> Dict[str, Any]: # Recovers results from all Strats
+        models = self._get_all_models()
+        results = {}
+        
+        for model_name in models.keys():
+            model_results = self.get_model_results(model_name)
+            if 'strats' in model_results:
+                results[model_name] = model_results['strats']
+    
+        return results
+
+    # III - Data Pre-Processing
     def _calculates_indicators(self): # Calculates all Indicators for all Models with their own Assets, saves to _indicators_cache
         models = self._get_all_models()
 
@@ -280,31 +371,62 @@ class Operation(BaseClass, Persistance):
     def _preliminary_backtest(self):
         return None
 
+    # IV - Execution
 
+    # V - Pos-Processing
     def _calculate_metrics():
         return None
 
-    def _save_results():
-        return None
+    # VI - Saving
+    def save_results(self, filepath: str=None) -> str: # Optimally saves results
+        if not filepath: filepath = f"operation_results_{self.name}_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.gz"
+        self._operation_result.save_to_file(filepath)
+        return filepath
+        
+    def load_results(self, filepath: str) -> None: # Loads saved results
+        self._operation_result = OptimizedOperationResult.load_from_file(filepath)
+
+    # VII - Cleanup
+    def cleanup_memory(self) -> None: # clears cache's memory
+        if len(self._memory_cache) > self._cache_size_limit: 
+            sorted_items = sorted( # Removes least necessary itens
+                self._memory_cache.items(),
+                key=lambda x: x[1].get('last_accessed', 0)
+            )
+
+            # Remove 50% of least used itens
+            items_to_remove = len(sorted_items) // 2
+            for key, _ in sorted_items[:items_to_remove]:
+                del self._memory_cache[key]
+    
+
 
     def run(self):
 
         # I - Init and Validation
         self._validate_operation()
 
-        # II - Data Pre-Processing
+        # II - Hierarchical Mapping
+        self._mapping()
+
+        # III - Data Pre-Processing
         self._calculates_indicators()
         self._generate_signals()
         self._preliminary_backtest() # If simple backtest then stops here?
 
-        # III - Execution
+        # IV - Execution
         if isinstance(self.operation, Backtest): self._execute_backtest()
         elif isinstance(self.operation, Optimization): self._execute_optimization()
         elif isinstance(self.operation, Walkforward): self._execute_walkforward()
 
-        # IV - Pos-Processing
+        # V - Pos-Processing
         if self.metrics: self._calculate_metrics()
-        if self.save: self._save_results()
+
+        # VI - Saving
+        if self.save: self.save_results()
+
+        # VII - Cleanup
+        self.cleanup_memory()
 
         return self._operation_result
 
