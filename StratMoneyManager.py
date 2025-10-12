@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from Trade import Trade
 from MoneyManager import MoneyManager, MoneyManagerParams
 
 @dataclass
@@ -20,7 +21,9 @@ class StratMoneyManager(MoneyManager): # Manages Strat's risk and money manageme
         self.trade_max_num_open = smm_params.trade_max_num_open
         self.trade_min_num_analysis = smm_params.trade_min_num_analysis
 
-    def calculate_strat_capital_allocation(self, capital: float, strat: Strat): 
+    def calculate_strat_capital_allocation(self, capital: float, strat: 'Strat'): 
+        from Strat import Strat, StratParams
+        
         return strat
 
     def calculate_kelly_criterion(self, trades: dict[Trade], weight: int=0.1):

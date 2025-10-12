@@ -3,16 +3,16 @@ from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
 from BaseClass import BaseClass
 from Indicator import Indicator
-from SystemManager import SystemManager, SystemManagerParameters
+from SystemManager import SystemManager, SystemManagerParams
 
 @dataclass
-class PortfolioManagerParameters(SystemManagerParameters):
+class ModelSystemManagerParams(SystemManagerParams):
     model_hierarchy: dict = field(default_factory=lambda: {"order_by": 'highest', "metric": 'profit_perc'})
     rebalance_frequency: str = 'weekly'
     close_open_trades_on_rebalance: bool = False
 
-class PortfolioManager(SystemManager): # Manages portfolio's model hierarchy 
-    def __init__(self, pm_params: PortfolioManagerParameters):
+class ModelSystemManager(SystemManager): # Manages portfolio's model hierarchy 
+    def __init__(self, pm_params: ModelSystemManagerParams):
         super().__init__(pm_params) # SystemManager attributes init
         
         self.model_hierarchy = dict(pm_params.model_hierarchy)

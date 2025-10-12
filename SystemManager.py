@@ -10,10 +10,13 @@ Atua sobre os níveis superiores (controla quem “fala” com o PMM e o TM).
 
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-import BaseClass, Indicator, uuid
+from BaseClass import BaseClass
+from Indicator import Indicator
+import uuid
+import pandas as pd
 
 @dataclass
-class SystemManagerParameters():
+class SystemManagerParams():
     name: str = field(default_factory=lambda: f'sm_{uuid.uuid4()}')
     
     sm_external_data: Dict[str, pd.DataFrame] = field(default_factory=dict)
@@ -21,10 +24,10 @@ class SystemManagerParameters():
     sm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
 class SystemManager(BaseClass): 
-    def __init__(self, system_params: SystemManagerParameters):
+    def __init__(self, system_params: SystemManagerParams):
         self.name = system_params.name
         
         # Custom Rules
-        self.sm_external_data = dict(system_params.sm_external_data) # For external data like CDT not present during Strat or Model construction
-        self.sm_indicators = dict(system_params.sm_indicators)
-        self.sm_rules = dict(system_params.sm_rules)
+        self.sm_external_data = system_params.sm_external_data # For external data like CDT not present during Strat or Model construction
+        self.sm_indicators = system_params.sm_indicators
+        self.sm_rules = system_params.sm_rules

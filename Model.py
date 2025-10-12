@@ -12,19 +12,19 @@ from MoneyManager import MoneyManagerParams
 import uuid
 
 @dataclass
-class Model_Parameters():
+class ModelParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     description: str=None
 
-    assets: Union[Asset, Asset_Portfolio]=None # Asset(s) that the model will trade with it's strat(s)
     strat: dict=None
+    assets: Union[Asset, Asset_Portfolio]=None # Asset(s) that the model will trade with it's strat(s)
 
-    execution_timeframe=None
+    execution_timeframe: str=None
     model_money_manager: Optional[ModelMoneyManager] = None
     model_system_manager: Optional[ModelSystemManager] = None
 
 class Model(BaseClass):
-    def __init__(self, model_params: Model_Parameters):
+    def __init__(self, model_params: ModelParams):
         super().__init__()
         self.name = model_params.name
         self.description = model_params.description

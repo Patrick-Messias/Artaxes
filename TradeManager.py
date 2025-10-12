@@ -8,17 +8,19 @@ Pode ter subvisões filtradas (ex: trades de um Strat, trades de um Model, etc.)
 🔹 Importante: TM é único e transversal — serve como “livro razão” de toda a atividade do sistema.
 """
 
-from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-import BaseClass, Indicator, uuid
+from BaseClass import BaseClass
+from Trade import Trade
+from Asset import Asset
+import Indicator, uuid
 
 @dataclass
-class Trade_Management_Parameters():
+class TradeManagerParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     trades: dict[Trade]={}
 
 class Trade_Management(BaseClass): 
-    def __init__(self, tm_params: Trade_Management_Parameters):
+    def __init__(self, tm_params: TradeManagerParams):
         super().__init__()
         self.name = tm_params.name
         self.trades = tm_params.trades
@@ -41,7 +43,8 @@ class Trade_Management(BaseClass):
         if trade_id in self.trades:
             raise ValueError(f"Trade with id {trade_id} already in trades dict")
 
-        return self.trades[trade_id] = trade
+        self.trades[trade_id] = trade
+        return True
 
     def remove_trade(self, trade: Trade): # Removes single trade from trades dict
         trade_id = self._get_trade_id(trade)

@@ -1,15 +1,14 @@
 import pandas as pd, numpy as np, datetime, json
-from Model import Model_Parameters, Model
+from Model import ModelParams, Model
 from Asset import Asset, AssetParams, Asset_Portfolio
-from Strat import Strat, Strat_Parameters, ExecutionSettings, DataSettings, TimeSettings
+from Strat import Strat, StratParams, ExecutionSettings, DataSettings, TimeSettings
 from Indicator import Indicator
-from Portfolio import Portfolio, Portfolio_Parameters
-from Backtest import Backtest, Backtest_Parameters
-from Operation import Operation, Operation_Parameters
+from Portfolio import Portfolio, PortfolioParams
+from Backtest import Backtest, BacktestParams
+from Operation import Operation, OperationParams
 from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
 from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
 from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
-from MoneyManager import MoneyManagerParams
 
 # NOTE Should be able to create a Trading Model Portfolio with multiple Strategies taking trades or a simple model that rebalances between a few stocks without "trading"
 
@@ -45,11 +44,11 @@ def test():
 
     # Usar instâncias das classes
     AT15 = Strat(
-        Strat_Parameters(
+        StratParams(
             name="AT15",
             asset_mapping=Asset_Mapping, # With what will the model define the rules
 
-            execution=ExecutionSettings(order_type='market', offset=0.0),
+            execution_settings=ExecutionSettings(order_type='market', offset=0.0),
             data_settings=DataSettings(fill_method='ffill', fillna=0),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             time_settings=TimeSettings(
@@ -90,7 +89,7 @@ def test():
 
     
     model_1 = Model(
-        Model_Parameters(
+        ModelParams(
             name='Mean Reversion',
             description='Short term mean reversion strategy',
             assets='FOREX',
@@ -104,7 +103,7 @@ def test():
     )
     """
     model_2 = Model(
-        Model_Parameters(
+        ModelParams(
             name='Trend Following',
             description='Long range trend following using breakout entry',
             assets='FOREX',
@@ -118,18 +117,18 @@ def test():
     )
     """
     portfolio = Portfolio(
-        Portfolio_Parameters(
+        PortfolioParams(
             name='Multi_Model_Portfolio',
             models={
                 'Model_1': model_1#,
                 #'Model_2': model_2
             },
-            pma = None, #Portfolio_Manager_Algorithm(PMA_Parameters(name='pma_1')),
-            pmm = None #Portfolio_Money_Management(PMM_Parameters(name='pmm_1')),
+            portfolio_money_manager = None, #Portfolio_Manager_Algorithm(PMA_Parameters(name='pma_1')),
+            portfolio_system_manager = None #Portfolio_Money_Management(PMM_Parameters(name='pmm_1')),
         )
     )
     backtest = Backtest(
-        Backtest_Parameters(
+        BacktestParams(
 
         )
     )
@@ -138,8 +137,8 @@ def test():
     }
 
     operation = Operation(
-        Operation_Parameters(
-            name=f'operation_{datetime.now()}',
+        OperationParams(
+            name=f'operation_{datetime.datetime.now()}',
             data=portfolio,
             operation=backtest,
             metrics=metrics,

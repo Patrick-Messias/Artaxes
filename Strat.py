@@ -3,9 +3,11 @@ from typing import Dict, Optional, Union, List, Callable
 from dataclasses import dataclass, field
 from BaseClass import BaseClass
 from finta import TA
+import uuid
 
 from MoneyManager import MoneyManager, MoneyManagerParams
-import Indicator
+from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
+from Indicator import Indicator
 
 # Import will be added later to avoid circular import
 # from StratMoneyManager import StratMoneyManager
@@ -43,27 +45,7 @@ class TradeManagementRules:
 @dataclass
 class DataSettings: # Commenting dataframe to avoid repetition, additional_timeframes can be replaced by a func
     fill_method: str='ffill'
-    fillna = 0
-
-@dataclass
-class Strat_Parameters():
-    name: str
-    asset_mapping: Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
-
-    execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
-    data_settings: DataSettings = field(default_factory=DataSettings)
-    mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
-    time_settings: TimeSettings = field(default_factory=TimeSettings)
-    indicators: Dict[str, Indicator] = field(default_factory=dict)
-
-    entry_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
-    tf_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
-    sl_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-    tp_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-    be_pos_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-    be_neg_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-
-    strat_money_manager: Optional['StratMoneyManager'] = None
+    fillna: object=0
 
                                                    #MOVE FUNCTIONS BELOW TO MODEL OR OPERATION WHERE THINGS WILL ACTUALLY HAPPEN
 
@@ -163,7 +145,7 @@ def _calculate_indicator(df: pd.DataFrame, ind: Indicator, params: dict) -> pd.D
     else: df[col_name] = res
     return df
 
-
+                                                   #MOVE FUNCTIONS BELOW TO MODEL OR OPERATION WHERE THINGS WILL ACTUALLY HAPPEN
 
 def calculate_indicators(df: pd.DataFrame, indicators: dict = None) -> pd.DataFrame: # Calculates for all indicators and all parameters
     """
@@ -193,9 +175,30 @@ def generate_signals(self, asset_name: str = None, indicators_cache: dict = None
     # Must take DF and indicators, use all model rules to generate when have signals to enter, exit, etc
     return None
 
+@dataclass
+class StratParams():
+    name: str = field(default_factory=lambda: f'strat_{uuid.uuid4()}')
+    asset_mapping: Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
+
+    execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
+    data_settings: DataSettings = field(default_factory=DataSettings)
+    mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+    time_settings: TimeSettings = field(default_factory=TimeSettings)
+    indicators: Dict[str, Indicator] = field(default_factory=dict)
+
+    entry_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
+    tf_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
+    sl_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
+    tp_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
+    be_pos_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
+    be_neg_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
+    nb_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
+
+    strat_money_manager: Optional['StratMoneyManager'] = None
+
 
 class Strat(BaseClass):
-    def __init__(self, strat_params: Strat_Parameters):
+    def __init__(self, strat_params: StratParams):
         super().__init__()
         self.name = strat_params.name
         self.asset_mapping = strat_params.asset_mapping
@@ -212,6 +215,7 @@ class Strat(BaseClass):
         self.tp_exit_rules = strat_params.tp_exit_rules
         self.be_pos_rules = strat_params.be_pos_rules
         self.be_neg_rules = strat_params.be_neg_rules
+        self.nb_exit_rules = strat_params.nb_exit_rules
 
         # StratMoneyManager is optional - if None, will use default or PMA/MMM from Operation
         self.strat_money_manager = strat_params.strat_money_manager

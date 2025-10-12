@@ -12,9 +12,12 @@ IMPORTANTE: Strat, Model e Portfolio Manager são opcionais em cada nível, para
 
 """
 
-from typing import Dict, Optional, Union, List, Callable
+from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-import BaseClass, Indicator, uuid
+from BaseClass import BaseClass
+from Indicator import Indicator
+import uuid
+import pandas as pd
 
 @dataclass
 class MoneyManagerParams:
@@ -42,10 +45,16 @@ class MoneyManager(BaseClass): # Base class for MMA, MMM and PMM
 
         # Drawdown Risk
         self.drawdown = mm_params.drawdown
-
+        if self.drawdown["method"] not in ["var", "fixed"]:
+            raise ValueError("Invalid drawdown method - Has to be 'var' or 'fixed'")
+        if self.drawdown["method"] == "var":
+            for period in ["global", "monthly", "weekly", "daily"]:
+                if mm_params.drawdown[period] is not None and (mm_params.drawdown[period] <= 0 or mm_params.drawdown[period] >= 1):
+                    raise ValueError(f"Invalid drawdown {period} - Has to be between 0 and 1 for 'var' method")
+                
         # Custom Rules
-        self.mm_external_data = dict(system_params.mm_external_data)
-        self.mm_indicators = mm_params.indicators
+        self.mm_external_data = mm_params.mm_external_data
+        self.mm_indicators = mm_params.mm_indicators
         self.mm_rules = mm_params.mm_rules
 
     def calculate_var(self, confidence_level: float=0.5):

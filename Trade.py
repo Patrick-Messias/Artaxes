@@ -1,4 +1,5 @@
-import BaseClass, uuid
+from BaseClass import BaseClass
+import uuid
 
 class Trade(BaseClass): # Each Trade represents 1 Position too
     def __init__(self, params: dict): 

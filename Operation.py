@@ -1,15 +1,17 @@
 from typing import Union, Dict, Optional, Any
 from dataclasses import dataclass, field
-import BaseClass, Persistance, uuid
-import pandas as pd
 from Model import Model
+from BaseClass import BaseClass
 from Portfolio import Portfolio
 from Backtest import Backtest
+from Indicator import Indicator
 from Optimization import Optimization
 from Walkforward import Walkforward
-from Asset import Asset, Asset_Portfolio
-from Persistance import save, load
+from Asset import Asset, Asset_Portfolio #, assets_info
+from Persistance import Persistance
 from OptimizedOperationResult import OptimizedOperationResult
+import uuid
+import pandas as pd
 
 # NOTE -> Tirar daqui -> 
 # 1. Criar um HMM para modelar transição de estados de volatilidade [high, med, low]. 
@@ -48,7 +50,7 @@ Operation:
 """
 
 @dataclass
-class Operation_Parameters():
+class OperationParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     data: Union[Model, Portfolio]=None # Can make an operation with a single model or portfolio
     operation: Union[Backtest, Optimization, Walkforward]=None 
@@ -63,7 +65,7 @@ class Operation_Parameters():
     save: bool=False
     
 class Operation(BaseClass, Persistance):
-    def __init__(self, op_params: Operation_Parameters):
+    def __init__(self, op_params: OperationParams):
         super().__init__()
         self.name = op_params.name
         self.data = op_params.data

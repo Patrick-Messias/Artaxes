@@ -1,5 +1,6 @@
-    import pickle, os    
-    
+import pickle, os    
+
+class Persistance:
     def save(self, path: str):
         with open(path, "wb") as f:
             pickle.dump(self, f)

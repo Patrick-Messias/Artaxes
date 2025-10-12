@@ -3,6 +3,7 @@ from MoneyManager import MoneyManager, MoneyManagerParams
 
 @dataclass
 class ModelMoneyManagerParams(MoneyManagerParams):
+    pass
 
 class ModelMoneyManager(MoneyManager): # Manages Model's risk and money management
     def __init__(self, mmm_params: ModelMoneyManagerParams): # PMM(Portfolio) > MMM(Model) > SMM(Strat)
