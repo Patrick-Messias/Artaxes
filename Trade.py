@@ -1,4 +1,4 @@
-import BaseClass, datetime, uuid
+import BaseClass, uuid
 
 class Trade(BaseClass): # Each Trade represents 1 Position too
     def __init__(self, params: dict): 

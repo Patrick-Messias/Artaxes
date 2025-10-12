@@ -7,6 +7,9 @@ from Portfolio import Portfolio, Portfolio_Parameters
 from Backtest import Backtest, Backtest_Parameters
 from Operation import Operation, Operation_Parameters
 from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
+from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
+from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
+from MoneyManager import MoneyManagerParams
 
 # NOTE Should be able to create a Trading Model Portfolio with multiple Strategies taking trades or a simple model that rebalances between a few stocks without "trading"
 
@@ -64,7 +67,9 @@ def test():
             tp_exit_rules=tp_exit_rules,
             be_pos_rules=be_pos_rules,
             be_neg_rules=be_neg_rules,
-            nb_exit_rules=nb_exit_rules
+            nb_exit_rules=nb_exit_rules,
+
+            strat_money_manager=StratMoneyManager(StratMoneyManagerParams(name="AT15_SMM"))
         )
     )
 
@@ -93,7 +98,8 @@ def test():
                 'AT15': AT15#, 'AT13': AT13
             },
             execution_timeframe=Asset_Mapping['Asset1']['timeframe'],
-            model_money_manager=ModelMoneyManager(MoneyManagerParams(name="AT15_MM"))
+            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model1_MM")),
+            model_system_manager=None  # Optional - will use default system management
         )
     )
     """
@@ -106,7 +112,8 @@ def test():
                 'AT20': AT20
             },
             execution_timeframe=Asset_Mapping['Asset2']['timeframe'],
-            model_money_manager=ModelMoneyManager(MoneyManagerParams(name="AT20_MM"))
+            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model2_MM")),
+            model_system_manager=None  # Optional - will use default system management
         )
     )
     """

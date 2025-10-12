@@ -1,11 +1,14 @@
 import pandas as pd, numpy as np, itertools, importlib
 from typing import Dict, Optional, Union, List, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from BaseClass import BaseClass
 from finta import TA
 
 from MoneyManager import MoneyManager, MoneyManagerParams
 import Indicator
+
+# Import will be added later to avoid circular import
+# from StratMoneyManager import StratMoneyManager
 
 @dataclass
 class ExecutionSettings:
@@ -59,6 +62,8 @@ class Strat_Parameters():
     tp_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
     be_pos_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
     be_neg_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
+
+    strat_money_manager: Optional['StratMoneyManager'] = None
 
                                                    #MOVE FUNCTIONS BELOW TO MODEL OR OPERATION WHERE THINGS WILL ACTUALLY HAPPEN
 
@@ -208,6 +213,9 @@ class Strat(BaseClass):
         self.be_pos_rules = strat_params.be_pos_rules
         self.be_neg_rules = strat_params.be_neg_rules
 
+        # StratMoneyManager is optional - if None, will use default or PMA/MMM from Operation
+        self.strat_money_manager = strat_params.strat_money_manager
+
         self.data = None
     
 
@@ -246,15 +254,15 @@ class Strat(BaseClass):
         df['entry_long'] = entry_signals.all(axis=1)
         df['entry_short'] = entry_signals.all(axis=1)
         
-        # Aplica regras de direção
-        if not self.trade_rules.LONG: df['entry_long'] = False
-        if not self.trade_rules.SHORT: df['entry_short'] = False
+        # Aplica regras de direção - verifica se as regras existem
+        if 'entry_long' not in self.entry_rules: df['entry_long'] = False
+        if 'entry_short' not in self.entry_rules: df['entry_short'] = False
         
         return df
 
     def _apply_exit_rules(self, df: pd.DataFrame) -> pd.DataFrame:
         # Trend Following Exit
-        if self.trade_rules.TF and self.tf_exit_rules:
+        if self.tf_exit_rules:
             tf_signals = pd.DataFrame(index=df.index)
             
             for rule_name, rule_func in self.tf_exit_rules.items():
@@ -281,7 +289,7 @@ class Strat(BaseClass):
                 df.loc[sell_signals, 'tf'] = -1
         
         # Stop Loss
-        if self.trade_rules.SL and self.sl_exit_rules:
+        if self.sl_exit_rules:
             sl_signals = pd.DataFrame(index=df.index)
             
             for rule_name, rule_func in self.sl_exit_rules.items():

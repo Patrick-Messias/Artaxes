@@ -18,18 +18,19 @@ import BaseClass, Indicator, uuid
 
 @dataclass
 class MoneyManagerParams:
-    name: str = field(default_factory=lambda: f'sm_{uuid.uuid4()}')
+    name: str = field(default_factory=lambda: f'mm_{uuid.uuid4()}')
     
     # Capital Management
     capital: float = 100000.0
     max_capital_exposure: float = 1.0
     
-    # Drawdown Risk
+    # Drawdown Risk (Drawdown is oriented based on $ Money)
     drawdown: dict = field(default_factory=lambda: {"method": "var", "global": None, "monthly": None, "weekly": None, "daily": None}) # fixed
     
-    # Indicators to find MMA
-    indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) # For Model/Asset Balancing
-    mma_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
+    # Indicators to find MM
+    mm_external_data: Dict[str, pd.DataFrame] = field(default_factory=dict)
+    mm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) # For Model/Asset Balancing
+    mm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
 class MoneyManager(BaseClass): # Base class for MMA, MMM and PMM
     def __init__(self, mm_params: MoneyManagerParams): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
@@ -43,8 +44,9 @@ class MoneyManager(BaseClass): # Base class for MMA, MMM and PMM
         self.drawdown = mm_params.drawdown
 
         # Custom Rules
-        self.indicators = mm_params.indicators
-        self.mma_rules = mm_params.mma_rules
+        self.mm_external_data = dict(system_params.mm_external_data)
+        self.mm_indicators = mm_params.indicators
+        self.mm_rules = mm_params.mm_rules
 
     def calculate_var(self, confidence_level: float=0.5):
         return None

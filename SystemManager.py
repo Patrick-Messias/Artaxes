@@ -16,15 +16,15 @@ import BaseClass, Indicator, uuid
 class SystemManagerParameters():
     name: str = field(default_factory=lambda: f'sm_{uuid.uuid4()}')
     
-    external_data: Dict[str, pd.DataFrame] = field(default_factory=dict)
-    indicators: Optional[Dict[str, 'Indicator']] = field(default_factory=dict)
-    rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
+    sm_external_data: Dict[str, pd.DataFrame] = field(default_factory=dict)
+    sm_indicators: Optional[Dict[str, 'Indicator']] = field(default_factory=dict)
+    sm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
 class SystemManager(BaseClass): 
     def __init__(self, system_params: SystemManagerParameters):
         self.name = system_params.name
         
         # Custom Rules
-        self.external_data = dict(system_params.external_data) # For external data like CDT not present during Strat or Model construction
-        self.indicators = dict(system_params.indicators)
-        self.rules = dict(system_params.rules)
+        self.sm_external_data = dict(system_params.sm_external_data) # For external data like CDT not present during Strat or Model construction
+        self.sm_indicators = dict(system_params.sm_indicators)
+        self.sm_rules = dict(system_params.sm_rules)

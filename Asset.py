@@ -1,6 +1,7 @@
 import pandas as pd, os, re
 from BaseClass import BaseClass
 from dataclasses import dataclass
+from typing import Union, Callable
 
 @staticmethod
 def load_data(data_path, min_limit=0, max_limit=1, index_col_setting=False, drop_index=True):
@@ -72,7 +73,7 @@ class AssetParams:
     lot_value: float = 100.0
     min_lot: float = 1.0
     leverage: float = 1.0
-    comissions: float = 0.0
+    commissions: float = 0.0
     slippage: float = 0.0
     spread: float = 0.0
 
@@ -88,7 +89,7 @@ class Asset(BaseClass):
                     'lot_value': 20000.0,
                     'min_lot': 1,
                     'leverage': 20,
-                    'comissions': 0.5,
+                    'commissions': 0.5,
                     'slippage': 0.25,
                     'spread': 0.25
                 },
@@ -98,7 +99,7 @@ class Asset(BaseClass):
                     'lot_value': 40000.0,
                     'min_lot': 1,
                     'leverage': 20,
-                    'comissions': 0.5,
+                    'commissions': 0.5,
                     'slippage': 0.25,
                     'spread': 0.25
                 }
@@ -112,7 +113,7 @@ class Asset(BaseClass):
                     'lot_value': 100000.0,
                     'min_lot': 0.01,
                     'leverage': 100,
-                    'comissions': 1.5,
+                    'commissions': 1.5,
                     'slippage': 0.75,
                     'spread': 0.75
                 }
@@ -126,7 +127,7 @@ class Asset(BaseClass):
                     'lot_value': 100,
                     'min_lot': 1,
                     'leverage': 1,
-                    'comissions': 5.0,
+                    'commissions': 5.0,
                     'slippage': 0.05,
                     'spread': 0.02
                 }
@@ -138,7 +139,7 @@ class Asset(BaseClass):
                     'lot_value': 100,
                     'min_lot': 1,
                     'leverage': 1,
-                    'comissions': 5.0,
+                    'commissions': 5.0,
                     'slippage': 0.05,
                     'spread': 0.02
                 }
@@ -188,14 +189,14 @@ class Asset(BaseClass):
                 'lot_value': 100.0,
                 'min_lot': 1.0,
                 'leverage': 1.0,
-                'comissions': 0.0,
+                'commissions': 0.0,
                 'slippage': 0.0,
                 'spread': 0.0
             }
 
     @staticmethod
     def register_asset_params(name: str, type: str, market: str, params: dict):
-        required_params = {'tick', 'tick_fin_val', 'lot_value', 'min_lot', 'leverage', 'comissions', 'slippage', 'spread'}
+        required_params = {'tick', 'tick_fin_val', 'lot_value', 'min_lot', 'leverage', 'commissions', 'slippage', 'spread'}
 
         missing_params = required_params - set(params.keys())
         if missing_params: raise ValueError(f"!!! --- Necessary Parameters Missing: {missing_params} --- !!!")
@@ -264,11 +265,21 @@ class Asset(BaseClass):
 
 
 class Asset_Portfolio(BaseClass):
-    def __init__(self, asset_portfolio_params: dict):
+    def __init__(self, asset_portfolio_params: dict = None, name: str = None, assets: Union[dict, list, None] = None):
         super().__init__()
-        self.name = asset_portfolio_params.get('name', 'unnamed_portfolio')
+        
+        # Handle different initialization patterns
+        if asset_portfolio_params is not None:
+            # Legacy initialization with dict
+            self.name = asset_portfolio_params.get('name', 'unnamed_portfolio')
+            assets_dict = asset_portfolio_params.get('assets', {})
+        else:
+            # New initialization with direct parameters
+            self.name = name or 'unnamed_portfolio'
+            assets_dict = assets or {}
+        
         self.assets: dict[str, Asset] = {}
-        assets_dict = asset_portfolio_params.get('assets', {})
+        
         if isinstance(assets_dict, dict):
             self.assets = assets_dict
         elif isinstance(assets_dict, list):  # For backward compatibility
@@ -287,7 +298,7 @@ class Asset_Portfolio(BaseClass):
         if asset_name in self.assets:
             del self.assets[asset_name]
 
-    def assets_filter(self, condition: callable) -> list[Asset]:
+    def assets_filter(self, condition: Callable) -> list[Asset]:
         return [asset for asset in self.assets.values() if condition(asset)]
 
     def asset_get(self, name: str) -> Asset:
@@ -296,6 +307,11 @@ class Asset_Portfolio(BaseClass):
         return self.assets[name]
 
     def assets_list(self, print_assets: bool = True, sort_by: str = None) -> list:
+        if not self.assets:
+            if print_assets:
+                print("No assets in portfolio")
+            return []
+            
         assets_info = []
         for asset in self.assets.values():
             info = {
@@ -305,7 +321,7 @@ class Asset_Portfolio(BaseClass):
             }
             assets_info.append(info)
             
-        if sort_by and sort_by in assets_info[0]:
+        if sort_by and assets_info and sort_by in assets_info[0]:
             assets_info.sort(key=lambda x: x[sort_by])
             
         if print_assets:
@@ -327,13 +343,19 @@ class Asset_Portfolio(BaseClass):
         return result
 
     def stats(self) -> dict:
+        if not self.assets:
+            return {
+                'total_assets': 0,
+                'asset_types': [],
+                'markets': []
+            }
+        
         return {
             'total_assets': len(self.assets),
             'asset_types': list(set(asset.type for asset in self.assets.values())),
             'markets': list(set(asset.market for asset in self.assets.values()))
         }
 
-    @staticmethod
     def calculate_correlation(self, timeframe: str, method='pearson') -> pd.DataFrame:
         data = {}
         for asset_name, asset in self.assets.items():
@@ -348,7 +370,6 @@ class Asset_Portfolio(BaseClass):
         df_combined = pd.DataFrame(data)
         return df_combined.corr(method=method)
 
-    @staticmethod
     def plot_correlation(self, timeframe: str, figsize=(12, 10)):
         import matplotlib.pyplot as plt
         import seaborn as sns
