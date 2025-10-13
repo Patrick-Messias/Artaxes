@@ -57,7 +57,7 @@ class OptimizedOperationResult: # Class to manage results optmally
                 else:
                     raise KeyError(f"Path not found: {'.'.join(path)}")
             current = current[key]
-        return current[key]
+        return current
 
     def set_result(self, path: str, data: Any, compress: bool=True) -> None: # Defines a result with automatic optimization
         path_tuple = self._get_nested_path(path)

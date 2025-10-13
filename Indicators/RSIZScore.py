@@ -1,6 +1,6 @@
 import pandas as pd, numpy as np
 
-#zscore = RSIZscore.calculate(df, rsi_window=14, zscore_window=20, price_col='close')
+# rsiz = RSIZscore.calculate(df, rsi_window=14, zscore_window=20, price_col='close')
 class RSIZscore:
     @staticmethod 
     def calculate(df: pd.DataFrame, rsi_window: int = 14, zscore_window: int = 14, price_col: str = 'close') -> pd.Series:

@@ -127,11 +127,7 @@ def test():
             portfolio_system_manager = None #Portfolio_Money_Management(PMM_Parameters(name='pmm_1')),
         )
     )
-    backtest = Backtest(
-        BacktestParams(
-
-        )
-    )
+    backtest = Backtest()
     metrics = {
         'balance': {'total'}
     }
@@ -149,7 +145,7 @@ def test():
 
     # Durante execução
     results = operation.run()
-
+    """ WIP ABOVE, ADD results class for operation run
     # Acesso otimizado
     model_results = results.get_model_results("Model_1")
     strat_results = results.get_strat_results("Model_1", "AT15")
@@ -160,7 +156,7 @@ def test():
 
     # Serialização para JSON (apenas estrutura, não dados comprimidos)
     json_data = json.dumps(results.to_dict(), indent=2)
-
+    """
 def main():
     test()
 

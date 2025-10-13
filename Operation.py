@@ -94,7 +94,7 @@ class Operation(BaseClass, Persistance):
         if isinstance(self.data, Model): # Single Model
             return {self.data.name: self.data}
         elif isinstance(self.data, Portfolio): # Portfolio
-            return self.data._get_all_models()
+            return self.data.get_all_models()
         else: return {}
 
     def _get_all_unique_datetimes(self, assets_cache=None): # Returns all unique datetimes from a Asset dict
@@ -271,7 +271,7 @@ class Operation(BaseClass, Persistance):
             #     )
 
     def _get_model_assets(self, model) -> Dict[str, Any]: # Optimally extracts assets from a model
-        asset_info={}
+        assets_info={}
 
         if isinstance(model.assets, Asset):
             assets_info[model.assets.name] = {
@@ -331,7 +331,7 @@ class Operation(BaseClass, Persistance):
                 self._calculate_strat_indicators(model_name, strat_name, indicators, asset_mapping)
         return None
 
-    def _calculates_strat_indicators(self, model_name: str, strat_name: str, indicators: dict, asset_mapping: dict): # Calculates indicators for a specific Strat using mapped data
+    def _calculate_strat_indicators(self, model_name: str, strat_name: str, indicators: dict, asset_mapping: dict): # Calculates indicators for a specific Strat using mapped data
         for asset_key, asset_config in asset_mapping.items():
             asset_name = asset_config.get('name')
             timeframe = asset_config.get('timeframe')
@@ -356,7 +356,7 @@ class Operation(BaseClass, Persistance):
 
                 # Calculates and stores results
                 result_path = f"portfolio.models.{model_name}.strats.{strat_name}.results.indicators.{asset_name}.{timeframe}.{ind_name}"
-                calculated_data = self._calculate_indicator_data(data, indicator)
+                calculated_data = self.calculate_indicators(data, indicator)
                 
                 self._operation_result.set_result(result_path, calculated_data)
 
@@ -373,6 +373,15 @@ class Operation(BaseClass, Persistance):
         return None
 
     def _generate_signals(self):
+
+        
+
+
+        
+
+
+
+
         return None
 
     def _preliminary_backtest(self):
@@ -381,7 +390,7 @@ class Operation(BaseClass, Persistance):
     # IV - Execution
 
     # V - Pos-Processing
-    def _calculate_metrics():
+    def _calculate_metrics(self):
         return None
 
     # VI - Saving
@@ -422,9 +431,9 @@ class Operation(BaseClass, Persistance):
         self._preliminary_backtest() # If simple backtest then stops here?
 
         # IV - Execution
-        if isinstance(self.operation, Backtest): self._execute_backtest()
-        elif isinstance(self.operation, Optimization): self._execute_optimization()
-        elif isinstance(self.operation, Walkforward): self._execute_walkforward()
+        if isinstance(self.operation, Backtest): self.operation.run()
+        elif isinstance(self.operation, Optimization): self.operation.run()
+        elif isinstance(self.operation, Walkforward): self.operation.run()
 
         # V - Pos-Processing
         if self.metrics: self._calculate_metrics()

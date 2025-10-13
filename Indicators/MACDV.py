@@ -1,6 +1,7 @@
 import pandas as pd
 
-class MACDV:
+# macdv = MACDV.calculate(df, fast=12, slow=26, signal=9, vol_window=20, price_col='close')
+class MACDV: 
     @staticmethod
     def calculate(
         df: pd.DataFrame,
