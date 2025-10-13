@@ -86,13 +86,29 @@ def test():
     """
 
 
+    eurusd = Asset(
+        name='EURUSD',
+        type='currency_pair',
+        market='forex',
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex'#,
+        #timeframe=['M15'], 
+        # params={
+        #     'tick': 0.0001,
+        #     'tick_fin_val': 10,
+        #     'lot_value': 100000.0,
+        #     'min_lot': 0.01,
+        #     'leverage': 100,
+        #     'commissions': 1.5,
+        #     'slippage': 0.75,
+        #     'spread': 0.75
+        # }
+    )
 
-    
     model_1 = Model(
         ModelParams(
             name='Mean Reversion',
             description='Short term mean reversion strategy',
-            assets='FOREX',
+            assets=eurusd,
             strat={
                 'AT15': AT15#, 'AT13': AT13
             },
@@ -106,7 +122,7 @@ def test():
         ModelParams(
             name='Trend Following',
             description='Long range trend following using breakout entry',
-            assets='FOREX',
+            assets=eurusd,
             strat={
                 'AT20': AT20
             },

@@ -229,13 +229,16 @@ class Operation(BaseClass, Persistance):
 
         # Base Structure
         portfolio_name = getattr(self.data, 'name', 'default_portfolio')
-
+        
         for model_name, model in models.items():
             model_path = f'portfolio.models.{model_name}'
-
+            
             # Model's Assets
             assets = self._get_model_assets(model)
             self._operation_result.set_result(f"{model_path}.assets", assets)
+            
+            #print(f"Assets mapped for model '{model_name}': {list(assets.keys())}")
+            for asset_name, asset_info in assets.items(): print(f"✅ Mapped asset(s): '{asset_name}' | with timeframe(s): {asset_info['timeframes']} | for model: '{model_name}'\n")
 
             # Model's Strats
             if hasattr(model, 'strat') and model.strat:
@@ -377,7 +380,7 @@ class Operation(BaseClass, Persistance):
         
 
 
-        
+
 
 
 
