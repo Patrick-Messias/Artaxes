@@ -238,15 +238,19 @@ class Operation(BaseClass, Persistance):
             self._operation_result.set_result(f"{model_path}.assets", assets)
             
             #print(f"Assets mapped for model '{model_name}': {list(assets.keys())}")
-            for asset_name, asset_info in assets.items(): print(f"✅ Mapped asset(s): '{asset_name}' | with timeframe(s): {asset_info['timeframes']} | for model: '{model_name}'\n")
+            for asset_name, asset_info in assets.items(): print(f"-> Mapped asset(s): '{asset_name}' | with timeframe(s): {asset_info['timeframes']} | for model: '{model_name}'")
 
             # Model's Strats
             if hasattr(model, 'strat') and model.strat:
                 for strat_name, strat in model.strat.items():
                     strat_path = f"{model_path}.strats.{strat_name}"
 
+                    print(f"-> Mapped strat: '{strat_name}' for model: '{model_name}'")
+
                     # Strat's Indicators
                     if hasattr(strat, 'indicators'):
+                        for ind_name, indicator in strat.indicators.items():
+                            print(f"-> Mapped indicator: '{ind_name}' for strat: '{strat_name}'")
                         self._operation_result.set_result(
                             f"{strat_path}.indicators",
                             strat.indicators
@@ -427,6 +431,7 @@ class Operation(BaseClass, Persistance):
 
         # II - Hierarchical Mapping
         self._mapping()
+        print()
 
         # III - Data Pre-Processing
         self._calculates_indicators()
@@ -508,7 +513,7 @@ class Operation(BaseClass, Persistance):
                             cache_key = (ind.name, asset.name, ind.timeframe, param_value)
 
                             if cache_key not in self._indicators_cache:
-                                self._indicators_cache[cache_key] = ind.calculate_indicator(data, param_value)
+                                self._indicators_cache[cache_key] = ind.calculate(data, param_value)
         return None
 
 

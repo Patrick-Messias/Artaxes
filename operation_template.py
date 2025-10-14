@@ -1,14 +1,16 @@
-import pandas as pd, numpy as np, datetime, json
+import pandas as pd, numpy as np, datetime, json, sys
 from Model import ModelParams, Model
 from Asset import Asset, AssetParams, Asset_Portfolio
 from Strat import Strat, StratParams, ExecutionSettings, DataSettings, TimeSettings
-from Indicator import Indicator
 from Portfolio import Portfolio, PortfolioParams
 from Backtest import Backtest, BacktestParams
 from Operation import Operation, OperationParams
 from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
 from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
 from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
+
+sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
+from RSIZScore import RSIZScore # type: ignore
 
 # NOTE Should be able to create a Trading Model Portfolio with multiple Strategies taking trades or a simple model that rebalances between a few stocks without "trading"
 
@@ -57,7 +59,14 @@ def test():
                             next_index_day_close=False, friday_close=False, 
                             timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
             indicators={
-                'ma': Indicator(name='SMA', timeframe=Asset_Mapping['Asset1']['timeframe'], params={'window': list(Params['AT15']['param1'])}, func_path='TA.SMA')
+                'rsiz': RSIZScore(
+                        timeframe=Asset_Mapping['Asset1']['timeframe'],
+                        params={
+                            'rsi_window': list(Params['AT15']['param1']), 
+                            'zscore_window': list(Params['AT15']['param2']),
+                            'price_col': 'close'
+                        }
+                    )
             },
             
             entry_rules=entry_rules,

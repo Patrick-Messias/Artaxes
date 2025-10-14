@@ -1,10 +1,10 @@
 import pandas as pd, numpy as np
+from Indicator import Indicator
 
 # rsiz = RSIZscore.calculate(df, rsi_window=14, zscore_window=20, price_col='close')
-class RSIZscore:
-    @staticmethod 
+class RSIZScore(Indicator):
     def calculate(df: pd.DataFrame, rsi_window: int = 14, zscore_window: int = 14, price_col: str = 'close') -> pd.Series:
-        delta = df[price_col].diff()
+        delta = df[price_col].diff().fillna(0)
         gain = np.where(delta > 0, delta, 0)
         loss = np.where(delta < 0, -delta, 0)
         avg_gain = pd.Series(gain).rolling(window=rsi_window, min_periods=rsi_window).mean()

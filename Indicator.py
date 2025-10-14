@@ -1,7 +1,20 @@
-import pandas as pd, numpy as np
-from typing import Optional, List
+import pandas as pd
 from dataclasses import dataclass
 
+@dataclass
+class Indicator:
+    def __init__(self, timeframe, params):
+        self.timeframe = timeframe
+        self.params = params
+        self.data = pd.DataFrame()  # DataFrame to hold calculated indicator values
+        
+    def calculate(self, df): # Abstract method to be implemented by subclasses
+        raise NotImplementedError
+
+
+
+
+""" OLD Indicator.py
 @dataclass
 class Indicator: # Indicador class utilizado apenas para organizar, os calculos e armazenamento de dados será feito em um dicionário
     name: str # "IND_Var_Parametric"
@@ -51,7 +64,7 @@ def calculate_indicator(df: pd.DataFrame, ind: Indicator, params: dict) -> pd.Da
         for c in res.columns: df[f"{col_name}_{c}"] = res[c].values
     else: df[col_name] = res
     return df
-
+"""
 
 
 
