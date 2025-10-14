@@ -1,11 +1,8 @@
 import pandas as pd
-from dataclasses import dataclass
 
-@dataclass
 class Indicator:
-    def __init__(self, timeframe, params):
+    def __init__(self, timeframe):
         self.timeframe = timeframe
-        self.params = params
         self.data = pd.DataFrame()  # DataFrame to hold calculated indicator values
         
     def calculate(self, df): # Abstract method to be implemented by subclasses

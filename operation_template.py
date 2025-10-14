@@ -58,14 +58,12 @@ def test():
                             timeTI=None, timeEF=None, timeTF=None, 
                             next_index_day_close=False, friday_close=False, 
                             timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
-            indicators={
+            indicators={ 
                 'rsiz': RSIZScore(
                         timeframe=Asset_Mapping['Asset1']['timeframe'],
-                        params={
-                            'rsi_window': list(Params['AT15']['param1']), 
-                            'zscore_window': list(Params['AT15']['param2']),
-                            'price_col': 'close'
-                        }
+                        rsi_window=list(Params['AT15']['param1']),
+                        zscore_window=list(Params['AT15']['param2']),
+                        price_col='close'
                     )
             },
             
