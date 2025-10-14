@@ -2,8 +2,8 @@ import pandas as pd, numpy as np
 from Indicator import Indicator
 
 class RSIZScore(Indicator):
-    def __init__(self, timeframe: str, rsi_window: int = 14, zscore_window: int = 14, price_col: str = 'close'):
-        super().__init__(timeframe)
+    def __init__(self, asset, timeframe: str, rsi_window: int = 14, zscore_window: int = 14, price_col: str = 'close'):
+        super().__init__(asset, timeframe)
         self.rsi_window = rsi_window
         self.zscore_window = zscore_window
         self.price_col = price_col

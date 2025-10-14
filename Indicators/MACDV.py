@@ -2,8 +2,8 @@ import pandas as pd
 from Indicator import Indicator
 
 class MACDV(Indicator): 
-    def __init__(self, timeframe: str, fast: int = 12, slow: int = 26, signal: int = 9, vol_window: int = 20, price_col: str = 'close'):
-        super().__init__(timeframe)
+    def __init__(self, asset, timeframe: str, fast: int = 12, slow: int = 26, signal: int = 9, vol_window: int = 20, price_col: str = 'close'):
+        super().__init__(asset, timeframe)
         self.fast = fast
         self.slow = slow    
         self.signal = signal

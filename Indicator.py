@@ -1,7 +1,8 @@
 import pandas as pd, itertools
 
 class Indicator:
-    def __init__(self, timeframe):
+    def __init__(self, asset, timeframe):
+        self.asset = asset
         self.timeframe = timeframe
         self.data = pd.DataFrame()  # DataFrame to hold calculated indicator values
         

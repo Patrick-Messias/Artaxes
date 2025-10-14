@@ -178,7 +178,7 @@ def generate_signals(self, asset_name: str = None, indicators_cache: dict = None
 @dataclass
 class StratParams():
     name: str = field(default_factory=lambda: f'strat_{uuid.uuid4()}')
-    asset_mapping: Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
+    asset_mapping: Union[Asset, Asset_Portfolio]=None #Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
 
     execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
     data_settings: DataSettings = field(default_factory=DataSettings)

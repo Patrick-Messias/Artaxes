@@ -23,12 +23,14 @@ def test():
         }
     }
 
-    # What assets are going to do what enside the Strat
-    Asset_Mapping = { 
-        'Asset1': {'name': 'CURR_ASSET', 'timeframe': 'M15'}, # CURR_ASSET is the dynamic current Asset in the list being analysed
-        'Asset2': {'name': 'EURUSD', 'timeframe': 'D1'} # Defines specific Asset for custom rule
-    }
+    # What assets are going to do what enside the Strat != What assets are going to be tested with the rules below
+    #Asset_Mapping = { 
+    #    'Asset1': {'name': 'CURR_ASSET', 'timeframe': 'M15'}, # CURR_ASSET is the dynamic current Asset in the list being analysed
+    #    'Asset2': {'name': 'GBPUSD', 'timeframe': 'D1'} # Defines specific Asset for custom rule
+    #}
 
+    close = df['CURR_ASSET']['M15']['close']
+    ma = df['CURR_ASSET']['M15']['sma']
     entry_rules = {
         'entry_long': lambda df: (df['Asset1']['close'] < df['Asset1']['ma']) & (df['Asset1']['close'] < df['Asset1']['low'].shift(1)), # df['Asset2']['close_D1'] > df['Asset2']['ma_D1']
         'entry_short': lambda df: (df['Asset1']['close'] > df['Asset1']['ma']) & (df['Asset1']['close'] > df['Asset1']['high'].shift(1)) # df['Asset2']['close_D1'] < df['Asset2']['ma_D1']
@@ -58,14 +60,18 @@ def test():
                             timeTI=None, timeEF=None, timeTF=None, 
                             next_index_day_close=False, friday_close=False, 
                             timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
-            indicators={ 
+            indicators={  
                 'rsiz': RSIZScore( 
+                        asset=Asset_Mapping['Asset1']['name'], # if 'CURR_ASSET' then must create for all assets in Model's Assets
                         timeframe=Asset_Mapping['Asset1']['timeframe'],
                         rsi_window=list(Params['AT15']['param1']),
                         zscore_window=list(Params['AT15']['param2']),
                         price_col='close'
                     )
             },
+
+            #Mudar onde for relevante, na definição do ind (acima) deve usar list para colocar >1 parametro
+            #ITERAR SOBRE models.assets -> strat -> ind.calculate_all_sets
             
             entry_rules=entry_rules,
             tf_exit_rules=tf_exit_rules,
@@ -80,7 +86,7 @@ def test():
     )
 
     """
-    trade=TradeManagementRules( # TradeManagementRules Eliminated, it must check in Strat's generate_signals() with the checks below
+    trade=TradeManagementRules( # TradeManagementRules vars Eliminated, it must check in Strat's generate_signals() with the checks below
         LONG='entry_long' in entry_rules,
         SHORT='entry_short' in entry_rules,
         TF=bool(tf_exit_rules),
@@ -97,29 +103,19 @@ def test():
         name='EURUSD',
         type='currency_pair',
         market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex'#,
-        #timeframe=['M15'], 
-        # params={
-        #     'tick': 0.0001,
-        #     'tick_fin_val': 10,
-        #     'lot_value': 100000.0,
-        #     'min_lot': 0.01,
-        #     'leverage': 100,
-        #     'commissions': 1.5,
-        #     'slippage': 0.75,
-        #     'spread': 0.75
-        # }
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
+        timeframe=[Asset_Mapping['Asset1']['timeframe']]
     )
 
     model_1 = Model(
         ModelParams(
             name='Mean Reversion',
             description='Short term mean reversion strategy',
-            assets=eurusd,
+            assets=eurusd, # CURR_ASSET refers to this one in asset_mapping
             strat={
                 'AT15': AT15#, 'AT13': AT13
             },
-            execution_timeframe=Asset_Mapping['Asset1']['timeframe'],
+            execution_timeframe=[Asset_Mapping['Asset1']['timeframe']],
             model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model1_MM")),
             model_system_manager=None  # Optional - will use default system management
         )
