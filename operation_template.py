@@ -17,8 +17,8 @@ from RSIZScore import RSIZScore # type: ignore
 def test():
     Params = {
         'AT15': {
-            'param1': range(4, 80, 4), 
-            'param2': range(2, 11, 2),  
+            'param1': range(10, 10, 10), 
+            'param2': range(5, 50, 5),  
             'param3': range(14, 15, 1)  
         }
     }
@@ -59,7 +59,7 @@ def test():
                             next_index_day_close=False, friday_close=False, 
                             timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
             indicators={ 
-                'rsiz': RSIZScore(
+                'rsiz': RSIZScore( 
                         timeframe=Asset_Mapping['Asset1']['timeframe'],
                         rsi_window=list(Params['AT15']['param1']),
                         zscore_window=list(Params['AT15']['param2']),

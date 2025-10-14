@@ -1,7 +1,6 @@
 import pandas as pd, numpy as np
 from Indicator import Indicator
 
-# rsiz = RSIZscore.calculate(df, rsi_window=14, zscore_window=20, price_col='close')
 class RSIZScore(Indicator):
     def __init__(self, timeframe: str, rsi_window: int = 14, zscore_window: int = 14, price_col: str = 'close'):
         super().__init__(timeframe)

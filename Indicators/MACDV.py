@@ -1,7 +1,6 @@
 import pandas as pd
 from Indicator import Indicator
 
-# macdv = MACDV.calculate(df, fast=12, slow=26, signal=9, vol_window=20, price_col='close')
 class MACDV(Indicator): 
     def __init__(self, timeframe: str, fast: int = 12, slow: int = 26, signal: int = 9, vol_window: int = 20, price_col: str = 'close'):
         super().__init__(timeframe)
@@ -11,7 +10,6 @@ class MACDV(Indicator):
         self.vol_window = vol_window
         self.price_col = price_col
 
-    @staticmethod
     def calculate(self, df: pd.DataFrame) -> pd.DataFrame:        
         # MACD
         ema_fast = df[self.price_col].ewm(span=self.fast, adjust=False).mean()
