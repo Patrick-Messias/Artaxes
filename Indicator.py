@@ -9,39 +9,55 @@ class Indicator:
     def calculate(self, df): # Abstract method to be implemented by subclasses
         raise NotImplementedError
 
-    def calculate_all_sets(self, df):
-        # Identifica atributos que são listas
+    def calculate_all_sets(self, df, base_path: str = ""):
+        import itertools
+
         param_names, param_values = [], []
         
+        # Identifica quais atributos são listas de parâmetros
         for attr, value in self.__dict__.items():
-            # Ignora atributos não relacionados a parâmetros
-            if attr.startswith('_') or callable(value): continue
+            if attr.startswith('_') or callable(value):
+                continue
             if isinstance(value, list):
                 param_names.append(attr)
                 param_values.append(value)
         
-        # Se não houver listas, calcula normalmente
-        if not param_names: 
-            return {self._param_str(): self.calculate(df)}
+        results = {}
+        if not param_names:
+            key = f"{base_path}.{self._param_suffix()}" if base_path else self._param_suffix()
+            results[key] = self.calculate(df)
+            return results
         
         # Gera todas as combinações possíveis
-        results = {}
         for combo in itertools.product(*param_values):
             # Salva valores originais
             original = {name: getattr(self, name) for name in param_names}
-            # Atualiza atributos para a combinação atual
+
+            # Atualiza atributos
             for name, val in zip(param_names, combo):
                 setattr(self, name, val)
-            # Calcula e salva resultado
-            results[self._param_str()] = self.calculate(df)
+            
+            # Calcula resultado
+            calculated_data = self.calculate(df)
+            
+            # Gera string de parâmetros
+            param_id = "_".join(f"{name}{val}" for name, val in zip(param_names, combo))
+            
+            full_key = f"{base_path}.{param_id}" if base_path else param_id
+            
+            results[full_key] = calculated_data
+            
             # Restaura valores originais
             for name, val in original.items():
                 setattr(self, name, val)
+        
         return results
 
-    def _param_str(self):
-        # Gera uma string identificadora dos parâmetros atuais
-        return "_".join(f"{k}{getattr(self, k)}" for k in self.__dict__ if not k.startswith('_') and not callable(getattr(self, k)))
+    def _param_suffix(self):
+        """Retorna apenas um sufixo compacto dos parâmetros atuais."""
+        return ".".join(f"{getattr(self, k)}" for k in self.__dict__ 
+                        if not k.startswith('_') and not callable(getattr(self, k)))
+
 
 
 """ OLD Indicator.py

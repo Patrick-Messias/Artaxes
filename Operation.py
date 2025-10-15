@@ -367,10 +367,11 @@ class Operation(BaseClass, Persistance):
                 continue
 
             # Calcula o indicador com ind.calculate
-            calculated_data = ind_obj.calculate_all_sets(data)
+            calculated_data = ind_obj.calculate_all_sets(data, base_path=result_path)
 
             # Salva no Mapping
-            print(f"        {type(calculated_data)}\n{calculated_data}")
+            for key in calculated_data.keys():
+                print(f"{key}{calculated_data[key]}\n")
             self._operation_result.set_result(result_path, calculated_data)
 
 
