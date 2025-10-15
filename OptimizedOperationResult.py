@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 import json, pickle
 import pandas as pd
+from functools import lru_cache
 
 """
 # Hierarquia implementada:
@@ -92,6 +93,10 @@ class OptimizedOperationResult: # Class to manage results optmally
                 
         if path in self._metadata: self._metadata[path].last_accessed = str(pd.Timestamp.now())
         return result
+
+    @lru_cache(maxsize=32) # For repeated used files
+    def get_df_cached(self, path: str):
+        return self.get_result(path)
 
     def _should_compress(self, data: Any) -> bool: # Determines if data must be compressed
         try:

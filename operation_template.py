@@ -17,9 +17,9 @@ from MA import MA # type: ignore
 def test():
     Params = {
         'AT15': {
-            'param1': range(10, 10, 10), 
-            'param2': range(5, 50, 5),  
-            'param3': range(14, 15, 1)  
+            'param1': range(10, 10+1, 10), 
+            'param2': range(5, 5+1, 5),  
+            'param3': range(14, 14+1, 1)  
         }
     }
 
@@ -36,21 +36,21 @@ def test():
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=[execution_tf, 'D1']
+        timeframe=[execution_tf]
     )
     gbpusd = Asset(
         name='GBPUSD',
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=[execution_tf, 'D1']
+        timeframe=[execution_tf]
     )
     usdjpy = Asset(
         name='USDJPY',
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=[execution_tf, 'D1']
+        timeframe=[execution_tf]
     )
 
     Model_Assets = Asset_Portfolio({
