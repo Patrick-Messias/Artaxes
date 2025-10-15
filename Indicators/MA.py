@@ -1,8 +1,8 @@
 import pandas as pd
-from Indicator import IndicatorBase
+from Indicator import Indicator
 
-class MA(IndicatorBase):
-    def __init__(self, asset, timeframe: str, window: int = 14, ma_type: str = 'sma', price_col: str = 'close'):
+class MA(Indicator):
+    def __init__(self, asset, timeframe: str, window: int = 20, ma_type: str = 'sma', price_col: str = 'close'):
         super().__init__(asset, timeframe)
         self.window = window
         self.ma_type = ma_type 

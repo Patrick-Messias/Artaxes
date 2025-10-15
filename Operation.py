@@ -157,21 +157,15 @@ class Operation(BaseClass, Persistance):
                 if hasattr(model, 'strat') and model.strat:
                     for strat_name, strat in model.strat.items():
                         # Validate strategy has required components
-                        required_attrs = ['name', 'asset_mapping', 'indicators', 'entry_rules']
+                        required_attrs = ['name', 'indicators', 'entry_rules']
                         for attr in required_attrs:
                             if not hasattr(strat, attr):
                                 errors.append(f"❌ Strategy '{strat_name}' missing required attribute: {attr}")
                         
                         # Validate asset mapping
-                        if hasattr(strat, 'asset_mapping') and strat.asset_mapping:
-                            if not isinstance(strat.asset_mapping, dict):
-                                errors.append(f"❌ Strategy '{strat_name}' asset_mapping must be a dictionary")
-                            else:
-                                for asset_key, asset_config in strat.asset_mapping.items():
-                                    if not isinstance(asset_config, dict):
-                                        errors.append(f"❌ Strategy '{strat_name}' asset_mapping['{asset_key}'] must be a dictionary")
-                                    elif 'name' not in asset_config or 'timeframe' not in asset_config:
-                                        errors.append(f"❌ Strategy '{strat_name}' asset_mapping['{asset_key}'] missing 'name' or 'timeframe'")
+                        if hasattr(strat, 'strat_support_assets') and strat.strat_support_assets:
+                            if not isinstance(strat.strat_support_assets, dict):
+                                errors.append(f"❌ Strategy '{strat_name}' strat_support_assets must be a dictionary")
                         
                         # Validate indicators
                         if hasattr(strat, 'indicators') and strat.indicators:
@@ -226,19 +220,18 @@ class Operation(BaseClass, Persistance):
     # II - Hierarchical Mapping
     def _mapping(self): # Creates an optmized hierarchical mapping of the results
         models = self._get_all_models()
-
+        
         # Base Structure
         portfolio_name = getattr(self.data, 'name', 'default_portfolio')
         
         for model_name, model in models.items():
             model_path = f'portfolio.models.{model_name}'
-            
+            print(f"-> Mapped model(s): '{model_name}'")
+
             # Model's Assets
             assets = self._get_model_assets(model)
             self._operation_result.set_result(f"{model_path}.assets", assets)
-            
-            #print(f"Assets mapped for model '{model_name}': {list(assets.keys())}")
-            for asset_name, asset_info in assets.items(): print(f"-> Mapped asset(s): '{asset_name}' | with timeframe(s): {asset_info['timeframes']} | for model: '{model_name}'")
+            for asset_name, asset_obj in assets.items(): print(f"-> Mapped asset(s): '{asset_obj.name}' | with timeframe(s): {asset_obj.timeframe}")
 
             # Model's Strats
             if hasattr(model, 'strat') and model.strat:
@@ -246,7 +239,7 @@ class Operation(BaseClass, Persistance):
                     strat_path = f"{model_path}.strats.{strat_name}"
 
                     print(f"-> Mapped strat: '{strat_name}' for model: '{model_name}'")
-
+                    
                     # Strat's Indicators
                     if hasattr(strat, 'indicators'):
                         for ind_name, indicator in strat.indicators.items():
@@ -255,12 +248,14 @@ class Operation(BaseClass, Persistance):
                             f"{strat_path}.indicators",
                             strat.indicators
                         )
-
-                    # Strat's Asset Mapping
-                    if hasattr(strat, 'asset_mapping'):
+                     
+                    # Strat's Support Assets
+                    if hasattr(strat, 'strat_support_assets'):
+                        for asset_name, _ in strat.strat_support_assets.items():
+                            print(f"-> Mapped strat_support_assets: '{asset_name}'")
                         self._operation_result.set_result(
-                            f"{strat_path}.asset_mapping",
-                            strat.asset_mapping
+                            f"{strat_path}.strat_support_assets",
+                            strat.strat_support_assets
                         )
 
                     # Strat's Results PLACEHOLDER
@@ -278,22 +273,25 @@ class Operation(BaseClass, Persistance):
             #     )
 
     def _get_model_assets(self, model) -> Dict[str, Any]: # Optimally extracts assets from a model
-        assets_info={}
-
+        assets={}
         if isinstance(model.assets, Asset):
-            assets_info[model.assets.name] = {
-                'type': model.assets.type,
-                'market': model.assets.market,
-                'timeframes': list(model.assets.data.keys())
-            }
+            assets[model.assets.name] = model.assets
         elif isinstance(model.assets, Asset_Portfolio):
             for asset_name, asset in model.assets.assets.items():
-                assets_info[asset_name] = {
-                    'type': asset.type,
-                    'market': asset.market,
-                    'timeframes': list(asset.data.keys())
-                }
-        return assets_info
+                assets[asset_name] = asset
+        return assets
+        # if isinstance(model.assets, Asset):
+        #     assets_info[model.assets.name] = {
+        #         'data': model.assets.data,
+        #         'timeframes': list(model.assets.data.keys())
+        #     }
+        # elif isinstance(model.assets, Asset_Portfolio):
+        #     for asset_name, asset in model.assets.assets.items():
+        #         assets_info[asset_name] = {
+        #             'data': asset.data,
+        #             'timeframes': list(asset.data.keys())
+        #         }
+        # return assets_info
 
     # Helper methos for fast access
     def get_model_results(self, model_name: str) -> Dict[str, Any]: # Fast access for Models results
@@ -319,6 +317,7 @@ class Operation(BaseClass, Persistance):
 
     # III - Data Pre-Processing
     def _calculates_indicators(self): # Calculates all indicators using mapped structure
+        print(f"\n>>> Data Pre-Processing <<<")
         try:
             portfolio_data = self._operation_result.get_result("portfolio")
         except KeyError:
@@ -328,44 +327,100 @@ class Operation(BaseClass, Persistance):
         models = portfolio_data.get('models', {})
 
         for model_name, model_data in models.items(): # Processes each Strat in each Model
+            print(f"{model_name}")
             strats = model_data.get('strats', {})
+            model_assets = model_data.get('assets', {})
 
-            for strat_name, strat_data in strats.items(): # Get any indicators and asset_mapping already mapped
+            for asset_key, asset_obj in model_assets.items(): # Primeiro mapeia os Assets do Model
+                asset_obj = self._get_asset_object(model_name, asset_key)
+                result_path = f"portfolio.models.{model_name}.assets.{asset_key}"
+                
+                for tf in asset_obj.timeframe:
+                    try:
+                        data = asset_obj.data_get(tf)
+                        if data is None or data.empty: continue
+                    except Exception as e:
+                        print(f"⚠️ Error loading data for {asset_name}: {e}")
+                        continue
+                    asset_obj.data[tf] = data
+
+                    self._operation_result.set_result(result_path, asset_obj)
+
+
+                    ACIMA JÁ MAPEIA OS DADOS, PORÉM PARECE UM POUCO LENTO, MOD ABAIXO PRA SALVAR OS strat_support_assets E CALC IND
+            
+            for strat_name, strat_data in strats.items(): # Get any indicators and strat_support_assets already mapped
                 indicators = strat_data.get('indicators', {})
-                asset_mapping = strat_data.get('asset_mapping', {})
-
+                strat_support_assets = strat_data.get('strat_support_assets', {})
+                #print(f"strat: {strat_name} | indicators: {indicators} |")
+                
                 # Calculates indicators based on mapping
-                self._calculate_strat_indicators(model_name, strat_name, indicators, asset_mapping)
+                for ind_key, ind_obj in indicators.items():
+                    if ind_obj.asset == 'CURR_ASSET': # Calcula com cada asset de model_asset
+                        self._calculate_strat_indicator(model_name, strat_name, ind_key, ind_obj.timeframe, model_assets)
+                    else: # Calcula ind apenas com o ind_obj.asset que esteja em strat_support_assets
+                        self._calculate_strat_indicator(model_name, strat_name, ind_key, ind_obj.timeframe, strat_support_assets, ind_obj.asset)
         return None
 
-    def _calculate_strat_indicators(self, model_name: str, strat_name: str, indicators: dict, asset_mapping: dict): # Calculates indicators for a specific Strat using mapped data
-        for asset_key, asset_config in asset_mapping.items():
-            asset_name = asset_config.get('name')
-            timeframe = asset_config.get('timeframe')
+    def _calculate_strat_indicator(self, model_name: str, strat_name: str, ind_name: str, ind_timeframe: str, assets: dict, asset_name=None): # Calculates indicators for a specific Strat using mapped data
+        ind_asset_obj_all = {}
+        if asset_name is None: # Calcula ind para cada Asset em Model
+            for asset_key, asset_obj in assets.items():
+                asset_obj = self._get_asset_object(model_name, asset_key)
+                result_path = f"portfolio.models.{model_name}.strats.{strat_name}.results.indicators.{asset_obj.name}.{ind_timeframe}.{ind_name}"
+                #print(result_path)
+                ind_asset_obj_all[result_path] = asset_obj
+        else:   # Calcula apenas para o Asset asset_name
+            asset_obj = assets[asset_name]
+            result_path = f"portfolio.models.{model_name}.strats.{strat_name}.results.indicators.{asset_obj.name}.{ind_timeframe}.{ind_name}"
+            #print(result_path)
+            ind_asset_obj_all[result_path] = asset_obj
 
-            if not asset_name or not timeframe: continue
-
-            # Gets the real object (not mapped metadata)
-            asset_obj = self._get_asset_object(model_name, asset_name)
-            if not asset_obj: continue
-
+        for result_path, asset_obj in ind_asset_obj_all.items():
             # Loads Asset data
             try:
-                data = asset_obj.data_get(timeframe)
+                data = asset_obj.data_get(ind_timeframe)
                 if data is None or data.empty: continue
             except Exception as e:
                 print(f"⚠️ Error loading data for {asset_name}: {e}")
                 continue
 
-            # Calculates each indicator
-            for ind_name, indicator in indicators.items():
-                if indicator.timeframe != timeframe: continue
+            # Calcula o indicador com ind.calculate
+            #calculated_data = 
 
-                # Calculates and stores results
-                result_path = f"portfolio.models.{model_name}.strats.{strat_name}.results.indicators.{asset_name}.{timeframe}.{ind_name}"
-                calculated_data = self.calculate_indicators(data, indicator)
+            #REFAZER -> AO MAPEAR OS MODEL.ASSET E STRAT_SUPPORT_ASSETS JÁ COPIAR OS DADOS E DEPOIS SÓ VERIFICAR ENTRE OS ASSETS QUAL IND PRECISA DE QUAL
+            
+            # Salva no Mapping
+            self._operation_result.set_result(result_path, calculated_data)
+
+        #Abaixo está errado porque está tratando que apenas os dados de strat_support_assets precisam ser calculados
+        # for asset_key, asset_obj in strat_support_assets.items():
+        #     asset_name = asset_obj.name
+        #     timeframe = asset_obj.timeframe
+
+        #     if not asset_name or not timeframe: continue
+
+        #     # Gets the real object (not mapped metadata)
+        #     asset_obj = self._get_asset_object(model_name, asset_name)
+        #     if not asset_obj: continue
+
+        #     # Loads Asset data
+        #     try:
+        #         data = asset_obj.data_get(timeframe)
+        #         if data is None or data.empty: continue
+        #     except Exception as e:
+        #         print(f"⚠️ Error loading data for {asset_name}: {e}")
+        #         continue
+
+        #     # Calculates each indicator
+        #     for ind_name, indicator in indicators.items():
+        #         if indicator.timeframe != timeframe: continue
+
+        #         # Calculates and stores results
+        #         result_path = f"portfolio.models.{model_name}.strats.{strat_name}.results.indicators.{asset_name}.{timeframe}.{ind_name}"
+        #         calculated_data = self.calculate_indicators(data, indicator)
                 
-                self._operation_result.set_result(result_path, calculated_data)
+        #         self._operation_result.set_result(result_path, calculated_data)
 
     def _get_asset_object(self, model_name, asset_name: str): # Gets the real Asset object (not mapped metadata)
         models = self._get_all_models()
@@ -431,6 +486,8 @@ class Operation(BaseClass, Persistance):
 
         # II - Hierarchical Mapping
         self._mapping()
+        print(f'\nMapped Structure')
+        self._operation_result.print_structure()
         print()
 
         # III - Data Pre-Processing

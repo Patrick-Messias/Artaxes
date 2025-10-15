@@ -13,7 +13,7 @@ portfolio = {
             'strats': {
                 'strat_name': {
                     'indicators': {...},
-                    'asset_mapping': {...},
+                    'strat_support_assets': {...},
                     'results': {...}
                 }
             },
@@ -149,7 +149,16 @@ class OptimizedOperationResult: # Class to manage results optmally
         instance._metadata = data.get('metadata', {})
         return instance
 
+    def print_structure(self, level: int = 0, current: Optional[dict] = None):
+        if current is None: current = self._structure
 
+        for key, value in current.items():
+            indent = "  " * level
+            if isinstance(value, dict):
+                print(f"{indent}- {key}/")
+                self.print_structure(level + 1, value)
+            else:
+                print(f"{indent}- {key}: {type(value).__name__}")
 
 
 

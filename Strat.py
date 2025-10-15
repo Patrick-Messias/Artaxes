@@ -2,6 +2,7 @@ import pandas as pd, numpy as np, itertools, importlib
 from typing import Dict, Optional, Union, List, Callable
 from dataclasses import dataclass, field
 from BaseClass import BaseClass
+from Asset import Asset, Asset_Portfolio
 from finta import TA
 import uuid
 
@@ -178,8 +179,7 @@ def generate_signals(self, asset_name: str = None, indicators_cache: dict = None
 @dataclass
 class StratParams():
     name: str = field(default_factory=lambda: f'strat_{uuid.uuid4()}')
-    asset_mapping: Union[Asset, Asset_Portfolio]=None #Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
-
+    strat_support_assets: Optional[Dict[str, Asset]] = field(default_factory=dict) #Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
     execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
     data_settings: DataSettings = field(default_factory=DataSettings)
     mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
@@ -201,7 +201,7 @@ class Strat(BaseClass):
     def __init__(self, strat_params: StratParams):
         super().__init__()
         self.name = strat_params.name
-        self.asset_mapping = strat_params.asset_mapping
+        self.strat_support_assets = strat_params.strat_support_assets
 
         self.execution_settings = strat_params.execution_settings
         self.data_settings = strat_params.data_settings

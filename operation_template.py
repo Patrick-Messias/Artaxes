@@ -10,7 +10,7 @@ from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
 from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
 
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
-from RSIZScore import RSIZScore # type: ignore
+from MA import MA # type: ignore
 
 # NOTE Should be able to create a Trading Model Portfolio with multiple Strategies taking trades or a simple model that rebalances between a few stocks without "trading"
 
@@ -23,21 +23,58 @@ def test():
         }
     }
 
-    # What assets are going to do what enside the Strat != What assets are going to be tested with the rules below
-    #Asset_Mapping = { 
-    #    'Asset1': {'name': 'CURR_ASSET', 'timeframe': 'M15'}, # CURR_ASSET is the dynamic current Asset in the list being analysed
-    #    'Asset2': {'name': 'GBPUSD', 'timeframe': 'D1'} # Defines specific Asset for custom rule
-    #}
+    execution_tf='M15'
+    eurusd_daily = Asset(
+        name='EURUSD',
+        type='currency_pair',
+        market='forex',
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
+        timeframe=['D1']
+    )
+    eurusd = Asset(
+        name='EURUSD',
+        type='currency_pair',
+        market='forex',
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
+        timeframe=[execution_tf, 'D1']
+    )
+    gbpusd = Asset(
+        name='GBPUSD',
+        type='currency_pair',
+        market='forex',
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
+        timeframe=[execution_tf, 'D1']
+    )
+    usdjpy = Asset(
+        name='USDJPY',
+        type='currency_pair',
+        market='forex',
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
+        timeframe=[execution_tf, 'D1']
+    )
 
-    close = df['CURR_ASSET']['M15']['close']
-    ma = df['CURR_ASSET']['M15']['sma']
+    Model_Assets = Asset_Portfolio({
+        'name': 'forex',
+        'assets': {eurusd.name: eurusd, gbpusd.name: gbpusd, usdjpy.name: usdjpy}
+    })
+    #Forex = {eurusd.name: eurusd, gbpusd.name: gbpusd, usdjpy.name: usdjpy} # Criar uma def que retorna o(s) asset com o timeframe que quer
+    Strat_Assets = {'eurusd': eurusd_daily} # Assets de suporte seja para calcular regras ou indicadores
+
     entry_rules = {
-        'entry_long': lambda df: (df['Asset1']['close'] < df['Asset1']['ma']) & (df['Asset1']['close'] < df['Asset1']['low'].shift(1)), # df['Asset2']['close_D1'] > df['Asset2']['ma_D1']
-        'entry_short': lambda df: (df['Asset1']['close'] > df['Asset1']['ma']) & (df['Asset1']['close'] > df['Asset1']['high'].shift(1)) # df['Asset2']['close_D1'] < df['Asset2']['ma_D1']
+        'entry_long': lambda df: (
+            df['CURR_ASSET'][execution_tf]['close'] < df['CURR_ASSET'][execution_tf]['sma']) 
+            & (df['CURR_ASSET'][execution_tf]['close'].shift(1) < df['CURR_ASSET'][execution_tf]['low'].shift(1)) 
+            & (df['eurusd']['D1']['close'] > df['eurusd']['D1']['close'].shift(1)
+            ), 
+        'entry_short': lambda df: (
+            df['CURR_ASSET'][execution_tf]['close'] > df['CURR_ASSET'][execution_tf]['sma']) 
+            & (df['CURR_ASSET'][execution_tf]['close'].shift(1) > df['CURR_ASSET'][execution_tf]['high'].shift(1)) 
+            & (df['eurusd']['D1']['close'] < df['eurusd']['D1']['close'].shift(1)
+            ) 
     }
     tf_exit_rules = {
-        'tf_exit_long': lambda df: df['Asset1']['close'] > df['Asset1']['ma'],
-        'tf_exit_short': lambda df: df['Asset1']['close'] < df['Asset1']['ma']
+        'tf_exit_long': lambda df: (df['CURR_ASSET'][execution_tf]['close'] > df['CURR_ASSET'][execution_tf]['sma']),
+        'tf_exit_short': lambda df: (df['CURR_ASSET'][execution_tf]['close'] < df['CURR_ASSET'][execution_tf]['sma'])
     }
     sl_exit_rules = None
     tp_exit_rules = None
@@ -50,7 +87,7 @@ def test():
     AT15 = Strat(
         StratParams(
             name="AT15",
-            asset_mapping=Asset_Mapping, # With what will the model define the rules
+            strat_support_assets=Strat_Assets, # With what will the model define the rules
 
             execution_settings=ExecutionSettings(order_type='market', offset=0.0),
             data_settings=DataSettings(fill_method='ffill', fillna=0),
@@ -61,11 +98,11 @@ def test():
                             next_index_day_close=False, friday_close=False, 
                             timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
             indicators={  
-                'rsiz': RSIZScore( 
-                        asset=Asset_Mapping['Asset1']['name'], # if 'CURR_ASSET' then must create for all assets in Model's Assets
-                        timeframe=Asset_Mapping['Asset1']['timeframe'],
-                        rsi_window=list(Params['AT15']['param1']),
-                        zscore_window=list(Params['AT15']['param2']),
+                'ma': MA( 
+                        asset='CURR_ASSET', # if 'CURR_ASSET' then must create for all assets in Model's Assets
+                        timeframe=execution_tf,
+                        window=list(Params['AT15']['param1']),
+                        ma_type='sma',
                         price_col='close'
                     )
             },
@@ -98,24 +135,15 @@ def test():
     )
     """
 
-
-    eurusd = Asset(
-        name='EURUSD',
-        type='currency_pair',
-        market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=[Asset_Mapping['Asset1']['timeframe']]
-    )
-
     model_1 = Model(
         ModelParams(
             name='Mean Reversion',
             description='Short term mean reversion strategy',
-            assets=eurusd, # CURR_ASSET refers to this one in asset_mapping
+            assets=Model_Assets, # CURR_ASSET refers to this one in strat_support_assets
             strat={
                 'AT15': AT15#, 'AT13': AT13
             },
-            execution_timeframe=[Asset_Mapping['Asset1']['timeframe']],
+            execution_timeframe=execution_tf,
             model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model1_MM")),
             model_system_manager=None  # Optional - will use default system management
         )
@@ -125,11 +153,11 @@ def test():
         ModelParams(
             name='Trend Following',
             description='Long range trend following using breakout entry',
-            assets=eurusd,
+            assets=Model_Assets,
             strat={
                 'AT20': AT20
             },
-            execution_timeframe=Asset_Mapping['Asset2']['timeframe'],
+            execution_timeframe=execution_tf,
             model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model2_MM")),
             model_system_manager=None  # Optional - will use default system management
         )
@@ -157,7 +185,7 @@ def test():
             data=portfolio,
             operation=backtest,
             metrics=metrics,
-            operation_timeframe='M15',  # Using default timeframe from Asset_Mapping
+            operation_timeframe=execution_tf,  # Using default timeframe from strat_support_assets
             date_start=None, date_end=None
         )
     )

@@ -164,10 +164,12 @@ class Asset(BaseClass):
         self.market = market
         self.data_path = data_path
         self.data: dict[str, pd.DataFrame] = {}
+        self.timeframe = timeframe
         if timeframe: 
             for tf in timeframe:
                 self.data[tf] = None
-        else: self.timeframes_load_available()
+        else: 
+            self.timeframes_load_available()
 
         if not os.path.isdir(self.data_path): print(f"⚠️ Warning: Data path '{self.data_path}' not found when initializing Asset.")
 
