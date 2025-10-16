@@ -1,10 +1,7 @@
 import pandas as pd, numpy as np
-from Indicator import IndicatorBase
+from Indicator import Indicator
 
-import pandas as pd, numpy as np
-from Indicator import IndicatorBase
-
-class HURST(IndicatorBase):
+class HURST(Indicator):
     def __init__(self, asset, timeframe: str, window: int = 20, type: str = 'simple', price_col: str = 'pct_change'):
         super().__init__(asset, timeframe)
         self.window = window

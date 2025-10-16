@@ -41,13 +41,13 @@ class Model(BaseClass):
         self.model_system_manager = model_params.model_system_manager
 
         # DELETAR?
-        def _get_all_assets(self):
-            if isinstance(self.assets, Asset):
-                return [self.assets]
-            elif isinstance(self.assets, Asset_Portfolio):
-                return self.assets.assets
-            else:
-                return []
+        # def _get_all_assets(self):
+        #     if isinstance(self.assets, Asset):
+        #         return [self.assets]
+        #     elif isinstance(self.assets, Asset_Portfolio):
+        #         return self.assets.assets
+        #     else:
+        #         return []
         
 
 

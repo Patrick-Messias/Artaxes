@@ -1,4 +1,4 @@
-from typing import Union, Dict, Optional, Any
+from typing import Union, Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from Model import Model
 from BaseClass import BaseClass
@@ -78,13 +78,7 @@ class Operation(BaseClass, Persistance):
         self.date_end = op_params.date_end
         self.save = op_params.save
 
-        # Caches organize and save data for general use in various defs
-        #self._assets_data_cache = {}        # {(asset_name, timeframe)}
-        #self._indicators_cache = {}         # {(ind_name, asset_name, timeframe, params)}
-        #self._signal_cache = {}             # {(model_name, strat_name, asset_name, timeframe, params)}
-        #self._preliminary_result_cache = {} # {(model_name, strat_name, asset_name, timeframe, params)}
-
-        # Cache otimizado
+        # Optimized Cache
         self._memory_cache = {}
         self._cache_size_limit = 100 * 1024 * 1024  # 100MB limit
 
@@ -97,25 +91,6 @@ class Operation(BaseClass, Persistance):
             return self.data.get_all_models()
         else: return {}
 
-    def _get_all_unique_datetimes(self, assets_cache=None): # Returns all unique datetimes from a Asset dict
-        all_unique_datetimes = set()
-
-        if not assets_cache: return []
-
-        for (asset_name, tf), df in assets_cache.items():
-            if df is None or df.empty: continue
-
-            if 'datetime' in df.columns:
-                datetimes = pd.to_datetime(df['datetime'], errors='coerse')
-            elif 'date' in df.columns:
-                datetimes = pd.to_datetime(df['date'], errors='coerse')
-            else: 
-                continue
-
-            datetimes = datetimes.dt.normalize()
-            all_unique_datetimes.update(datetimes.dropna().unique())
-
-        return sorted(all_unique_datetimes)
 
 
     # I - Init and Validation
@@ -316,9 +291,7 @@ class Operation(BaseClass, Persistance):
         return results
 
     # III - Data Pre-Processing
-
     def _calculates_indicators(self): # Calculates all indicators using mapped structure
-        print(f"\n>>> Data Pre-Processing <<<")
         try:
             portfolio_data = self._operation_result.get_result("portfolio")
         except KeyError:
@@ -375,6 +348,84 @@ class Operation(BaseClass, Persistance):
             self._operation_result.set_result(result_path, calculated_data)
 
 
+
+    def _generate_signals(self): 
+        portfolio_data = self._operation_result.get_result("portfolio")
+        models = portfolio_data.get('models', {})
+
+        for model_name, model_data in models.items(): # Processes each Strat in each Model
+            print(f"        > {model_name}")
+            strats = model_data.get('strats', {})
+            model_assets = model_data.get('assets', {})
+
+            # Variable saves any unique timeframe != operation_timeframe for all relevant model.assets and strat.strat_support_assets
+            unique_timeframes_model = {}
+
+            for asset_name, asset_obj in model_assets.items():
+                timeframes = getattr(asset_obj, "timeframe", [])
+                if not isinstance(timeframes, (list, tuple, set)): timeframes = [timeframes]  # Garantees that timeframes is iterable
+                for tf in timeframes:
+                    if tf and tf != self.operation_timeframe:
+                        unique_timeframes_model.setdefault(asset_name, []).append(tf) # cria lista se ainda não existir
+
+            for strat_name, strat_data in strats.items(): 
+                unique_timeframes_all = unique_timeframes_model.copy() # Reseta a comparação a cada Strat para comparar sempre os strat_support_assets com os model.asset
+                strat_support_assets = strat_data.get('strat_support_assets', {})
+
+                 # Aqui vou fazer a verificação dos timeframes do strat_support_assets dessa Strat
+                for supp_asset_name, supp_asset_obj in strat_support_assets.items():
+                    timeframes = getattr(supp_asset_obj, "timeframe", [])
+                    if not isinstance(timeframes, (list, tuple, set)): timeframes = [timeframes]  
+                    for tf in timeframes:
+                        if tf and tf != self.operation_timeframe:
+                            unique_timeframes_all.setdefault(supp_asset_name, []).append(tf)
+
+                # If any different timeframes found then transfers HTF to LTF, if any tf < operational_timeframe then interrupts operation
+                if not unique_timeframes_all:
+                    print("       ✅  No different timeframes from operational_timeframe found")
+                else:
+                    print("       ⚠️  Different timeframes found:", unique_timeframes_all)
+
+                for unique_tf_asset_name, unique_tf in unique_timeframes_all.items(): # Takes HTF transfers to LTF and saves df object to cache
+                    print(f"           > unique_tf_asset_name: {unique_tf_asset_name} with unique_tf: {unique_tf}")
+                    try: # Tries to get data from model_assets
+                        htf_asset_obj = model_assets[unique_tf_asset_name]
+                        if htf_asset_obj: print(f"              > model_assets unique tf found: {htf_asset_obj}")
+                    except: # Gets data from strat_support_assets
+                        htf_asset_obj = strat_support_assets[unique_tf_asset_name]
+                        if htf_asset_obj: print(f"              > strat_support_assets unique tf found: {htf_asset_obj}")
+                    
+                    
+
+                    # Passar df HTF para LTF
+                    # Como você tem uma estrutura de OperationResult com cache e compressão, o ideal é:
+                    # Fazer o mapping multitimeframe logo após carregar os dados (pré-processamento).
+                    # Salvar os dados sincronizados (por exemplo: asset_obj.data['M5_with_H1']).
+                    # Usar esse dataframe já pronto durante todo o backtest/sinal.
+
+                # Gets Indicators
+                # for ind_key, ind_obj in indicators.items():
+                #     print(f"    > asset(s): {ind_obj.asset} | strat: {strat_name} | indicator: {ind_key}")
+
+                # If unique_timeframes > 1 then transfers HTF columns to LTF for each Strat
+
+                # Gets Signal Rules
+                
+
+                # Calculates Signals
+                
+                
+
+
+        return None
+
+
+        
+    def _preliminary_backtest(self):
+        return None
+
+
+
     def _get_asset_object(self, model_name, asset_name: str): # Gets the real Asset object (not mapped metadata)
         models = self._get_all_models()
         model = models.get(model_name)
@@ -387,22 +438,81 @@ class Operation(BaseClass, Persistance):
             return model.assets.assets.get(asset_name)
         return None
 
-    def _generate_signals(self):
-
+    def _transfer_HTF_Columns(self, ltf_df: pd.DataFrame, ltf_tf: str, htf_df: pd.DataFrame, htf_tf: str, columns: Optional[List[str]] = None): 
+        """
+        Transfere colunas do timeframe maior para o menor
         
+        Args:
+            ltf_df (pd.DataFrame): DataFrame do timeframe menor
+            ltf_tf (str): Timeframe menor (ex: 'M5')
+            htf_df (pd.DataFrame): DataFrame do timeframe maior
+            htf_tf (str): Timeframe maior (ex: 'H1')
+            columns (list[str], optional): Lista de colunas para transferir. Se None, transfere todas
+            
+        Returns:
+            pd.DataFrame: DataFrame do timeframe menor com as colunas do maior
+        """
+        
+        def get_tf_minutes(tf: str) -> int:
+            """Converte timeframe para minutos"""
+            if tf.startswith('M'): return int(tf[1:])
+            elif tf.startswith('H'): return int(tf[1:]) * 60
+            elif tf.startswith('D'): return int(tf[1:]) * 1440
+            else: raise ValueError(f"Timeframe não suportado: {tf}")
+            
+        if not columns:
+            columns = htf_df.columns
+            
+        ltf_minutes = get_tf_minutes(ltf_tf)
+        htf_minutes = get_tf_minutes(htf_tf)
+        
+        if ltf_minutes >= htf_minutes:
+            raise ValueError(f"Timeframe menor ({ltf_tf}) deve ser menor que o maior ({htf_tf})")
+            
+        # Cria índice de tempo para ambos os DataFrames
+        ltf_df = ltf_df.copy()
+        htf_df = htf_df.copy()
+        
+        if 'datetime' not in ltf_df.columns or 'datetime' not in htf_df.columns:
+            raise ValueError("Ambos os DataFrames precisam ter coluna 'datetime'")
+            
+        ltf_df.set_index('datetime', inplace=True)
+        htf_df.set_index('datetime', inplace=True)
+        
+        # Replica valores do HTF para cada barra do LTF
+        for column in columns:
+            if column in htf_df.columns:
+                ltf_df[f"{column}_{htf_tf}"] = htf_df[column].reindex(ltf_df.index, method='ffill')
+            
+        ltf_df.reset_index(inplace=True)
+        return ltf_df
 
 
-
-
-
-
-
-        return None
-
-    def _preliminary_backtest(self):
-        return None
 
     # IV - Execution
+
+
+
+    def _get_all_unique_datetimes(self, assets_cache=None): # Returns all unique datetimes from a Asset dict
+        all_unique_datetimes = set()
+
+        if not assets_cache: return []
+
+        for (asset_name, tf), df in assets_cache.items():
+            if df is None or df.empty: continue
+
+            if 'datetime' in df.columns:
+                datetimes = pd.to_datetime(df['datetime'], errors='coerse')
+            elif 'date' in df.columns:
+                datetimes = pd.to_datetime(df['date'], errors='coerse')
+            else: 
+                continue
+
+            datetimes = datetimes.dt.normalize()
+            all_unique_datetimes.update(datetimes.dropna().unique())
+
+        return sorted(all_unique_datetimes)
+
 
     # V - Pos-Processing
     def _calculate_metrics(self):
@@ -435,31 +545,41 @@ class Operation(BaseClass, Persistance):
     def run(self):
 
         # I - Init and Validation
+        print(f"\n>>> Init and Validating Operation <<<")
         self._validate_operation()
 
         # II - Hierarchical Mapping
+        print(f"\n>>> Hierarchical Mapping <<<")
+        print(f"    > Mapping Structure")
         self._mapping()
-        print(f'\nMapped Structure')
         self._operation_result.print_structure()
         print()
 
         # III - Data Pre-Processing
+        print(f"\n>>> Data Pre-Processing <<<")
+        print(f"    > Calculating Indicators")
         self._calculates_indicators()
+        print(f"    > Generating Signals")
         self._generate_signals()
+        print(f"    > Generating Preliminary Results")
         self._preliminary_backtest() # If simple backtest then stops here?
 
         # IV - Execution
+        print(f"\n>>> Executing Operation <<<")
         if isinstance(self.operation, Backtest): self.operation.run()
         elif isinstance(self.operation, Optimization): self.operation.run()
         elif isinstance(self.operation, Walkforward): self.operation.run()
 
         # V - Pos-Processing
+        print(f"\n>>> Pos-Processing <<<")
         if self.metrics: self._calculate_metrics()
 
-        # VI - Saving
+        # VI - Saving   
+        print(f"\n>>> Saving Results <<<")
         if self.save: self.save_results()
 
         # VII - Cleanup
+        print(f"\n>>> Cleaning Memory <<<")
         self.cleanup_memory()
 
         return self._operation_result

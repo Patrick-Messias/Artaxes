@@ -11,6 +11,10 @@ from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
 
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 from MA import MA # type: ignore
+from HURST import HURST # type: ignore
+from MACDV import MACDV # type: ignore
+from RSIZScore import RSIZScore # type: ignore
+from VAR import VAR # type: ignore
 
 # NOTE Should be able to create a Trading Model Portfolio with multiple Strategies taking trades or a simple model that rebalances between a few stocks without "trading"
 
@@ -29,29 +33,25 @@ def test():
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=['D1']
-    )
+        timeframe=['D1'])
     eurusd = Asset(
         name='EURUSD',
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=[execution_tf]
-    )
+        timeframe=[execution_tf])
     gbpusd = Asset(
         name='GBPUSD',
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=[execution_tf]
-    )
+        timeframe=[execution_tf])
     usdjpy = Asset(
         name='USDJPY',
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=[execution_tf]
-    )
+        timeframe=[execution_tf])
 
     Model_Assets = Asset_Portfolio({
         'name': 'forex',
@@ -97,18 +97,20 @@ def test():
                             timeTI=None, timeEF=None, timeTF=None, 
                             next_index_day_close=False, friday_close=False, 
                             timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
-            indicators={  
+            indicators={ # if asset='CURR_ASSET' then must create for all assets in Model's Assets
                 'ma': MA( 
-                        asset='CURR_ASSET', # if 'CURR_ASSET' then must create for all assets in Model's Assets
+                        asset='CURR_ASSET', 
                         timeframe=execution_tf,
                         window=list(Params['AT15']['param1']),
-                        ma_type='sma',
+                        type='sma',
                         price_col='close'
+                    ),
+                'var': VAR( 
+                        asset='CURR_ASSET', 
+                        timeframe=execution_tf,
+                        window=list(Params['AT15']['param1'])
                     )
             },
-
-            #Mudar onde for relevante, na definição do ind (acima) deve usar list para colocar >1 parametro
-            #ITERAR SOBRE models.assets -> strat -> ind.calculate_all_sets
             
             entry_rules=entry_rules,
             tf_exit_rules=tf_exit_rules,

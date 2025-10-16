@@ -316,54 +316,7 @@ class Strat(BaseClass):
 
 
 
-    def transfer_HTF_Columns(self, ltf_df: pd.DataFrame, ltf_tf: str, htf_df: pd.DataFrame, htf_tf: str, columns: Optional[List[str]] = None): 
-        """
-        Transfere colunas do timeframe maior para o menor
-        
-        Args:
-            ltf_df (pd.DataFrame): DataFrame do timeframe menor
-            ltf_tf (str): Timeframe menor (ex: 'M5')
-            htf_df (pd.DataFrame): DataFrame do timeframe maior
-            htf_tf (str): Timeframe maior (ex: 'H1')
-            columns (list[str], optional): Lista de colunas para transferir. Se None, transfere todas
-            
-        Returns:
-            pd.DataFrame: DataFrame do timeframe menor com as colunas do maior
-        """
-        
-        def get_tf_minutes(tf: str) -> int:
-            """Converte timeframe para minutos"""
-            if tf.startswith('M'): return int(tf[1:])
-            elif tf.startswith('H'): return int(tf[1:]) * 60
-            elif tf.startswith('D'): return int(tf[1:]) * 1440
-            else: raise ValueError(f"Timeframe não suportado: {tf}")
-            
-        if not columns:
-            columns = htf_df.columns
-            
-        ltf_minutes = get_tf_minutes(ltf_tf)
-        htf_minutes = get_tf_minutes(htf_tf)
-        
-        if ltf_minutes >= htf_minutes:
-            raise ValueError(f"Timeframe menor ({ltf_tf}) deve ser menor que o maior ({htf_tf})")
-            
-        # Cria índice de tempo para ambos os DataFrames
-        ltf_df = ltf_df.copy()
-        htf_df = htf_df.copy()
-        
-        if 'datetime' not in ltf_df.columns or 'datetime' not in htf_df.columns:
-            raise ValueError("Ambos os DataFrames precisam ter coluna 'datetime'")
-            
-        ltf_df.set_index('datetime', inplace=True)
-        htf_df.set_index('datetime', inplace=True)
-        
-        # Replica valores do HTF para cada barra do LTF
-        for column in columns:
-            if column in htf_df.columns:
-                ltf_df[f"{column}_{htf_tf}"] = htf_df[column].reindex(ltf_df.index, method='ffill')
-            
-        ltf_df.reset_index(inplace=True)
-        return ltf_df
+
 
 
 
