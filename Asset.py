@@ -4,6 +4,38 @@ from dataclasses import dataclass
 from typing import Union, Callable
 
 @staticmethod
+def create_datetime_columns(df: pd.DataFrame) -> pd.DataFrame: #Garantees that the DataFrame has 'datetime', 'date' e 'time' columns
+    df = df.copy()
+
+    # If 'datetime' doen't exist, tries to create it
+    if 'datetime' not in df.columns:
+        if 'date' in df.columns and 'time' in df.columns:
+            # Classic case: date and time separated
+            df['datetime'] = pd.to_datetime(df['date'].astype(str) + ' ' + df['time'].astype(str), errors='coerce')
+
+        elif 'date' in df.columns:
+            # Only date, no time
+            df['datetime'] = pd.to_datetime(df['date'].astype(str) + ' 00:00:00', errors='coerce')
+
+        elif 'time' in df.columns:
+            # Only time, no date
+            df['datetime'] = pd.to_datetime('1900-01-01 ' + df['time'].astype(str), errors='coerce')
+
+        else:
+            # No info available
+            raise ValueError("Não foi possível criar 'datetime': faltam colunas 'date' e 'time'.")
+
+    # Garantees consistency in the complementary columns
+    if 'date' not in df.columns: df['date'] = pd.to_datetime(df['datetime']).dt.date
+
+    if 'time' not in df.columns: df['time'] = pd.to_datetime(df['datetime']).dt.time
+
+    # Removes possible nulls from 'datetime'
+    df = df.dropna(subset=['datetime']).reset_index(drop=True)
+    
+    return df
+
+@staticmethod
 def load_data(data_path, min_limit=0, max_limit=1, index_col_setting=False, drop_index=True):
     """
     Carrega dados de um arquivo ou diretório, tentando automaticamente extensões .xlsx, .xls e .csv.
@@ -25,15 +57,17 @@ def load_data(data_path, min_limit=0, max_limit=1, index_col_setting=False, drop
             df = normalize_columns(pd.DataFrame(df))
             df['ativo'] = os.path.splitext(os.path.basename(file_path))[0]
             
-            if 'datetime' not in df.columns:
-                if 'date' in df.columns: 
-                    time_part = (' ' + df['time'].astype(str)) if 'time' in df.columns else '00:00:00'
-                    df['datetime'] = pd.to_datetime(df['date'].astype(str) + time_part)
-                elif 'time' in df.columns: 
-                    df['datetime'] = pd.to_datetime(df['time'].astype(str) + ' 00:00:00')
+            df = create_datetime_columns(df)
+
+            # if 'datetime' not in df.columns:
+            #     if 'date' in df.columns: 
+            #         time_part = (' ' + df['time'].astype(str)) if 'time' in df.columns else '00:00:00'
+            #         df['datetime'] = pd.to_datetime(df['date'].astype(str) + time_part)
+            #     elif 'time' in df.columns: 
+            #         df['datetime'] = pd.to_datetime(df['time'].astype(str) + ' 00:00:00')
             
-            df['time'] = df.get('time', pd.to_datetime(df['datetime']).dt.time if 'datetime' in df.columns else '00:00:00')
-            df['date'] = df.get('date', pd.to_datetime(df['datetime']).dt.date if 'datetime' in df.columns else "1900-00-00")
+            # df['time'] = df.get('time', pd.to_datetime(df['datetime']).dt.time if 'datetime' in df.columns else '00:00:00')
+            # df['date'] = df.get('date', pd.to_datetime(df['datetime']).dt.date if 'datetime' in df.columns else "1900-00-00")
             
             return df.iloc[int(len(df)*min_limit):int(len(df)*max_limit)].reset_index(drop=drop_index)
         except Exception as e:

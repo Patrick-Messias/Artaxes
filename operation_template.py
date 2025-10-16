@@ -33,7 +33,14 @@ def test():
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
+        timeframe=['D1', 'H1'])
+    gbpusd_daily = Asset(
+        name='GBPUSD',
+        type='currency_pair',
+        market='forex',
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
         timeframe=['D1'])
+    
     eurusd = Asset(
         name='EURUSD',
         type='currency_pair',
@@ -58,7 +65,7 @@ def test():
         'assets': {eurusd.name: eurusd, gbpusd.name: gbpusd, usdjpy.name: usdjpy}
     })
     #Forex = {eurusd.name: eurusd, gbpusd.name: gbpusd, usdjpy.name: usdjpy} # Criar uma def que retorna o(s) asset com o timeframe que quer
-    Strat_Assets = {'eurusd': eurusd_daily} # Assets de suporte seja para calcular regras ou indicadores
+    Strat_Assets = {'eurusd': eurusd_daily, 'gbpusd': gbpusd_daily} # Assets de suporte seja para calcular regras ou indicadores
 
     entry_rules = {
         'entry_long': lambda df: (

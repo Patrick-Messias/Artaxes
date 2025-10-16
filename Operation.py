@@ -7,10 +7,10 @@ from Backtest import Backtest
 from Indicator import Indicator
 from Optimization import Optimization
 from Walkforward import Walkforward
-from Asset import Asset, Asset_Portfolio #, assets_info
+from Asset import Asset, Asset_Portfolio, create_datetime_columns #, assets_info
 from Persistance import Persistance
 from OptimizedOperationResult import OptimizedOperationResult
-import uuid
+import uuid, copy
 import pandas as pd
 
 # NOTE -> Tirar daqui -> 
@@ -369,7 +369,7 @@ class Operation(BaseClass, Persistance):
                         unique_timeframes_model.setdefault(asset_name, []).append(tf) # cria lista se ainda não existir
 
             for strat_name, strat_data in strats.items(): 
-                unique_timeframes_all = unique_timeframes_model.copy() # Reseta a comparação a cada Strat para comparar sempre os strat_support_assets com os model.asset
+                unique_timeframes_all = copy.deepcopy(unique_timeframes_model) # Reseta a comparação a cada Strat para comparar sempre os strat_support_assets com os model.asset
                 strat_support_assets = strat_data.get('strat_support_assets', {})
 
                  # Aqui vou fazer a verificação dos timeframes do strat_support_assets dessa Strat
@@ -381,21 +381,54 @@ class Operation(BaseClass, Persistance):
                             unique_timeframes_all.setdefault(supp_asset_name, []).append(tf)
 
                 # If any different timeframes found then transfers HTF to LTF, if any tf < operational_timeframe then interrupts operation
-                if not unique_timeframes_all:
-                    print("       ✅  No different timeframes from operational_timeframe found")
-                else:
+                if unique_timeframes_all:
                     print("       ⚠️  Different timeframes found:", unique_timeframes_all)
 
-                for unique_tf_asset_name, unique_tf in unique_timeframes_all.items(): # Takes HTF transfers to LTF and saves df object to cache
-                    print(f"           > unique_tf_asset_name: {unique_tf_asset_name} with unique_tf: {unique_tf}")
-                    try: # Tries to get data from model_assets
-                        htf_asset_obj = model_assets[unique_tf_asset_name]
-                        if htf_asset_obj: print(f"              > model_assets unique tf found: {htf_asset_obj}")
-                    except: # Gets data from strat_support_assets
-                        htf_asset_obj = strat_support_assets[unique_tf_asset_name]
-                        if htf_asset_obj: print(f"              > strat_support_assets unique tf found: {htf_asset_obj}")
-                    
-                    
+                    # Creates a operational template df to fit HTF data
+                    ltf_asset_obj = next(
+                        (
+                            asset for asset in model_assets.values()
+                            if isinstance(getattr(asset, "timeframe", None), (list, tuple, set))
+                            and self.operation_timeframe in getattr(asset, "timeframe")
+                            or getattr(asset, "timeframe", "").upper() == self.operation_timeframe.upper()
+                        ),
+                        None
+                    )
+
+                    if ltf_asset_obj is not None:
+                        ltf_template_df = ltf_asset_obj.data_get(self.operation_timeframe).copy()
+                        if not ltf_template_df.empty:
+                            ltf_template_df = create_datetime_columns(ltf_template_df) # Garantees datetime columns
+                            ltf_template_df = ltf_template_df.dropna(subset=['datetime']) # Removes possible NaT
+                            ltf_template_df = ltf_template_df[['datetime', 'date', 'time']].copy() # Keeps only the necessary
+                        else: print("           ⚠️ LTF dataframe is empty!")
+                    else: print("           ⚠️ No asset found with timeframe == operation_timeframe. THIS SHOULD NOT HAPPEN")
+
+                    # Takes HTF transfers to LTF and saves df object to cache
+                    for unique_tf_asset_name, unique_tf in unique_timeframes_all.items(): 
+                        print(f"           > unique_tf_asset_name: {unique_tf_asset_name} with unique_tf: {unique_tf}")
+                        
+                        htf_asset_obj = model_assets.get(unique_tf_asset_name) or strat_support_assets.get(unique_tf_asset_name)
+                        if htf_asset_obj:
+                            print(f"              > unique tf(s) found for: {unique_tf_asset_name}")
+                        else:
+                            print(f"              ⚠️ Asset '{unique_tf_asset_name}' not found in model or strat_support_assets")
+                            continue
+                        
+                        for tf in unique_tf:
+                            htf_asset_obj_df = htf_asset_obj.data_get(tf) # htf_asset_obj_df now hold the df object of the HTF asset to transfer to LTF for one timeframe of each asset
+                            if htf_asset_obj_df is None or htf_asset_obj_df.empty: 
+                                print(f"              ⚠️  Warning: No data found for asset '{unique_tf_asset_name}' with timeframe '{tf}'")
+                                continue
+                            print(f"                > [{tf}]\n")
+
+                            ltf_df = copy.deepcopy(ltf_template_df) # LTF Template
+                            ltf_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, htf_asset_obj_df, tf)
+                            print(f"                  {ltf_df}")
+                            _transfer_HTF_Columns errando em passar os dados, ver alt
+
+                else:
+                    print("       ✅  No different timeframes from operational_timeframe found")
 
                     # Passar df HTF para LTF
                     # Como você tem uma estrutura de OperationResult com cache e compressão, o ideal é:
@@ -482,7 +515,8 @@ class Operation(BaseClass, Persistance):
         # Replica valores do HTF para cada barra do LTF
         for column in columns:
             if column in htf_df.columns:
-                ltf_df[f"{column}_{htf_tf}"] = htf_df[column].reindex(ltf_df.index, method='ffill')
+                ltf_df[f"{column}_{htf_tf}"] = htf_df[column].reindex(ltf_df.index, method='ffill').shift(1)
+
             
         ltf_df.reset_index(inplace=True)
         return ltf_df
