@@ -343,9 +343,9 @@ class Operation(BaseClass, Persistance):
             calculated_data = ind_obj.calculate_all_sets(data, base_path=result_path)
 
             # Salva no Mapping
-            for key in calculated_data.keys():
-                print(f"{key}{calculated_data[key]}\n")
-            self._operation_result.set_result(result_path, calculated_data)
+            for name, ind in calculated_data.items():
+                print(name)
+                self._operation_result.set_result(name, ind)
 
 
 
@@ -425,7 +425,8 @@ class Operation(BaseClass, Persistance):
                             ltf_df = copy.deepcopy(ltf_template_df) # LTF Template
                             ltf_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, htf_asset_obj_df, tf)
                             print(f"                  {ltf_df}")
-                            _transfer_HTF_Columns errando em passar os dados, ver alt
+
+                            #_transfer_HTF_Columns errando em passar os dados, ver alt
 
                 else:
                     print("       ✅  No different timeframes from operational_timeframe found")

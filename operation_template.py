@@ -21,7 +21,7 @@ from VAR import VAR # type: ignore
 def test():
     Params = {
         'AT15': {
-            'param1': range(10, 10+1, 10), 
+            'param1': range(10, 20+1, 10), 
             'param2': range(5, 5+1, 5),  
             'param3': range(14, 14+1, 1)  
         }
