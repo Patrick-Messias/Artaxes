@@ -61,7 +61,7 @@ class EdgeFinder(BaseClass):
                 ind_values = ind.calculate_all_sets(df)
 
                 for ind_param_set, ind in ind_values: # Saves each parameter set as a different indicator
-                    self.data[f"{asset.name}.{self.timeframe}.{ind.__class__.__name__}.{ind_param_set}"] = ind
+                    self.data[asset.name][self.timeframe][ind.__class__.__name__][ind_param_set] = ind
 
         return True
 
@@ -98,11 +98,13 @@ if __name__ == "__main__":
     assets = {eurusd.name: eurusd}
     
     # Entry Rules L and S    
-    entry_long = ((df[asset][tf]['close'] < df[asset][tf][sma]) & (df[asset][tf]['close'].shift(1) > df[asset][tf][sma].shift(1)))
-    entry_short = ((df[asset][tf]['close'] > df[asset][tf][sma]) & (df[asset][tf]['close'].shift(1) < df[asset][tf][sma].shift(1)))
+    entry_long = ((df[asset][tf]['close'] < df[asset][tf][ma]) & (df[asset][tf]['close'].shift(1) > df[asset][tf][ma].shift(1)))
+    entry_short = ((df[asset][tf]['close'] > df[asset][tf][ma]) & (df[asset][tf]['close'].shift(1) < df[asset][tf][ma].shift(1)))
 
     # Indicators
-    sma = MA(asset='CURR_ASSET', timeframe=op_timeframe, window=list(range(20, 20+1, 10)), type='sma', price_col='close')
+    indicators={ 
+        'ma': MA(asset='CURR_ASSET', timeframe=op_timeframe, window=list(range(20, 20+1, 10)), type='sma', price_col='close')
+    }
 
     # Edge Finder Operation
     operation = EdgeFinder(

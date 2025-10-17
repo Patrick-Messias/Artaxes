@@ -112,10 +112,11 @@ def test():
                         type='sma',
                         price_col='close'
                     ),
-                'var': VAR( 
+                'var': RSIZScore( 
                         asset='CURR_ASSET', 
                         timeframe=execution_tf,
-                        window=list(Params['AT15']['param1'])
+                        rsi_window=list(Params['AT15']['param1']),
+                        zscore_window=list(Params['AT15']['param2'])
                     )
             },
             

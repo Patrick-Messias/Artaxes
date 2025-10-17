@@ -340,7 +340,7 @@ class Operation(BaseClass, Persistance):
                 continue
 
             # Calcula o indicador com ind.calculate
-            calculated_data = ind_obj.calculate_all_sets(data, base_path=result_path)
+            calculated_data = ind_obj.calculate_all_sets(data, base_path=result_path) # Ind params are separated by "_" suffix
 
             # Salva no Mapping
             for name, ind in calculated_data.items():
@@ -527,7 +527,36 @@ class Operation(BaseClass, Persistance):
     # IV - Execution
 
 
+    def collect_strat_indicators(strat_obj): # For backtest
+        """
+        Receives a Strat object and returns all indicators in a structured dict:
+        { asset_name: { indicator_name: { param_set_str: df } } }
+        """
+        result = {}
+        
+        for ind_key, ind_obj in strat_obj.get('indicators', {}).items():
+            assets_to_use = [ind_obj.asset] if ind_obj.asset != "CURR_ASSET" else strat_obj.get('assets', {}).keys()
+            
+            for asset_name in assets_to_use:
+                asset_obj = strat_obj['assets'].get(asset_name) or strat_obj['strat_support_assets'].get(asset_name)
+                if asset_obj is None:
+                    continue
 
+                data = asset_obj.data_get(ind_obj.timeframe)
+                if data is None or data.empty:
+                    continue
+
+                # Calcula todos os sets
+                calculated_sets = ind_obj.calculate_all_sets(data)
+                
+                for full_key, df in calculated_sets.items():
+                    # full_key já contém os parâmetros, mas podemos extrair apenas o suffix
+                    param_str = full_key.split('.')[-1]
+                    
+                    result.setdefault(asset_name, {}).setdefault(ind_obj.__class__.__name__, {})[param_str] = df
+                    
+        return result
+    
     def _get_all_unique_datetimes(self, assets_cache=None): # Returns all unique datetimes from a Asset dict
         all_unique_datetimes = set()
 
