@@ -420,13 +420,12 @@ class Operation(BaseClass, Persistance):
                             if htf_asset_obj_df is None or htf_asset_obj_df.empty: 
                                 print(f"              ⚠️  Warning: No data found for asset '{unique_tf_asset_name}' with timeframe '{tf}'")
                                 continue
-                            print(f"                > [{tf}]\n")
+                            #print(f"                > [{tf}]\n")
 
                             ltf_df = copy.deepcopy(ltf_template_df) # LTF Template
-                            ltf_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, htf_asset_obj_df, tf)
-                            print(f"                  {ltf_df}")
-
-                            #_transfer_HTF_Columns errando em passar os dados, ver alt
+                            ltf_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, htf_asset_obj_df, tf) # OBS: Datetime seem to be oriented toward the opening of the bar
+                            ltf_df.to_excel(f"C:\\Users\\Patrick\\Desktop\\Operation_{model_name}_{strat_name}_{unique_tf_asset_name}_{tf}_to_{self.operation_timeframe}.xlsx", index=False)
+                            print(f"                  > Transferred HTF '{tf}' columns to LTF '{self.operation_timeframe}' for asset '{unique_tf_asset_name}'")
 
                 else:
                     print("       ✅  No different timeframes from operational_timeframe found")
@@ -474,28 +473,19 @@ class Operation(BaseClass, Persistance):
 
     def _transfer_HTF_Columns(self, ltf_df: pd.DataFrame, ltf_tf: str, htf_df: pd.DataFrame, htf_tf: str, columns: Optional[List[str]] = None): 
         """
-        Transfere colunas do timeframe maior para o menor
-        
-        Args:
-            ltf_df (pd.DataFrame): DataFrame do timeframe menor
-            ltf_tf (str): Timeframe menor (ex: 'M5')
-            htf_df (pd.DataFrame): DataFrame do timeframe maior
-            htf_tf (str): Timeframe maior (ex: 'H1')
-            columns (list[str], optional): Lista de colunas para transferir. Se None, transfere todas
-            
-        Returns:
-            pd.DataFrame: DataFrame do timeframe menor com as colunas do maior
+        WARNING: Check data source to ensure that 'datetime' represents the bar's opening time like (MT5), yahoo finance uses closing time!
+        Transfers specified columns from a higher timeframe (HTF) DataFrame to a lower timeframe (LTF) DataFrame.
+        Ensures that HTF data is only used after its bar has closed.
         """
         
         def get_tf_minutes(tf: str) -> int:
-            """Converte timeframe para minutos"""
             if tf.startswith('M'): return int(tf[1:])
             elif tf.startswith('H'): return int(tf[1:]) * 60
             elif tf.startswith('D'): return int(tf[1:]) * 1440
             else: raise ValueError(f"Timeframe não suportado: {tf}")
             
         if not columns:
-            columns = htf_df.columns
+            columns = [col for col in htf_df.columns if col != 'datetime']
             
         ltf_minutes = get_tf_minutes(ltf_tf)
         htf_minutes = get_tf_minutes(htf_tf)
@@ -503,26 +493,51 @@ class Operation(BaseClass, Persistance):
         if ltf_minutes >= htf_minutes:
             raise ValueError(f"Timeframe menor ({ltf_tf}) deve ser menor que o maior ({htf_tf})")
             
-        # Cria índice de tempo para ambos os DataFrames
+        # Cria cópias
         ltf_df = ltf_df.copy()
         htf_df = htf_df.copy()
         
         if 'datetime' not in ltf_df.columns or 'datetime' not in htf_df.columns:
             raise ValueError("Ambos os DataFrames precisam ter coluna 'datetime'")
             
-        ltf_df.set_index('datetime', inplace=True)
-        htf_df.set_index('datetime', inplace=True)
+        # Converte para datetime
+        ltf_df['datetime'] = pd.to_datetime(ltf_df['datetime'])
+        htf_df['datetime'] = pd.to_datetime(htf_df['datetime'])
         
-        # Replica valores do HTF para cada barra do LTF
-        for column in columns:
-            if column in htf_df.columns:
-                ltf_df[f"{column}_{htf_tf}"] = htf_df[column].reindex(ltf_df.index, method='ffill').shift(1)
-
-            
-        ltf_df.reset_index(inplace=True)
-        return ltf_df
-
-
+        # Ordena por datetime
+        ltf_df = ltf_df.sort_values('datetime')
+        htf_df = htf_df.sort_values('datetime')
+        
+        # Para usar merge_asof corretamente, precisamos ajustar os timestamps do HTF
+        # Uma barra HTF só fica disponível após seu fechamento
+        # O fechamento acontece no início da próxima barra HTF
+        htf_available = htf_df.copy()
+        
+        # Cria uma coluna com o timestamp de quando a barra HTF fica disponível
+        # (início da próxima barra HTF)
+        htf_available['available_from'] = htf_available['datetime'].shift(-1)
+        
+        # Remove a última linha (não tem próxima barra para definir disponibilidade)
+        htf_available = htf_available.iloc[:-1]
+        
+        # Filtra colunas
+        htf_to_merge = htf_available[['available_from'] + columns].copy()
+        
+        # Agora fazemos o merge usando 'available_from' como chave
+        # Isso garante que só usamos a barra HTF quando ela já está completa
+        merged_df = pd.merge_asof(
+            ltf_df, 
+            htf_to_merge, 
+            left_on='datetime',
+            right_on='available_from',
+            direction='backward',
+            suffixes=('', f'_{htf_tf}')
+        )
+        
+        # Remove a coluna auxiliar
+        merged_df = merged_df.drop('available_from', axis=1, errors='ignore')
+        
+        return merged_df
 
     # IV - Execution
 

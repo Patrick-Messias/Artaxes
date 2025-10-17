@@ -33,13 +33,13 @@ def test():
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=['D1', 'H1'])
+        timeframe=['D1'])
     gbpusd_daily = Asset(
         name='GBPUSD',
         type='currency_pair',
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex',
-        timeframe=['D1'])
+        timeframe=['H1'])
     
     eurusd = Asset(
         name='EURUSD',
