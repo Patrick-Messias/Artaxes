@@ -21,7 +21,7 @@ class ModelParams():
 
     execution_timeframe: str=None
     model_money_manager: Optional[ModelMoneyManager] = None
-    model_system_manager: Optional[ModelSystemManager] = None
+    model_system_manager: Optional[ModelSystemManager] = None # Pode, também, gerênciar os ativos e strats que estarão habilitados para trade por regra x dentre os listados no Model
 
 class Model(BaseClass):
     def __init__(self, model_params: ModelParams):

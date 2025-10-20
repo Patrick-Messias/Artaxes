@@ -430,12 +430,6 @@ class Operation(BaseClass, Persistance):
                 else:
                     print("       ✅  No different timeframes from operational_timeframe found")
 
-                    # Passar df HTF para LTF
-                    # Como você tem uma estrutura de OperationResult com cache e compressão, o ideal é:
-                    # Fazer o mapping multitimeframe logo após carregar os dados (pré-processamento).
-                    # Salvar os dados sincronizados (por exemplo: asset_obj.data['M5_with_H1']).
-                    # Usar esse dataframe já pronto durante todo o backtest/sinal.
-
                 # Gets Indicators
                 # for ind_key, ind_obj in indicators.items():
                 #     print(f"    > asset(s): {ind_obj.asset} | strat: {strat_name} | indicator: {ind_key}")
@@ -443,6 +437,9 @@ class Operation(BaseClass, Persistance):
                 # If unique_timeframes > 1 then transfers HTF columns to LTF for each Strat
 
                 # Gets Signal Rules
+                1. Como fazer um Model/Portfolio balancing rules que eu posso selecionar os ativos que vou operar de forma dinâmica?
+                    talvez já deixar todos os ativos carregados e ter uma regra que "habilite" a entrada neles (mais simples)
+                2. Olhar EdgeFinder para geração de sinais
                 
 
                 # Calculates Signals
