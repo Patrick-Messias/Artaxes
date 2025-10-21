@@ -67,23 +67,32 @@ def test():
     #Forex = {eurusd.name: eurusd, gbpusd.name: gbpusd, usdjpy.name: usdjpy} # Criar uma def que retorna o(s) asset com o timeframe que quer
     Strat_Assets = {'eurusd': eurusd_daily, 'gbpusd': gbpusd_daily} # Assets de suporte seja para calcular regras ou indicadores
 
-    entry_rules = {
-        'entry_long': lambda df: (
-            df['CURR_ASSET'][execution_tf]['close'] < df['CURR_ASSET'][execution_tf]['sma']) 
-            & (df['CURR_ASSET'][execution_tf]['close'].shift(1) < df['CURR_ASSET'][execution_tf]['low'].shift(1)) 
-            & (df['eurusd']['D1']['close'] > df['eurusd']['D1']['close'].shift(1)
-            ), 
-        'entry_short': lambda df: (
-            df['CURR_ASSET'][execution_tf]['close'] > df['CURR_ASSET'][execution_tf]['sma']) 
-            & (df['CURR_ASSET'][execution_tf]['close'].shift(1) > df['CURR_ASSET'][execution_tf]['high'].shift(1)) 
-            & (df['eurusd']['D1']['close'] < df['eurusd']['D1']['close'].shift(1)
-            ) 
-    }
-    tf_exit_rules = {
-        'tf_exit_long': lambda df: (df['CURR_ASSET'][execution_tf]['close'] > df['CURR_ASSET'][execution_tf]['sma']),
-        'tf_exit_short': lambda df: (df['CURR_ASSET'][execution_tf]['close'] < df['CURR_ASSET'][execution_tf]['sma'])
-    }
-    sl_exit_rules = None
+    def entry_long(df, ind_series_dict):
+        sma = ind_series_dict['sma']
+        signal = (df['close'] < sma) & (df['close'].shift(1) > sma.shift(1)) & (df['close_D1'] > df['close_D1'].shift(1))
+        return signal
+    def entry_short(df, ind_series_dict):
+        sma = ind_series_dict['sma']
+        signal = (df['close'] > sma) & (df['close'].shift(1) < sma.shift(1)) & (df['close_D1'] < df['close_D1'].shift(1))
+        return signal
+    entry_rules = {'entry_long': entry_long,'entry_short': entry_short}
+    
+    def tf_long(df, ind_series_dict):
+        sma = ind_series_dict['sma']
+        signal = df['close'] > sma
+        return signal
+    def tf_short(df, ind_series_dict):
+        sma = ind_series_dict['sma']
+        signal = df['close'] < sma
+        return signal
+    tf_exit_rules = {'tf_exit_long': tf_long, 'tf_exit_short': tf_short}
+
+    def sl_long(df, slL_pos):
+        return df['close'] < slL_pos
+    def sl_short(df, slS_pos):
+        return df['close'] > slS_pos
+    sl_exit_rules = {'sl_exit_long': sl_long, 'sl_exit_short': sl_short}
+
     tp_exit_rules = None
     be_pos_rules = None
     be_neg_rules = None
@@ -219,3 +228,36 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+"""
+OLD Snippets for reference:
+
+    entry_rules = {
+        'entry_long': lambda df: (
+            df['CURR_ASSET'][execution_tf]['close'] < df['CURR_ASSET'][execution_tf]['sma']) 
+            & (df['CURR_ASSET'][execution_tf]['close'].shift(1) < df['CURR_ASSET'][execution_tf]['low'].shift(1)) 
+            & (df['eurusd']['D1']['close'] > df['eurusd']['D1']['close'].shift(1)
+            ), 
+        'entry_short': lambda df: (
+            df['CURR_ASSET'][execution_tf]['close'] > df['CURR_ASSET'][execution_tf]['sma']) 
+            & (df['CURR_ASSET'][execution_tf]['close'].shift(1) > df['CURR_ASSET'][execution_tf]['high'].shift(1)) 
+            & (df['eurusd']['D1']['close'] < df['eurusd']['D1']['close'].shift(1)
+            ) 
+    }
+    tf_exit_rules = {
+        'tf_exit_long': lambda df: (df['CURR_ASSET'][execution_tf]['close'] > df['CURR_ASSET'][execution_tf]['sma']),
+        'tf_exit_short': lambda df: (df['CURR_ASSET'][execution_tf]['close'] < df['CURR_ASSET'][execution_tf]['sma'])
+    }
+
+
+
+
+
+
+
+"""
+
+
+
+
+

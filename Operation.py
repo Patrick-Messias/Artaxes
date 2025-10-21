@@ -11,7 +11,7 @@ from Asset import Asset, Asset_Portfolio, create_datetime_columns #, assets_info
 from Persistance import Persistance
 from OptimizedOperationResult import OptimizedOperationResult
 import uuid, copy
-import pandas as pd
+import pandas as pd, numpy as np
 
 # NOTE -> Tirar daqui -> 
 # 1. Criar um HMM para modelar transição de estados de volatilidade [high, med, low]. 
@@ -423,7 +423,7 @@ class Operation(BaseClass, Persistance):
                             #print(f"                > [{tf}]\n")
 
                             ltf_df = copy.deepcopy(ltf_template_df) # LTF Template
-                            ltf_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, htf_asset_obj_df, tf) # OBS: Datetime seem to be oriented toward the opening of the bar
+                            ltf_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, htf_asset_obj_df, tf, htf_asset_obj.datetime_candle_references) # OBS: Datetime seem to be oriented toward the opening of the bar
                             ltf_df.to_excel(f"C:\\Users\\Patrick\\Desktop\\Operation_{model_name}_{strat_name}_{unique_tf_asset_name}_{tf}_to_{self.operation_timeframe}.xlsx", index=False)
                             print(f"                  > Transferred HTF '{tf}' columns to LTF '{self.operation_timeframe}' for asset '{unique_tf_asset_name}'")
 
@@ -437,6 +437,10 @@ class Operation(BaseClass, Persistance):
                 # If unique_timeframes > 1 then transfers HTF columns to LTF for each Strat
 
                 # Gets Signal Rules
+                Precisa iterar novamente porque tem que potencialmente pegar os dados HTF->LTF primeiro 
+
+                para cada strat -> asset -> indicador -> regra de sinais = salvar dados
+
                 1. Como fazer um Model/Portfolio balancing rules que eu posso selecionar os ativos que vou operar de forma dinâmica?
                     talvez já deixar todos os ativos carregados e ter uma regra que "habilite" a entrada neles (mais simples)
                 2. Olhar EdgeFinder para geração de sinais
@@ -468,73 +472,85 @@ class Operation(BaseClass, Persistance):
             return model.assets.assets.get(asset_name)
         return None
 
-    def _transfer_HTF_Columns(self, ltf_df: pd.DataFrame, ltf_tf: str, htf_df: pd.DataFrame, htf_tf: str, columns: Optional[List[str]] = None): 
-        """
-        WARNING: Check data source to ensure that 'datetime' represents the bar's opening time like (MT5), yahoo finance uses closing time!
-        Transfers specified columns from a higher timeframe (HTF) DataFrame to a lower timeframe (LTF) DataFrame.
-        Ensures that HTF data is only used after its bar has closed.
-        """
+    def _transfer_HTF_Columns(self, ltf_df: pd.DataFrame, ltf_tf: str, 
+                                    htf_df: pd.DataFrame, htf_tf: str,
+                                    datetime_reference_candles: str = 'open', 
+                                    fill_method: str = 'ffill',
+                                    columns: Optional[List[str]] = None
+                                    ):
+        #     """
+        #     WARNING: Check data source to ensure that 'datetime' represents the bar's opening time like (MT5), yahoo finance uses closing time!
+        #     Transfers specified columns from a higher timeframe (HTF) DataFrame to a lower timeframe (LTF) DataFrame.
+        #     Ensures that HTF data is only used after its bar has closed.
+        #     """
         
         def get_tf_minutes(tf: str) -> int:
             if tf.startswith('M'): return int(tf[1:])
             elif tf.startswith('H'): return int(tf[1:]) * 60
             elif tf.startswith('D'): return int(tf[1:]) * 1440
+            elif tf.startswith('W'): return int(tf[1:]) * 10080  # 7 dias
+            elif tf.startswith('MN'): return int(tf[2:]) * 43200  # 30 dias aprox
             else: raise ValueError(f"Timeframe não suportado: {tf}")
-            
+        
+        # Cria cópias uma única vez
+        ltf_df = ltf_df.copy()
+        htf_df = htf_df.copy()
+        
+        # Garante datetime como índice para operações eficientes
+        ltf_df['datetime'] = pd.to_datetime(ltf_df['datetime'])
+        htf_df['datetime'] = pd.to_datetime(htf_df['datetime'])
+        
+        ltf_df = ltf_df.set_index('datetime').sort_index()
+        htf_df = htf_df.set_index('datetime').sort_index()
+        
         if not columns:
             columns = [col for col in htf_df.columns if col != 'datetime']
-            
+        
         ltf_minutes = get_tf_minutes(ltf_tf)
         htf_minutes = get_tf_minutes(htf_tf)
         
         if ltf_minutes >= htf_minutes:
             raise ValueError(f"Timeframe menor ({ltf_tf}) deve ser menor que o maior ({htf_tf})")
-            
-        # Cria cópias
-        ltf_df = ltf_df.copy()
-        htf_df = htf_df.copy()
         
-        if 'datetime' not in ltf_df.columns or 'datetime' not in htf_df.columns:
-            raise ValueError("Ambos os DataFrames precisam ter coluna 'datetime'")
-            
-        # Converte para datetime
-        ltf_df['datetime'] = pd.to_datetime(ltf_df['datetime'])
-        htf_df['datetime'] = pd.to_datetime(htf_df['datetime'])
+        # Ajusta o índice do HTF baseado na referência temporal
+        htf_adjusted = htf_df.copy()
         
-        # Ordena por datetime
-        ltf_df = ltf_df.sort_values('datetime')
-        htf_df = htf_df.sort_values('datetime')
+        if datetime_reference_candles == 'open':
+            # Para 'open', deslocamos o índice pela duração do candle HTF
+            # Isso simula que o candle só fica disponível após seu fechamento
+            htf_adjusted.index = htf_adjusted.index + pd.Timedelta(minutes=htf_minutes)
+        elif datetime_reference_candles == 'close':
+            # Para 'close', não precisamos deslocar - o candle já está disponível no fechamento
+            pass
+        else:
+            raise ValueError("datetime_reference_candles deve ser 'open' ou 'close'")
         
-        # Para usar merge_asof corretamente, precisamos ajustar os timestamps do HTF
-        # Uma barra HTF só fica disponível após seu fechamento
-        # O fechamento acontece no início da próxima barra HTF
-        htf_available = htf_df.copy()
+        # Seleciona apenas as colunas necessárias do HTF
+        htf_data = htf_adjusted[columns].copy()
         
-        # Cria uma coluna com o timestamp de quando a barra HTF fica disponível
-        # (início da próxima barra HTF)
-        htf_available['available_from'] = htf_available['datetime'].shift(-1)
+        # Adiciona sufixo às colunas HTF
+        htf_data = htf_data.add_suffix(f'_{htf_tf}')
         
-        # Remove a última linha (não tem próxima barra para definir disponibilidade)
-        htf_available = htf_available.iloc[:-1]
-        
-        # Filtra colunas
-        htf_to_merge = htf_available[['available_from'] + columns].copy()
-        
-        # Agora fazemos o merge usando 'available_from' como chave
-        # Isso garante que só usamos a barra HTF quando ela já está completa
-        merged_df = pd.merge_asof(
-            ltf_df, 
-            htf_to_merge, 
-            left_on='datetime',
-            right_on='available_from',
-            direction='backward',
-            suffixes=('', f'_{htf_tf}')
+        # Merge usando reindex com method='ffill' - MUITO mais eficiente
+        merged_df = ltf_df.merge(
+            htf_data, 
+            left_index=True, 
+            right_index=True, 
+            how='left'
         )
         
-        # Remove a coluna auxiliar
-        merged_df = merged_df.drop('available_from', axis=1, errors='ignore')
+        # Forward fill para preencher valores entre os timestamps HTF
+        htf_columns = [col for col in merged_df.columns if col.endswith(f'_{htf_tf}')]
+        merged_df[htf_columns] = merged_df[htf_columns].fillna(method=fill_method)
         
-        return merged_df
+        # Remove valores antes do primeiro dado HTF disponível
+        first_htf_time = htf_data.index[0]
+        mask = merged_df.index >= first_htf_time
+        merged_df.loc[~mask, htf_columns] = np.nan
+        
+        return merged_df.reset_index()
+
+
 
     # IV - Execution
 
@@ -662,7 +678,74 @@ class Operation(BaseClass, Persistance):
 
 
 
-""" OLD BELOW, DELETE AFTER
+""" OLD BELOW, DELETE AFTER]
+
+
+    def _transfer_HTF_Columns(self, ltf_df: pd.DataFrame, ltf_tf: str, htf_df: pd.DataFrame, htf_tf: str, columns: Optional[List[str]] = None): 
+        # WARNING: Check data source to ensure that 'datetime' represents the bar's opening time like (MT5), yahoo finance uses closing time!
+        # Transfers specified columns from a higher timeframe (HTF) DataFrame to a lower timeframe (LTF) DataFrame.
+        # Ensures that HTF data is only used after its bar has closed.
+        
+        def get_tf_minutes(tf: str) -> int:
+            if tf.startswith('M'): return int(tf[1:])
+            elif tf.startswith('H'): return int(tf[1:]) * 60
+            elif tf.startswith('D'): return int(tf[1:]) * 1440
+            else: raise ValueError(f"Timeframe não suportado: {tf}")
+            
+        if not columns:
+            columns = [col for col in htf_df.columns if col != 'datetime']
+            
+        ltf_minutes = get_tf_minutes(ltf_tf)
+        htf_minutes = get_tf_minutes(htf_tf)
+        
+        if ltf_minutes >= htf_minutes:
+            raise ValueError(f"Timeframe menor ({ltf_tf}) deve ser menor que o maior ({htf_tf})")
+            
+        # Cria cópias
+        ltf_df = ltf_df.copy()
+        htf_df = htf_df.copy()
+        
+        if 'datetime' not in ltf_df.columns or 'datetime' not in htf_df.columns:
+            raise ValueError("Ambos os DataFrames precisam ter coluna 'datetime'")
+            
+        # Converte para datetime
+        ltf_df['datetime'] = pd.to_datetime(ltf_df['datetime'])
+        htf_df['datetime'] = pd.to_datetime(htf_df['datetime'])
+        
+        # Ordena por datetime
+        ltf_df = ltf_df.sort_values('datetime')
+        htf_df = htf_df.sort_values('datetime')
+        
+        # Para usar merge_asof corretamente, precisamos ajustar os timestamps do HTF
+        # Uma barra HTF só fica disponível após seu fechamento
+        # O fechamento acontece no início da próxima barra HTF
+        htf_available = htf_df.copy()
+        
+        # Cria uma coluna com o timestamp de quando a barra HTF fica disponível
+        # (início da próxima barra HTF)
+        htf_available['available_from'] = htf_available['datetime'].shift(-1)
+        
+        # Remove a última linha (não tem próxima barra para definir disponibilidade)
+        htf_available = htf_available.iloc[:-1]
+        
+        # Filtra colunas
+        htf_to_merge = htf_available[['available_from'] + columns].copy()
+        
+        # Agora fazemos o merge usando 'available_from' como chave
+        # Isso garante que só usamos a barra HTF quando ela já está completa
+        merged_df = pd.merge_asof(
+            ltf_df, 
+            htf_to_merge, 
+            left_on='datetime',
+            right_on='available_from',
+            direction='backward',
+            suffixes=('', f'_{htf_tf}')
+        )
+        
+        # Remove a coluna auxiliar
+        merged_df = merged_df.drop('available_from', axis=1, errors='ignore')
+        
+        return merged_df
 
   
     def _get_all_assets(self) -> dict: # Returns all Asset(s) from Models

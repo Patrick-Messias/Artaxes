@@ -110,6 +110,7 @@ class AssetParams:
     commissions: float = 0.0
     slippage: float = 0.0
     spread: float = 0.0
+    datetime_candle_references: str = 'open'
 
 
 class Asset(BaseClass):
@@ -125,7 +126,8 @@ class Asset(BaseClass):
                     'leverage': 20,
                     'commissions': 0.5,
                     'slippage': 0.25,
-                    'spread': 0.25
+                    'spread': 0.25,
+                    'datetime_candle_references': 'open'
                 },
                 'WDO$': {
                     'tick': 5,
@@ -135,7 +137,8 @@ class Asset(BaseClass):
                     'leverage': 20,
                     'commissions': 0.5,
                     'slippage': 0.25,
-                    'spread': 0.25
+                    'spread': 0.25,
+                    'datetime_candle_references': 'open'
                 }
             }
         },
@@ -149,7 +152,8 @@ class Asset(BaseClass):
                     'leverage': 100,
                     'commissions': 1.5,
                     'slippage': 0.75,
-                    'spread': 0.75
+                    'spread': 0.75,
+                    'datetime_candle_references': 'open'
                 }
             }
         },
@@ -163,7 +167,8 @@ class Asset(BaseClass):
                     'leverage': 1,
                     'commissions': 5.0,
                     'slippage': 0.05,
-                    'spread': 0.02
+                    'spread': 0.02,
+                    'datetime_candle_references': 'open'
                 }
             },
             'NYSE': {
@@ -175,7 +180,8 @@ class Asset(BaseClass):
                     'leverage': 1,
                     'commissions': 5.0,
                     'slippage': 0.05,
-                    'spread': 0.02
+                    'spread': 0.02,
+                    'datetime_candle_references': 'open'
                 }
             }
         }
@@ -227,12 +233,13 @@ class Asset(BaseClass):
                 'leverage': 1.0,
                 'commissions': 0.0,
                 'slippage': 0.0,
-                'spread': 0.0
+                'spread': 0.0,
+                'datetime_candle_references': 'open'
             }
 
     @staticmethod
     def register_asset_params(name: str, type: str, market: str, params: dict):
-        required_params = {'tick', 'tick_fin_val', 'lot_value', 'min_lot', 'leverage', 'commissions', 'slippage', 'spread'}
+        required_params = {'tick', 'tick_fin_val', 'lot_value', 'min_lot', 'leverage', 'commissions', 'slippage', 'spread', 'datetime_candle_references'}
 
         missing_params = required_params - set(params.keys())
         if missing_params: raise ValueError(f"!!! --- Necessary Parameters Missing: {missing_params} --- !!!")
