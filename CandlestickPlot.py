@@ -76,7 +76,7 @@ class CandlestickChart:
             'position': {
                 'data': None,
                 'colors': {1: 'darkgreen', -1: 'darkred', 0: None},
-                'alpha': 0.25,
+                'alpha': 0.3,
                 'label': 'Posição'
             }
         }
@@ -217,18 +217,28 @@ class CandlestickChart:
     
     def plot_all(self):
         """Plota todos os elementos do gráfico"""
-        # Plotar candles
+        # Plotar candles, indicadores e sinais PRIMEIRO
         self.plot_candles()
-        
-        # Plotar indicadores
         self.plot_indicators()
-        
-        # Plotar sinais
         self.plot_signals()
         
-        # Plotar áreas (se configurado)
+        # ← CORREÇÃO: Replotar candles se houver subplots ↓
+        if hasattr(self, 'indicator_axes_list') and self.indicator_axes_list:
+            # Replotar candles no gráfico principal (que pode ter sido recriado)
+            self.plot_candles()
+            # Replotar sinais no gráfico principal
+            self.plot_signals()
+        
+        # ← TRAVAR OS LIMITES após plotar elementos principais ↓
+        self.ax.set_autoscale_on(False)
+        current_ylim = self.ax.get_ylim()
+        
+        # AGORA plotar áreas com limites travados
         if hasattr(self, 'areas_config'):
             self.plot_areas(self.areas_config)
+        
+        # ← GARANTIR que os limites se mantenham ↓
+        self.ax.set_ylim(current_ylim)
     
     def plot_candles(self):
         """Plota os candles no gráfico"""
@@ -394,24 +404,26 @@ class CandlestickChart:
         alpha = area_config.get('alpha', 0.1)
         label = area_config.get('label', area_name)
         
-        # ← AJUSTE PARA plot_window ↓
         data = self._adjust_to_plot_window(data)
         
         if data is None or len(data) != len(self.df):
             return
             
-        # Encontra as regiões onde cada condição é verdadeira
+        # ← TRAVAR OS LIMITES antes de plotar áreas ↓
+        # Primeiro plote tudo (candles, indicadores, sinais)
+        # Depois obtenha os limites finais e trave
+        current_ylim = self.ax.get_ylim()
+        
+        # Agora plote as áreas com os limites travados
         for value, color in colors.items():
-            if color is None:  # Pula valores que não devem ser plotados
+            if color is None:
                 continue
                 
-            # Cria uma máscara para o valor específico
             mask = (data == value) if isinstance(value, (int, float)) else data
             
-            if not mask.any():  # Se não há valores True, pula
+            if not mask.any():
                 continue
             
-            # Encontra os blocos contínuos da condição
             mask_filled = mask.astype(int).diff().ne(0).cumsum()
             
             for block_id in mask_filled.unique():
@@ -420,7 +432,6 @@ class CandlestickChart:
                 if not block_mask.any():
                     continue
                     
-                # ← CORREÇÃO SIMPLIFICADA: Use os índices diretamente
                 block_dates = self.df.loc[block_mask, self.datetime_col]
                 if len(block_dates) == 0:
                     continue
@@ -428,31 +439,43 @@ class CandlestickChart:
                 start_date = block_dates.iloc[0]
                 end_date = block_dates.iloc[-1]
                 
-                # Plota a área para este bloco
-                y_min, y_max = self.ax.get_ylim()
+                # ← USA OS LIMITES NORMAIS DO PLOT ↓
+                y_min, y_max = current_ylim
                 
                 self.ax.fill_between(
                     [start_date, end_date],
-                    y_min, y_max,
+                    y_min, y_max,  # Limites normais do gráfico
                     color=color,
                     alpha=alpha,
-                    label=label if block_id == mask_filled.unique()[0] else "",  # Label apenas no primeiro bloco
-                    zorder=1  # Atrás dos candles
+                    label=label if block_id == mask_filled.unique()[0] else "",
+                    zorder=1
                 )
+        
+        # ← MANTÉM OS LIMITES TRAVADOS ↓
+        self.ax.set_ylim(current_ylim)
         
     def plot_indicators(self):
         """Plota todos os indicadores definidos no dicionário de indicadores"""
+        # Criar subplots para indicadores que não plotam no gráfico principal
+        self.indicator_axes = {}
+        
         for indicator_name, indicator_config in self.indicators.items():
-            self._plot_indicator(indicator_config, label=indicator_name)
+            plot_on_graph = indicator_config.get('plot_on_graph', True)
+            
+            if plot_on_graph:
+                # Plota no gráfico principal
+                self._plot_indicator(indicator_config, label=indicator_name)
+            else:
+                # Cria subplot separado
+                self._create_indicator_subplot(indicator_config, indicator_name)
 
     def _plot_indicator(self, indicator_config, label=None):
-        """Plota um indicador individual"""
+        """Plota um indicador individual NO GRÁFICO PRINCIPAL"""
         data = indicator_config.get('data')
         color = indicator_config.get('color', 'orange')
         linewidth = indicator_config.get('linewidth', 1.5)
         label = label or indicator_config.get('label', 'Indicador')
         
-        # ← AJUSTE PARA plot_window ↓
         data = self._adjust_to_plot_window(data)
         
         if data is None:
@@ -469,62 +492,221 @@ class CandlestickChart:
             linewidth=linewidth,
             alpha=0.8
         )
+
+    def _create_indicator_subplot(self, indicator_config, indicator_name):
+        """Cria um subplot SEPARADO ABAIXO para indicador com escala diferente"""
+        data = indicator_config.get('data')
+        color = indicator_config.get('color', 'orange')
+        linewidth = indicator_config.get('linewidth', 1.5)
+        label = indicator_config.get('label', indicator_name)
         
-    def show(self, title='Gráfico de Candlestick', legend=False, ylabel=None, xlabel=None):
+        data = self._adjust_to_plot_window(data)
+        
+        if data is None or len(data) != len(self.df):
+            return
+        
+        # ← MODIFICAÇÃO: Criar subplots com proporção 2/3 - 1/3 ↓
+        if not hasattr(self, 'indicator_axes_list'):
+            self.indicator_axes_list = []
+            self.indicator_count = 0
+            
+            # Fechar a figura atual e criar uma nova com subplots
+            plt.close(self.fig)
+            total_indicators = len([ind for ind in self.indicators.values() if not ind.get('plot_on_graph', True)])
+            
+            # Calcular alturas: 2/3 para gráfico principal, 1/3 dividido entre indicadores
+            main_height_ratio = 2/3  # 66.6% para gráfico principal
+            indicator_height_ratio = 1/3  # 33.3% para todos os indicadores juntos
+            
+            # Se houver múltiplos indicadores, dividir igualmente o espaço de 1/3
+            if total_indicators > 0:
+                each_indicator_ratio = indicator_height_ratio / total_indicators
+                height_ratios = [main_height_ratio] + [each_indicator_ratio] * total_indicators
+            else:
+                height_ratios = [1]
+            
+            # Criar figura com subplots verticais e proporções customizadas
+            self.fig, axes = plt.subplots(
+                total_indicators + 1, 1,  # +1 para o gráfico principal
+                figsize=(12, 8),  # Altura fixa, as proporções controlam a distribuição
+                sharex=True,
+                gridspec_kw={'height_ratios': height_ratios}
+            )
+            
+            # O primeiro axes é o gráfico principal
+            if total_indicators > 0:
+                self.ax = axes[0]
+                self.indicator_axes_list = list(axes[1:])
+            else:
+                self.ax = axes
+                self.indicator_axes_list = []
+            
+            # Reconfigurar o gráfico principal
+            self.setup_chart()
+        
+        # Usar o próximo subplot disponível
+        if self.indicator_count < len(self.indicator_axes_list):
+            indicator_ax = self.indicator_axes_list[self.indicator_count]
+            self.indicator_count += 1
+            
+            # Plotar no subplot
+            indicator_ax.plot(
+                self.df[self.datetime_col],
+                data,
+                color=color,
+                label=label,
+                linewidth=linewidth,
+                alpha=0.8
+            )
+            
+            # Configurar subplot
+            indicator_ax.tick_params(axis='y', labelsize=6, colors=color)
+            indicator_ax.tick_params(axis='x', labelsize=6)
+            indicator_ax.grid(True, alpha=0.3)
+
+            indicator_ax.text(
+                0.02,  # 2% da esquerda
+                0.98,  # 98% do topo
+                indicator_name,
+                transform=indicator_ax.transAxes,  # Coordenadas relativas ao axes
+                fontsize=6,  # Letra bem pequena
+                color=color,
+                verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='black', alpha=0.7, edgecolor=color, linewidth=0.5)
+            )
+            
+            # Se o background for escuro, ajustar cores
+            if self.config.get('background') in ['black', 'dark_background', 'dark']:
+                indicator_ax.set_facecolor('black')
+                indicator_ax.tick_params(colors='white')
+                indicator_ax.yaxis.label.set_color('white')
+                indicator_ax.spines['bottom'].set_color('white')
+                indicator_ax.spines['top'].set_color('white')
+                indicator_ax.spines['right'].set_color('white')
+                indicator_ax.spines['left'].set_color('white')
+                
+    def show(self, title='', legend=False, ylabel=None, xlabel=None):
         """Exibe o gráfico"""
-        # Configurar cores do título baseado no background
+        # Configurar cores do título
         title_color = 'white' if self.config.get('background') in ['black', 'dark_background'] else 'black'
         
         self.ax.set_title(title, fontsize=14, fontweight='bold', color=title_color)
         
         if ylabel: 
-            self.ax.set_ylabel(ylabel['name'], fontsize=ylabel.get('fontsize', 6),  # ← Mude para 6
-                            color=title_color if self.config.get('background') in ['black', 'dark_background'] else 'black')
-        if xlabel: 
-            self.ax.set_xlabel(xlabel['name'], fontsize=xlabel.get('fontsize', 6),  # ← Mude para 6
+            self.ax.set_ylabel(ylabel['name'], fontsize=ylabel.get('fontsize', 6), 
                             color=title_color if self.config.get('background') in ['black', 'dark_background'] else 'black')
         
+        # Ajustar labels de x apenas no último subplot
+        if hasattr(self, 'indicator_axes_list') and self.indicator_axes_list:
+            # Se há subplots, mostrar xlabel apenas no último
+            last_ax = self.indicator_axes_list[-1]
+            if xlabel: 
+                last_ax.set_xlabel(xlabel['name'], fontsize=xlabel.get('fontsize', 6),
+                                color=title_color if self.config.get('background') in ['black', 'dark_background'] else 'black')
+            # Formatar datas no último subplot
+            last_ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        else:
+            # Sem subplots, mostrar xlabel no gráfico principal
+            if xlabel: 
+                self.ax.set_xlabel(xlabel['name'], fontsize=xlabel.get('fontsize', 6),
+                                color=title_color if self.config.get('background') in ['black', 'dark_background'] else 'black')
+        
+        # Travar escala final após tudo plotado
+        self.ax.set_autoscale_on(False)
+        
+        # Calcular limites baseados nos dados reais (sem áreas)
+        price_margin = 0.02  # 2% de margem
+        y_min = self.df[self.ohlc_cols['low']].min()
+        y_max = self.df[self.ohlc_cols['high']].max()
+        y_range = y_max - y_min
+        final_ymin = y_min - (y_range * price_margin)
+        final_ymax = y_max + (y_range * price_margin)
+        
+        self.ax.set_ylim(final_ymin, final_ymax)
+        
+        # Adicionar legenda
         if legend:
             self.ax.legend(loc='best')
         
-        plt.tight_layout()
+        # ← MODIFICAÇÃO: Ajustar layout para proporção 2/3 - 1/3 ↓
+        if hasattr(self, 'indicator_axes_list') and self.indicator_axes_list:
+            # Remover TODOS os espaços horizontais
+            self.fig.subplots_adjust(
+                left=0.03,    # 2% da esquerda
+                right=0.98,   # 98% da direita  
+                top=0.98,     # 5% do topo
+                bottom=0.05,  # 5% da base
+                hspace=0.05   # Pouco espaço entre subplots
+            )
+        else:
+            # Sem subplots, também preencher horizontalmente
+            self.fig.subplots_adjust(
+                left=0.03,
+                right=0.98,
+                top=0.98,
+                bottom=0.05
+            )
+        
         plt.show()
 
 # Exemplo de uso:
 if __name__ == "__main__":
     import sys
     sys.path.append(f'C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend')
-    df = pd.read_csv(r'C:\Users\Patrick\Desktop\Artaxes Portfolio\MAIN\MT5_Dados\Forex\EURUSD_D1.csv')
+    df = pd.read_csv(r'C:\Users\Patrick\Desktop\Artaxes Portfolio\MAIN\MT5_Dados\Forex\USDJPY_D1.csv')
     if 'datetime' not in df.columns: df['datetime'] = df['date'] 
     
     # Criar sinais e indicadores
-    buy_signals = df['low'] < df['close'].shift(1) * 0.995
-    sell_signals = df['high'] > df['close'].shift(1) * 1.005
+    #buy_signals = df['low'] < df['close'].shift(1) * 0.995
+    #sell_signals = df['high'] > df['close'].shift(1) * 1.005
+    df['vol'] = np.log(df['high'] / df['low']).replace([np.inf, -np.inf], np.nan).ffill().fillna(0)
+    df['vol_avg'] = df['vol'].rolling(window=21).mean().fillna(0)
+
+    buy_signals = ((df['close'] < df['low'].shift(1) * 0.99) & (df['vol'] > df['vol_avg'].shift(1)))
+    sell_signals = ((df['close'] > df['high'].shift(1) * 1.01) & (df['vol'] > df['vol_avg'].shift(1)))
     
     # Calcular média móvel
     ma_period = 10
     df['MA'] = df['close'].rolling(ma_period).mean()
     
     # SIMULAR POSIÇÕES DE TRADE (exemplo)
-    np.random.seed(42)
-    positions = np.zeros(len(df))
+    # np.random.seed(42)
+    # positions = np.zeros(len(df))
 
-    # Simula alguns trades long
-    positions[100:300] = 1
-    positions[500:800] = 1
-    # Simula alguns trades short
-    positions[1000:1050] = -1
-    positions[1200:1275] = -1
-    df['position'] = positions
+    # # Simula alguns trades long
+    # positions[100:300] = 1
+    # positions[500:800] = 1
+    # # Simula alguns trades short
+    # positions[1000:1050] = -1
+    # positions[1200:1275] = -1
+    # df['position'] = positions
 
-    indicators = {
-        'Média Móvel 10': {
-            'data': df['MA'],
-            'color': 'khaki',  # Cor mais visível em fundo escuro
-            'linewidth': 0.8
-        }
-    }
-    
+    # Versão vetorizada (mais rápida para DataFrames grandes)
+    hold_period=3
+    strongest_buy = buy_signals #& (df['vol'] > df['vol_avg'] * 2) & (df['close'] > df['high'].shift(1) * 1.01)
+    strongest_sell = sell_signals #& (df['vol'] > df['vol_avg'] * 2) & (df['close'] < df['low'].shift(1) * 0.99)
+
+    # Apenas 1 posição ativa por vez
+    df['position'] = 0
+    in_position = False
+    position_end = -1
+
+    for i in range(len(df)):
+        if i <= position_end:
+            continue  # Manter posição atual
+        
+        in_position = False
+        
+        if strongest_buy.iloc[i]:
+            df.loc[i+1:min(i+hold_period, len(df)-1), 'position'] = 1
+            position_end = min(i+hold_period, len(df)-1)
+            in_position = True
+        elif strongest_sell.iloc[i]:
+            df.loc[i+1:min(i+hold_period, len(df)-1), 'position'] = -1
+            position_end = min(i+hold_period, len(df)-1)
+            in_position = True
+
+
     # Criar e mostrar gráfico
     chart = CandlestickChart(
         df=df,
@@ -532,7 +714,7 @@ if __name__ == "__main__":
         datetime_col='datetime',
         signals={'long': {'data': buy_signals}, 'short': {'data': sell_signals}},
         areas_config={'position': df['position']},
-        indicators=indicators,
+        indicators={'Média Móvel 10': {'data': df['MA'], 'color': 'khaki', 'linewidth': 0.8, 'plot_on_graph': True}},
         plot_window=slice(-500, -200),
         figsize=(12, 6)
     )
