@@ -441,9 +441,10 @@ class Operation(BaseClass, Persistance):
 
                 para cada strat -> asset -> indicador -> regra de sinais = salvar dados
 
-                1. Como fazer um Model/Portfolio balancing rules que eu posso selecionar os ativos que vou operar de forma dinâmica?
+                1. Em calculate_indicators, verificar antes se existe um indicador já calculado para o mesmo asset, timeframe e parameto de outra Strat
+                2. Como fazer um Model/Portfolio balancing rules que eu posso selecionar os ativos que vou operar de forma dinâmica?
                     talvez já deixar todos os ativos carregados e ter uma regra que "habilite" a entrada neles (mais simples)
-                2. Olhar EdgeFinder para geração de sinais
+                3. Olhar EdgeFinder para geração de sinais
                 
 
                 # Calculates Signals

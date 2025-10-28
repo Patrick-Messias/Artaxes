@@ -603,29 +603,29 @@ def main() -> None:
     kalman = KALMAN(asset='CURR_ASSET', timeframe=op_timeframe, R=[0.01, 0.1+0.01, 0.01], Q=[0.001, 0.01+0.001, 0.001])
     vixfix = VIXFIX(asset='CURR_ASSET', timeframe=op_timeframe, window=list(range(22, 22+1, 2)))
     volpredictor = VolPredictor(asset='CURR_ASSET', timeframe=op_timeframe)
-    indicators={'volpredictor': volpredictor, 'ma': ma, 'mmm': mmm, 'hurst': hurst} #{#, 'kalman': kalman} #, 'hurst': hurst
+    indicators={'ma': ma, 'mmm': mmm, 'hurst': hurst} # 'volpredictor': volpredictor,  #{#, 'kalman': kalman} #, 'hurst': hurst
 
     # Entry Rules L and S  
     def entry_long(df, ind_series_dict):
-        volpredictor = ind_series_dict['volpredictor']
+        #volpredictor = ind_series_dict['volpredictor']
         ma = ind_series_dict['ma']
         mmm = ind_series_dict['mmm']
         hurst = ind_series_dict['hurst']
 
-        signal = (volpredictor > 0) & (ma < mmm) #& (hurst < 0.5) #& (df['close'].shift(1) < df['open'].shift(1)) #& (df['close'].shift(1) < df['open'].shift(1)) #
+        #signal = (volpredictor > 0) & (ma < mmm) #& (hurst < 0.5) #& (df['close'].shift(1) < df['open'].shift(1)) #& (df['close'].shift(1) < df['open'].shift(1)) #
+        signal = (df['close'] < df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'].shift(2) < df['open'].shift(2))
         signal = signal.fillna(False)
         return signal
-
     def entry_short(df, ind_series_dict):
-        volpredictor = ind_series_dict['volpredictor']
+        #volpredictor = ind_series_dict['volpredictor']
         ma = ind_series_dict['ma']
         mmm = ind_series_dict['mmm']
         hurst = ind_series_dict['hurst']
 
-        signal = (volpredictor > 0) & (ma > mmm) #& (hurst < 0.5) #& (df['close'].shift(1) > df['open'].shift(1)) #
+        #signal = (volpredictor > 0) & (ma > mmm) #& (hurst < 0.5) #& (df['close'].shift(1) > df['open'].shift(1)) #
+        signal = (df['close'] > df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'].shift(2) > df['open'].shift(2))
         signal = signal.fillna(False)
         return signal
-
     entry_signal_rules = {'entry_long': entry_long, 'entry_short': entry_short}
 
     # Edge Finder Operation
