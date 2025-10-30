@@ -35,7 +35,7 @@ class GARCH(Indicator):
         vol_model: Literal['Arch', 'Garch', 'Figarch', 'GJR'] = 'Garch',
         dist: Literal['normal', 'gaussian', 'ged', 'generalized error', 'skewstudent', 'skewt', 'studentst', 't'] = 'normal',
         rolling_mode: Literal['rolling', 'anchored'] = 'rolling',
-        price_col_func: Optional[Callable[[pd.DataFrame], pd.Series]] = lambda df_: np.log(df_['close'] / df_['close'].shift(1)).replace([np.inf, -np.inf], np.nan).ffill(),
+        price_col_func: Optional[Callable[[pd.DataFrame], pd.Series]] = lambda df_: np.log(df_['high'] / df_['low']).replace([np.inf, -np.inf], np.nan).ffill(), 
         verbose: bool = True
     ):
         self.asset = asset
@@ -69,7 +69,7 @@ class GARCH(Indicator):
                 print(f"Forecast próximo período: {next_forecast:.6f}")
             return next_forecast
         
-        self.df['rv'] = np.log(self.df['high'] / self.df['low']).replace([np.inf, -np.inf], np.nan).ffill()
+        self.df['rv'] = np.log(self.df['high'] / self.df['low']).replace([np.inf, -np.inf], np.nan).ffill().fillna(0)
         self.df.dropna(inplace=True)
 
         n = len(self.df)
@@ -128,14 +128,14 @@ class GARCH(Indicator):
 # =========================
 # Exemplo de uso
 # =========================
-if __name__ == "__main__":
-    df = pd.read_excel(r'C:\Users\Patrick\Desktop\Artaxes Portfolio\MAIN\MT5_Dados\WIN$_D1.xlsx')
+# if __name__ == "__main__":
+#     df = pd.read_excel(r'C:\Users\Patrick\Desktop\Artaxes Portfolio\MAIN\MT5_Dados\WIN$_D1.xlsx')
 
-    col = lambda df_: np.log(df_['close'] / df_['close'].shift(1)).replace([np.inf, -np.inf], np.nan).ffill()
+#     col = lambda df_: np.log(df_['high'] / df_['low']).replace([np.inf, -np.inf], np.nan).ffill() #np.log(df_['close'] / df_['close'].shift(1)).replace([np.inf, -np.inf], np.nan).ffill()
 
-    model = GARCH(window=252, mean_model='Zero', vol_model='Garch', dist='normal', price_col_func=col)
-    df_pred = model.calculate(df)
-    print(df_pred)
+#     model = GARCH(window=252, mean_model='Zero', vol_model='Garch', dist='normal', price_col_func=col) 
+#     df_pred = model.calculate(df)
+#     print(df_pred)
 
 
 

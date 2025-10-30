@@ -4,7 +4,7 @@ import matplotlib.dates as mdates
 from matplotlib.patches import Rectangle
 import numpy as np
 
-class CandlestickChart:
+class CandlestickPlot:
     def __init__(self, 
                 df, 
                 timeframe,
@@ -54,22 +54,7 @@ class CandlestickChart:
                 raise ValueError("plot_window deve ser slice (ex: [-300:]) ou lista/tupla com início e fim")
         
         # Configurações
-        self.signals = signals or {
-            'long': {
-                'data': None,
-                'signal_type': 'compra',
-                'color': 'darkgreen',
-                'marker': '^',
-                'size': 50
-            },
-            'short': {
-                'data': None,
-                'signal_type': 'venda', 
-                'color': 'darkred',
-                'marker': 'v',
-                'size': 50
-            }
-        }
+        self.signals = signals or {}
         self.indicators = indicators or {}
         
         default_areas_config = {
@@ -217,27 +202,31 @@ class CandlestickChart:
     
     def plot_all(self):
         """Plota todos os elementos do gráfico"""
-        # Plotar candles, indicadores e sinais PRIMEIRO
+        # Plotar candles PRIMEIRO - SEMPRE
         self.plot_candles()
-        self.plot_indicators()
-        self.plot_signals()
         
-        # ← CORREÇÃO: Replotar candles se houver subplots ↓
+        # Plotar indicadores (que podem criar subplots)
+        self.plot_indicators()
+        
+        # ← CORREÇÃO: Se subplots foram criados, replotar candles no gráfico principal
         if hasattr(self, 'indicator_axes_list') and self.indicator_axes_list:
-            # Replotar candles no gráfico principal (que pode ter sido recriado)
-            self.plot_candles()
-            # Replotar sinais no gráfico principal
+            # Limpar e replotar tudo no gráfico principal
+            self.ax.clear()
+            self.setup_chart()  # Reconfigurar após clear
+            self.plot_candles()  # Replotar candles
+        
+        # Plotar sinais (se existirem)
+        if self.signals:
             self.plot_signals()
         
-        # ← TRAVAR OS LIMITES após plotar elementos principais ↓
-        self.ax.set_autoscale_on(False)
+        # ← CORREÇÃO: Plotar áreas por último, com limites travados
         current_ylim = self.ax.get_ylim()
+        self.ax.set_autoscale_on(False)
         
-        # AGORA plotar áreas com limites travados
         if hasattr(self, 'areas_config'):
             self.plot_areas(self.areas_config)
         
-        # ← GARANTIR que os limites se mantenham ↓
+        # Manter os limites
         self.ax.set_ylim(current_ylim)
     
     def plot_candles(self):
@@ -321,6 +310,9 @@ class CandlestickChart:
 
     def plot_signals(self):
         """Plota todos os sinais definidos no dicionário de sinais"""
+        if not self.signals:
+            return  # Nenhum sinal a plotar
+        
         for signal_type, signal_config in self.signals.items():
             if signal_type == 'long':
                 self._plot_signal(signal_config, default_type='compra', default_color='lime', signal_position='high')
@@ -328,6 +320,7 @@ class CandlestickChart:
                 self._plot_signal(signal_config, default_type='venda', default_color='r', signal_position='low')
             else:
                 self._plot_signal(signal_config)
+
 
     def _plot_signal(self, signal_config, default_type='sinal', default_color='blue', alpha=0.8, signal_position='close'):
         signal_data = signal_config.get('data')
@@ -657,8 +650,6 @@ if __name__ == "__main__":
     if 'datetime' not in df.columns: df['datetime'] = df['date'] 
     
     # Criar sinais e indicadores
-    #buy_signals = df['low'] < df['close'].shift(1) * 0.995
-    #sell_signals = df['high'] > df['close'].shift(1) * 1.005
     df['vol'] = np.log(df['high'] / df['low']).replace([np.inf, -np.inf], np.nan).ffill().fillna(0)
     df['vol_avg'] = df['vol'].rolling(window=21).mean().fillna(0)
 
@@ -668,18 +659,6 @@ if __name__ == "__main__":
     # Calcular média móvel
     ma_period = 10
     df['MA'] = df['close'].rolling(ma_period).mean()
-    
-    # SIMULAR POSIÇÕES DE TRADE (exemplo)
-    # np.random.seed(42)
-    # positions = np.zeros(len(df))
-
-    # # Simula alguns trades long
-    # positions[100:300] = 1
-    # positions[500:800] = 1
-    # # Simula alguns trades short
-    # positions[1000:1050] = -1
-    # positions[1200:1275] = -1
-    # df['position'] = positions
 
     # Versão vetorizada (mais rápida para DataFrames grandes)
     hold_period=3
@@ -708,18 +687,19 @@ if __name__ == "__main__":
 
 
     # Criar e mostrar gráfico
-    chart = CandlestickChart(
+    chart = CandlestickPlot(
         df=df,
         timeframe='D1',
         datetime_col='datetime',
         signals={'long': {'data': buy_signals}, 'short': {'data': sell_signals}},
         areas_config={'position': df['position']},
         indicators={'Média Móvel 10': {'data': df['MA'], 'color': 'khaki', 'linewidth': 0.8, 'plot_on_graph': True}},
-        plot_window=slice(-500, -200),
+        plot_window=slice(-500, None),
         figsize=(12, 6)
     )
     
     chart.show(title=None, legend=False, xlabel=None, ylabel=None)
+
 
 
 
