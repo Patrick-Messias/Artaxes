@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from BaseClass import BaseClass
+from Trade import Trade
 import uuid
 
 @dataclass
@@ -21,6 +22,11 @@ class Backtest(BaseClass):
         return None
 
     def get_statistics(self):
+        return None
+    
+
+    def _calculate_ohlc_from_trade(self, trades: list[Trade]): # Gets trade's entry and end datetime's from Asset, then calculates open(strat), max(), min() and close(end) from that whole period
+
         return None
 
 

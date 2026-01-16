@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from BaseClass import BaseClass
 from Asset import Asset, Asset_Portfolio
 from finta import TA
-import uuid
+import uuid, inspect
 
 from MoneyManager import MoneyManager, MoneyManagerParams
 from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
@@ -179,52 +179,96 @@ def generate_signals(self, asset_name: str = None, indicators_cache: dict = None
 @dataclass
 class StratParams():
     name: str = field(default_factory=lambda: f'strat_{uuid.uuid4()}')
-    strat_support_assets: Optional[Dict[str, Asset]] = field(default_factory=dict) #Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
+    #strat_support_assets: Optional[Dict[str, Asset]] = field(default_factory=None) #Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
+
+    params: Dict = field(default_factory=dict) 
     execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
     data_settings: DataSettings = field(default_factory=DataSettings)
     mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
     time_settings: TimeSettings = field(default_factory=TimeSettings)
-    indicators: Dict[str, Indicator] = field(default_factory=dict)
+    indicators: Dict[str, Indicator] = field(default_factory=dict) 
 
-    entry_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
-    tf_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
-    sl_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-    tp_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-    be_pos_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-    be_neg_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict) 
-    nb_exit_rules: Dict[str, Callable[[pd.DataFrame], pd.Series]] = field(default_factory=dict)
+    signal_rules: Dict = field(default_factory=lambda: {
+        'entry_long': None,
+        'entry_short': None,
+        'exit_tf_long': None,
+        'exit_tf_short': None,
+        'exit_sl_long': None,
+        'exit_sl_short': None,
+        'exit_tp_long': None,
+        'exit_tp_short': None,
+        'exit_nb_long': None,
+        'exit_nb_short': None,
+        'be_pos_long': None,
+        'be_pos_short': None,
+        'be_neg_long': None,
+        'be_neg_short': None
+    })
 
     strat_money_manager: Optional['StratMoneyManager'] = None
 
-
+def call_rule_function(func, **kwargs):
+    """Chama uma função com apenas os argumentos que ela realmente usa."""
+    sig = inspect.signature(func)
+    valid_args = {k: v for k, v in kwargs.items() if k in sig.parameters}
+    return func(**valid_args)
+    
 class Strat(BaseClass):
     def __init__(self, strat_params: StratParams):
         super().__init__()
         self.name = strat_params.name
-        self.strat_support_assets = strat_params.strat_support_assets
+        #self.strat_support_assets = strat_params.strat_support_assets
 
+        self.params = strat_params.params
         self.execution_settings = strat_params.execution_settings
         self.data_settings = strat_params.data_settings
         self.mma_settings = strat_params.mma_settings # If mma_rules=None then will use default or PMA or othe MMA define in Operation
         self.time_settings = strat_params.time_settings
         self.indicators = strat_params.indicators
 
-        self.entry_rules = strat_params.entry_rules
-        self.tf_exit_rules = strat_params.tf_exit_rules
-        self.sl_exit_rules = strat_params.sl_exit_rules
-        self.tp_exit_rules = strat_params.tp_exit_rules
-        self.be_pos_rules = strat_params.be_pos_rules
-        self.be_neg_rules = strat_params.be_neg_rules
-        self.nb_exit_rules = strat_params.nb_exit_rules
+        self.signal_rules = strat_params.signal_rules
+
+        # self.entry_rules = strat_params.entry_rules
+        # self.tf_exit_rules = strat_params.tf_exit_rules
+        # self.sl_exit_rules = strat_params.sl_exit_rules
+        # self.tp_exit_rules = strat_params.tp_exit_rules
+        # self.be_pos_rules = strat_params.be_pos_rules
+        # self.be_neg_rules = strat_params.be_neg_rules
+        # self.nb_exit_rules = strat_params.nb_exit_rules
 
         # StratMoneyManager is optional - if None, will use default or PMA/MMM from Operation
         self.strat_money_manager = strat_params.strat_money_manager
 
         self.data = None
     
+    def generate_signals(self, df, ind_series_dict, param_id, params=None):
+        results = {
+            'param_id': param_id,
+            'signals_long':  call_rule_function(
+                self.entry_rules.get('entry_long', lambda df, inds: None),
+                df=df, ind_series_dict=ind_series_dict, param_id=param_id, params=params
+            ),
+            'signals_short': call_rule_function(
+                self.entry_rules.get('entry_short', lambda df, inds: None),
+                df=df, ind_series_dict=ind_series_dict, param_id=param_id, params=params
+            ),
+            'exit_rules': {}
+        }
+
+        for rule_group_name in ['tf_exit_rules', 'sl_exit_rules', 'tp_exit_rules', 'be_pos_rules', 'be_neg_rules']:
+            rule_group = getattr(self, rule_group_name, {}) or {}
+            for side in ['long', 'short']:
+                key = f"{rule_group_name}_{side}"
+                if f"{side}" in [k.split('_')[-1] for k in rule_group.keys()]:
+                    func_key = next(k for k in rule_group if k.endswith(side))
+                    results['exit_rules'][key] = call_rule_function(
+                        rule_group[func_key],
+                        df=df, ind_series_dict=ind_series_dict, param_id=param_id, params=params
+                    )
+
+        return results
 
 
-        
     def _prepare_backtest_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Prepara colunas necessárias para o backtest"""
         # Adiciona colunas padrão se não existirem
@@ -233,82 +277,6 @@ class Strat(BaseClass):
         if 'entry_price_short' not in df.columns:
             df['entry_price_short'] = df['close']
             
-        return df
-
-    def _apply_entry_rules(self, df: pd.DataFrame) -> pd.DataFrame:
-        if not self.entry_rules:
-            return df
-            
-        entry_signals = pd.DataFrame(index=df.index)
-        
-        for rule_name, rule_func in self.entry_rules.items():
-            try:
-                signal = rule_func(df)
-                if isinstance(signal, pd.Series):
-                    entry_signals[rule_name] = signal
-                else:
-                    print(f"Warning: Rule {rule_name} did not return a pandas Series")
-            except Exception as e:
-                print(f"Error applying entry rule {rule_name}: {str(e)}")
-                
-        if entry_signals.empty:
-            return df
-            
-        # Combina os sinais (precisa de todos True para entrar)
-        df['entry_long'] = entry_signals.all(axis=1)
-        df['entry_short'] = entry_signals.all(axis=1)
-        
-        # Aplica regras de direção - verifica se as regras existem
-        if 'entry_long' not in self.entry_rules: df['entry_long'] = False
-        if 'entry_short' not in self.entry_rules: df['entry_short'] = False
-        
-        return df
-
-    def _apply_exit_rules(self, df: pd.DataFrame) -> pd.DataFrame:
-        # Trend Following Exit
-        if self.tf_exit_rules:
-            tf_signals = pd.DataFrame(index=df.index)
-            
-            for rule_name, rule_func in self.tf_exit_rules.items():
-                try:
-                    signal = rule_func(df)
-                    if isinstance(signal, pd.Series):
-                        tf_signals[rule_name] = signal
-                    else:
-                        print(f"Warning: TF Exit Rule {rule_name} did not return a pandas Series")
-                except Exception as e:
-                    print(f"Error applying TF exit rule {rule_name}: {str(e)}")
-                    
-            if not tf_signals.empty:
-                # Combina os sinais em um único sinal unificado
-                # 1 = compra, -1 = venda, 0 = neutro
-                df['tf'] = 0  # Inicializa com neutro
-                
-                # Se todos os sinais forem True, define como 1 (compra)
-                buy_signals = tf_signals.all(axis=1)
-                df.loc[buy_signals, 'tf'] = 1
-                
-                # Se todos os sinais forem False, define como -1 (venda)
-                sell_signals = ~tf_signals.any(axis=1)
-                df.loc[sell_signals, 'tf'] = -1
-        
-        # Stop Loss
-        if self.sl_exit_rules:
-            sl_signals = pd.DataFrame(index=df.index)
-            
-            for rule_name, rule_func in self.sl_exit_rules.items():
-                try:
-                    signal = rule_func(df)
-                    if isinstance(signal, pd.Series):
-                        sl_signals[rule_name] = signal
-                    else:
-                        print(f"Warning: SL Exit Rule {rule_name} did not return a pandas Series")
-                except Exception as e:
-                    print(f"Error applying SL exit rule {rule_name}: {str(e)}")
-                    
-            if not sl_signals.empty:
-                df['exit_sl'] = sl_signals.all(axis=1)
-        
         return df
 
 

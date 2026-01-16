@@ -9,6 +9,9 @@ from sklearn.preprocessing import StandardScaler
 from pprint import pprint
 from VolFeatureEng import VolFeatureEng
 from VolBinaryPredictor import VolBinaryPredictor
+import warnings, sys
+warnings.filterwarnings("ignore")
+sys.path.append(f'C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend')
 from Indicator import Indicator
 
 # ======================================================
@@ -172,11 +175,10 @@ class VolPredictor(Indicator):
         return vol_up_pred_aligned
 
 
-"""
+
 # Step 1: Build volatility features
 df = pd.read_csv(f"c:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex\\EURUSD_D1.csv")
 df = df[:int(len(df)*0.5)]  # limit for testing
-print(df)
 params={'har_period_s': 5, 'har_period_m': 21, 'vol_yz_period_m': 21}
 
 vfe = VolFeatureEng(df, params=params)      # from OHLC data
@@ -192,19 +194,25 @@ manager.fit_sv()
 manager.fit_state_space()
 manager.fit_hmm()
 
-# Step 3: View unified summary and forecast
-manager.summary()
-pprint(manager.forecast_next_vol())
-
-print(f"\n\n\n")
-
 vbp = VolBinaryPredictor(manager.df, vol_col='vol_yz', period=params['vol_yz_period_m'])
 vbp.create_target()
 vbp.select_features()
 vbp.train_model()
 df_with_pred = vbp.predict_all()
+df['vol_up_pred'] = df_with_pred['vol_up_pred']
 
-print(df_with_pred.value_counts())
-"""
+print(df['vol_up_pred'].count())
+print(df_with_pred.count())
+not working
+
+import matplotlib.pyplot as plt
+
+# Plot básico
+plt.figure(figsize=(12, 6))
+plt.style.use('dark_background')
+plt.plot(df['vol_up_pred'], linewidth=1, alpha=0.7)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.show()
 
 

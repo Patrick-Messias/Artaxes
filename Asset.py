@@ -203,7 +203,7 @@ class Asset(BaseClass):
         self.type = type
         self.market = market
         self.data_path = data_path
-        self.data: dict[str, pd.DataFrame] = {}
+        self.data: dict[str, pd.DataFrame] = {} # REMOVER self.data? sempre que precisar usar data_get()?
         self.timeframe = timeframe
         if timeframe: 
             for tf in timeframe:
@@ -305,6 +305,15 @@ class Asset(BaseClass):
         assets = Asset.load_unique_assets(assets, "currency_pair", "forex", forex_path)
         
         return assets 
+
+
+
+
+
+
+
+
+
 
 
 class Asset_Portfolio(BaseClass):

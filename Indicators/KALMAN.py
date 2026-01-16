@@ -22,7 +22,7 @@ import numpy as np
 from Indicator import Indicator
 
 class KALMAN(Indicator): 
-    def __init__(self, asset, timeframe: str, R: list = [0.001, 0.01+0.01, 0.001], Q: list = [0.001, 0.001+0.001, 0.001], price_col: str = 'close'):
+    def __init__(self, asset=None, timeframe: str=None, R: list = [0.001, 0.01+0.01, 0.001], Q: list = [0.001, 0.001+0.001, 0.001], price_col: str = 'close'):
         super().__init__(asset, timeframe)
         self.R = R if R is not None else [0.01]  # Lista de measurement noise variances
         self.Q = Q if Q is not None else [0.001]  # Lista de process noise variances

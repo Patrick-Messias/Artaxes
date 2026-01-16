@@ -10,7 +10,7 @@ class ParkinsonVolatility(Indicator):
     - É mais eficiente para medir volatilidade diária/intradiária.
     """
 
-    def __init__(self, asset=None, timeframe: str=None, window: int=20):
+    def __init__(self, asset=None, timeframe: str=None, window: int=21):
         super().__init__(asset, timeframe)
         self.window = window
 

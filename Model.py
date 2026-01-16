@@ -11,6 +11,24 @@ from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
 from MoneyManager import MoneyManagerParams
 import uuid
 
+
+"""
+MODEL IDEIA, CREATE WHEN READY
+1. Predict next 1, 5, 21, 63, 126 and 252 day/period returns, rank by highest
+maybe even rank by short term negative and long term positive
+
+2. Add defs to:
+- Remove overnight (open = close.shift(1) if intraday) -> and create synth asset to test Models
+- Select overnight (open - close.shift(1)) / (close.shift(1))
+- Removes abnormal market moves with regime filters or filter out data (2008, 2020)
+
+3. Seasonality Builder
+
+"""
+
+
+
+
 @dataclass
 class ModelParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')

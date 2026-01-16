@@ -15,6 +15,10 @@ class LewellenBarndorffJump(Indicator):
 
     def calculate(self, df: pd.DataFrame):
         df_ = df.copy()
+
+        if len(df) < self.window:
+            raise ValueError(f"Not enough data with window size")
+        
         if self.price_col not in df_.columns:
             raise ValueError(f"Coluna '{self.price_col}' não encontrada no DataFrame.")
 

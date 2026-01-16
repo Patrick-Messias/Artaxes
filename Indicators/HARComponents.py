@@ -28,4 +28,6 @@ class HARComponents(Indicator):
 
         # 3️⃣ Normalização (z-score) apenas dos componentes HAR
         har_df = (har_df - har_df.mean()) / (har_df.std() + 1e-8)
-        return har_df
+        return har_df # df[['har_daily', 'har_weekly', 'har_monthly']] = HARComponents().calculate(df)
+    
+

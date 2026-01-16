@@ -1,174 +1,112 @@
-import pandas as pd, itertools
+import pandas as pd, itertools, json
 
 class Indicator:
-    def __init__(self, asset, timeframe):
+    def __init__(self, asset: str=None, timeframe: str=None, **params):
         self.asset = asset
         self.timeframe = timeframe
-        #self.data = pd.DataFrame # To be used in future for caching data if needed for backtest
-        
-    def calculate(self, df): # Abstract method to be implemented by subclasses
+        self.params = params
+
+        self.name = self.__class__.__name__.lower()
+
+    def calculate(self, df: pd.DataFrame):
         raise NotImplementedError
+
+    # 1. Agora deve retornar um dict com as keys do param_sets, sem recalcular desn, podendo ser chamado com param_set
+    # def calculate_all_sets(self, df: pd.DataFrame, param_sets: dict = None, asset_name: str = None, timeframe: str = None, sep: str = '-') -> dict:
+    #     """Calculate indicator outputs for a set of global param_sets.
+
+    #     Behavior:
+    #     - `param_sets` is a dict {global_ps_name: {param_name: value, ...}}.
+    #     - For each global param_set we derive `effective_params` for this indicator
+    #       (mapping names or substitutions from the indicator's `self.params`).
+    #     - Deduplicate identical `effective_params` combinations and compute each
+    #       unique indicator parameter set only once. Then assign the resulting
+    #       DataFrame reference to every global_ps that maps to it.
+
+    #     Returns structure: { asset_name: { timeframe: { global_param_set_name: DataFrame } } }
+    #     """
+
+    #     asset_key = asset_name or 'default_asset'
+    #     tf_key = timeframe or getattr(self, 'timeframe', 'default_tf')
+    #     results = {asset_key: {tf_key: {}}}
+
+    #     # snapshot of defaults
+    #     ind_defaults = getattr(self, 'params', {}) or {}
+
+    #     # If no global param_sets provided, fallback to single current params
+    #     if not param_sets:
+    #         # try to call calculate with current params
+    #         try:
+    #             out = self.calculate(df, ind_defaults)
+    #         except TypeError:
+    #             backup = getattr(self, 'params', {}).copy()
+    #             try:
+    #                 self.params = ind_defaults
+    #                 out = self.calculate(df)
+    #             finally:
+    #                 self.params = backup
+    #         results[asset_key][tf_key]['default'] = out
+    #         return results
+
+    #     # helper: normalize value into hashable/serializable form
+    #     def _norm(v):
+    #         if isinstance(v, (list, tuple)):
+    #             return tuple(v)
+    #         if isinstance(v, dict):
+    #             return json.dumps(v, sort_keys=True)
+    #         return v
+
+    #     # Build mapping: ind_key -> {'params': dict, 'global_ps_names': [..]}
+    #     unique_map = {}
+
+    #     for global_name, global_vals in param_sets.items():
+    #         # build effective params for this indicator from global param set
+    #         effective = {}
+    #         # priority: if ind default value is a string referencing a key in global_vals
+    #         for k, v in ind_defaults.items():
+    #             if isinstance(v, str) and v in global_vals:
+    #                 effective[k] = global_vals[v]
+    #             elif k in global_vals:
+    #                 effective[k] = global_vals[k]
+    #             else:
+    #                 effective[k] = v
+
+    #         # also include any global_vals that match indicator params names
+    #         for k, v in global_vals.items():
+    #             if k not in effective and k in ind_defaults:
+    #                 effective[k] = v
+
+    #         # normalize into a key for deduplication
+    #         ind_key = tuple(sorted((kk, _norm(vv)) for kk, vv in effective.items()))
+
+    #         if ind_key not in unique_map:
+    #             unique_map[ind_key] = {'params': effective, 'global_ps_names': []}
+    #         unique_map[ind_key]['global_ps_names'].append(global_name)
+
+    #     # compute each unique indicator param once
+    #     for ind_key, info in unique_map.items():
+    #         params_to_use = info['params']
+    #         try:
+    #             out = self.calculate(df, params_to_use)
+    #         except TypeError:
+    #             backup = getattr(self, 'params', {}).copy()
+    #             try:
+    #                 self.params = params_to_use
+    #                 out = self.calculate(df)
+    #             finally:
+    #                 self.params = backup
+
+    #         # assign same DataFrame reference to all mapped global param_set names
+    #         for gname in info['global_ps_names']:
+    #             results[asset_key][tf_key][gname] = out
+
+    #     return results
+
+
     
-    def calculate_all_sets(self, df, base_path: str = ""):
-        import itertools
-
-        param_names, param_values = [], []
-
-        # Identifica atributos que são listas de parâmetros
-        for attr, value in self.__dict__.items():
-            if attr.startswith('_') or callable(value):
-                continue
-            if isinstance(value, list):
-                param_names.append(attr)
-                param_values.append(value)
-
-        results = {}
-
-        # Caso não haja múltiplos parâmetros, calcula direto
-        if not param_names:
-            key = f"{base_path}.{self._param_suffix()}" if base_path else self._param_suffix()
-            results[key] = self.calculate(df)
-            return results
-
-        # Gera todas as combinações possíveis
-        for combo in itertools.product(*param_values):
-            # Salva os valores originais
-            original = {name: getattr(self, name) for name in param_names}
-
-            # Atualiza os parâmetros do indicador
-            for name, val in zip(param_names, combo):
-                setattr(self, name, val)
-
-            # Calcula o resultado
-            calculated_data = self.calculate(df)
-
-            # Cria um identificador legível para o conjunto de parâmetros
-            param_id = "_".join(f"{name}={val}" for name, val in zip(param_names, combo))
-
-            # Cria o path completo para salvar o resultado
-            full_key = f"{base_path}.{param_id}" if base_path else param_id
-            results[full_key] = calculated_data
-
-            # Restaura os valores originais
-            for name, val in original.items():
-                setattr(self, name, val)
-
-        return results
-
-    def _param_suffix(self):
-        """Retorna um sufixo compacto com os parâmetros fixos atuais."""
-        return "_".join(
-            f"{k}={v}"
-            for k, v in self.__dict__.items()
-            if not k.startswith('_') and not callable(v) and not isinstance(v, list)
-        )
 
 
 
-
-
-
-
-
-""" OLD Indicator.py
-
-    def calculate_all_sets(self, df, base_path: str = ""):
-        import itertools
-
-        param_names, param_values = [], []
-        
-        # Identifica quais atributos são listas de parâmetros
-        for attr, value in self.__dict__.items():
-            if attr.startswith('_') or callable(value):
-                continue
-            if isinstance(value, list):
-                param_names.append(attr)
-                param_values.append(value)
-        
-        results = {}
-        if not param_names:
-            key = f"{base_path}.{self._param_suffix()}" if base_path else self._param_suffix()
-            results[key] = self.calculate(df)
-            return results
-        
-        # Gera todas as combinações possíveis
-        for combo in itertools.product(*param_values):
-            # Salva valores originais
-            original = {name: getattr(self, name) for name in param_names}
-
-            # Atualiza atributos
-            for name, val in zip(param_names, combo):
-                setattr(self, name, val)
-            
-            # Calcula resultado
-            calculated_data = self.calculate(df)
-            
-            # Gera string de parâmetros
-            param_id = "_".join(f"{name}{val}" for name, val in zip(param_names, combo))
-            full_key = f"{base_path}.{param_id}" if base_path else param_id
-            results[full_key] = calculated_data
-            
-            # Restaura valores originais
-            for name, val in original.items():
-                setattr(self, name, val)
-        
-        return results
-
-    def _param_suffix(self):
-        # Retorna apenas um sufixo compacto dos parâmetros atuais.
-        return ".".join(f"{getattr(self, k)}" for k in self.__dict__ 
-                        if not k.startswith('_') and not callable(getattr(self, k)))
-
-@dataclass
-class Indicator: # Indicador class utilizado apenas para organizar, os calculos e armazenamento de dados será feito em um dicionário
-    name: str # "IND_Var_Parametric"
-    timeframe: str
-    params: dict # {"alpha": [0.01, 0.05], "sliced_data_length": [50, 100]}
-
-    func_path: Optional[str] = None                # "Indicators.IND_Var_Parametric" ou "TA.RSI"
-    sliced_data: bool = False
-    sliced_data_length_param: Optional[str] = None # ex: "window", "length", "sliced_data_length"
-    input_cols: Optional[List[str]] = None         # ex: ["close"]
-    output_name_template: Optional[str] = None     # ex: "{name}[alpha={alpha},len={sliced_data_length}]"
-
-
-def calculate_indicator(df: pd.DataFrame, ind: Indicator, params: dict) -> pd.DataFrame:
-    # Must use indicator name to search for the function to calculate it in files or TA
-
-    func = _resolve_indicator_func(ind)
-    if func is None:
-        print(f"Indicator not found: {ind.name}")
-        return df
-    
-    input_df = _select_input(df, ind)
-    col_name = _build_col_name(ind, params)
-
-    if ind.sliced_data:
-        length_param = ind.sliced_data_length_param
-        if not length_param or length_param not in params:
-            print(f"Parameter window absent {ind.name}")
-            return df
-        
-        win = int(params[length_param])
-        out = [np.nan] * len(df)
-
-        for i in range(win - 1, len(df)):
-            window = input_df.iloc[i - win + 1:i + 1]
-            res = _apply_func(func, window, params)
-            if isinstance(res, (pd.Series, list, np.ndarray)): out[i] = pd.Series(res).iloc[-1]
-            elif isinstance(res, pd.DataFrame): out[i] = res.iloc[-1, -1] # takes last col/val
-            else: out[i] = res
-        df[col_name] = out
-        return df
-
-    # Full data (rolling window done in func or not existent)
-    res = _apply_func(func, input_df, params)
-    if isinstance(res, pd.Series): df[col_name] = res.values
-    elif isinstance(res, pd.DataFrame):
-        for c in res.columns: df[f"{col_name}_{c}"] = res[c].values
-    else: df[col_name] = res
-    return df
-"""
 
 
 
