@@ -151,6 +151,9 @@ class Operation(BaseClass, Persistance):
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name] = {'param_set_dict': param_set_dict, 'signals': None, 'trades': None}
                         
                         # Calculates Indicators
+
+                        # NOTE   Corrigir, se asset=None então tem que criar um novo para cada Asset   NOTE
+
                         for ind_name, ind_obj in strat_indicators.items():
                             if ind_obj is None:
                                 print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Indicator {ind_name} is None, skipping calculation.')
@@ -160,13 +163,12 @@ class Operation(BaseClass, Persistance):
 
                         for curr_signal_def_name, curr_signal_def_obj in signals.items():
                             if curr_signal_def_obj is not None:
-                                curr_asset_obj[curr_signal_def_name] = curr_signal_def_obj(self, asset_name, 
-                                                                     curr_asset_obj, 
-                                                                     param_set_dict
-                                                                     )
+                                curr_asset_obj[curr_signal_def_name] = curr_signal_def_obj(self, asset_name, curr_asset_obj, param_set_dict)
+
                                 num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
                                 print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
-                                
+                        print(curr_asset_obj)   
+                        curr_asset_obj.to_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx', index=False)
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name]['signals'] = curr_asset_obj # Saves full DataFrame with signals and indicators for exporting to C++ backtest later
 
         return True
@@ -178,7 +180,7 @@ class Operation(BaseClass, Persistance):
 
         ind_timeframe = ind_calc_obj.timeframe
         if ind_calc_obj.asset is None: 
-            ind_asset_name = ind_calc_obj.asset = curr_asset_name
+            ind_asset_name = curr_asset_name
         else: ind_asset_name = ind_calc_obj.asset
 
         # Decomposes param_set to only those relevant to this indicator, to avoid recalculating for unrelated params
@@ -530,8 +532,8 @@ if __name__ == "__main__":
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
 
-    model_assets={'EURUSD', 'GBPUSD'} # Only keys #, 'GBPUSD'
-    model_execution_tf = 'H1'
+    model_assets=['EURUSD', 'USDJPY'] # Only keys #, 'GBPUSD'
+    model_execution_tf = 'M15'
 
     Params = {
         'AT15': { 
@@ -557,7 +559,7 @@ if __name__ == "__main__":
         diff = df['close']*(sl_perc/100)
         ema_htf = df['ema_htf']
 
-        signal = ((df['close'] > df['sma']) & df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
+        signal = ((df['close'] > df['sma']) )#& df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
         return signal
     
     def entry_short(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict): 
@@ -568,7 +570,7 @@ if __name__ == "__main__":
         diff = df['close']*(sl_perc/100)
         ema_htf = df['ema_htf']
 
-        signal = ((df['close'] < df['sma']) & df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
+        signal = ((df['close'] < df['sma']) )#& df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
         return signal
 
     def exit_tf_long(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict):
