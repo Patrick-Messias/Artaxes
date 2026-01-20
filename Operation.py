@@ -113,10 +113,10 @@ class Operation(BaseClass, Persistance):
         self.unique_datetime_df = pd.DataFrame
 
         # Optimized Cache WIP to save data
-        self._memory_cache = {}
-        self._cache_size_limit = 100 * 1024 * 1024  # 100MB limit
+        #self._memory_cache = {}
+        #self._cache_size_limit = 100 * 1024 * 1024  # 100MB limit
 
-    # 1. Param Sets
+    # 1 - Data Pre-Processing
     def _data_pre_processing(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
@@ -167,14 +167,39 @@ class Operation(BaseClass, Persistance):
 
                                 num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
                                 print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
-                        print(curr_asset_obj)   
-                        curr_asset_obj.to_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx', index=False)
+                        #print(curr_asset_obj)   
+                        #curr_asset_obj.to_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx', index=False)
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name]['signals'] = curr_asset_obj # Saves full DataFrame with signals and indicators for exporting to C++ backtest later
-
         return True
     
+    # 2 - Serialize Data to JSON for C++ Backtest
+    def _serialize_to_json(self):
+        import json
+        data = {}
+        
+        # Iterar sobre _results_map para DataFrames de sinais
+        if self.name in self._results_map and 'models' in self._results_map[self.name]:
+            for model_name, model_data in self._results_map[self.name]['models'].items():
+                if 'strats' in model_data:
+                    for strat_name, strat_data in model_data['strats'].items():
+                        if 'assets' in strat_data:
+                            for asset_name, asset_data in strat_data['assets'].items():
+                                if 'param_sets' in asset_data:
+                                    for param_set_name, param_set_data in asset_data['param_sets'].items():
+                                        if 'signals' in param_set_data and isinstance(param_set_data['signals'], pd.DataFrame):
+                                            key = f"{model_name}_{strat_name}_{asset_name}_{param_set_name}"
+                                            data[key] = param_set_data['signals'].to_json()
+        
+        # Adicionar variáveis
+        data['pre_backtest_signal_is_position'] = self.pre_backtest_signal_is_position
+        data['date_start'] = self.date_start
+        data['date_end'] = self.date_end
+        
+        return json.dumps(data)
 
 
+
+    # || ===================================================================== || Helper Functions || ===================================================================== ||
 
     def _calculate_indicator(self, ind_calc_name: str, ind_calc_obj, param_set_dict, curr_asset_df_obj: pd.DataFrame=None, curr_asset_name: str=None, datetime_reference_candles='open'): # Calculates each individual indicator and saves in the global mapping
 
@@ -472,13 +497,8 @@ class Operation(BaseClass, Persistance):
     #    self._validate_operation()
 
         # II - Data Pre-Processing
-        print(f"\n>>> Data Pre-Processing <<<")
-        print(f"    > Calculating Param Sets, Signals, Indicators and Preliminary Backtest")
+        print(f"\n>>> Data Pre-Processing - Calculating Param Sets, Indicators and Signals <<<")
         self._data_pre_processing()
-
-        print()
-        print('ok até aqui, agora transformar cada df, ainda dentro do _data_pre_processing, em arquivo para C++ ler')
-        print(ok)
 
         # Não se faz preliminary backtest, vai direto para backtest(s) em C++
 
@@ -489,18 +509,22 @@ class Operation(BaseClass, Persistance):
         # 4. NOTE If Walkforward then at each IS saves data while Backtest then compares results, so even if not Day Trade still doesn't have bias  /
         # Operation checks if Walkforward then uses class to save data at each IS, then gets OS results from backtests
 
-        # III - Execution
-        print(f"\n>>> Executing Operation <<<")
+        # III - Data Processing
+        print(f"\n>>> Data Processing - Serializing Data for C++ <<<")
+        self._serialize_to_json()
 
-        # IV - Pos-Processing
+        # VI - Execution
+        print(f'\n>>> Executing Operation {type(self.operation).__name__} in C++ <<<')
+
+        # V - Pos-Processing
         print(f"\n>>> Pos-Processing <<<")
         if self.metrics: self._data_pos_processing()
 
-        # V - Saving   
+        # VI - Saving   
         print(f"\n>>> Saving Results <<<")
         if self.save: self.save_results()
 
-        # VI - Cleanup
+        # VII - Cleanup
         print(f"\n>>> Cleaning Memory <<<")
         self.cleanup_memory()
 
@@ -532,7 +556,7 @@ if __name__ == "__main__":
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
 
-    model_assets=['EURUSD', 'USDJPY'] # Only keys #, 'GBPUSD'
+    model_assets=['GBPUSD', 'EURUSD', 'USDJPY'] # Only keys #, 'GBPUSD'
     model_execution_tf = 'M15'
 
     Params = {
@@ -766,5 +790,7 @@ if __name__ == "__main__":
             ind_column_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, ind_column_df, ind_asset_df_obj.timeframe, ind_asset_df_obj.datetime_candle_references)
 
         return ind_column_df 
+
+
 
 """
