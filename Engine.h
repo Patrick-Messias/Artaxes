@@ -1,5 +1,4 @@
 #pragma once
-#include <nlohmann/json.hpp>
-using json = nlohmann::json;
+#include <string>
 
-json run_engine(const json& data);
+std::string run_backtest_from_json(const std::string& json_input);

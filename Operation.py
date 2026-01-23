@@ -173,16 +173,17 @@ class Operation(BaseClass, Persistance):
 
     # 3 - Serialize Data to JSON and running C++ Backtest
     def _run_cpp_operation(self):
-        print('wtf')
         try:
-            import engine
+            sys.path.append(r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release")
+            import engine_cpp # type: ignore
             json_str = self._serialize_to_json()
-            print("JSON serialized, calling C++...")
-            cpp_result = engine.run_backtest_from_json(json_str)
-            print("C++ result:", cpp_result)
+            print(f'       > JSON serialized, calling C++ ...')
+            cpp_result = engine_cpp.run_backtest_from_json(json_str)
+            print(f'       > C++ result:'),cpp_result
         except Exception as e:
-            print("Error in C++ call:", e)
+            print(f'       > Error in C++ call:',e)
         return None
+
 
     # || ===================================================================== || Helper Functions || ===================================================================== ||
 
@@ -524,7 +525,9 @@ class Operation(BaseClass, Persistance):
         # III - Execution
         print(f'\n>>> Serializing Data and Executing {type(self.operation).__name__} Operation in C++ <<<')
         self._run_cpp_operation()
+        print(f'\n\n\n\n\n')
 
+        print(stopping_process)
         # IV - Pos-Processing
         print(f"\n>>> Pos-Processing <<<")
         if self.metrics: self._data_pos_processing()
@@ -660,8 +663,8 @@ if __name__ == "__main__":
             operation_backtest_all_signals_are_positions=False,
             assets=global_assets,
             operation_timeframe=model_execution_tf,
-            date_start='2020-01-01',
-            date_end='2023-01-01',
+            date_start=None, #'2020-01-01',
+            date_end=None, #'2023-01-01',
             save=False,
             metrics={}
         )

@@ -6,5 +6,10 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(pybind11 REQUIRED)
 find_package(nlohmann_json REQUIRED)
 
-pybind11_add_module(engine_cpp bindings.cpp Engine.cpp)
+pybind11_add_module(engine_cpp
+    Engine.cpp
+    Backtest.cpp
+    bindings.cpp
+)
+
 target_link_libraries(engine_cpp PRIVATE nlohmann_json::nlohmann_json)

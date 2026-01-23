@@ -1,10 +1,13 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\bindings.cpp">
+    <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Engine.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Engine.cpp">
+    <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Backtest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\bindings.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

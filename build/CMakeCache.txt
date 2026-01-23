@@ -446,6 +446,8 @@ _Python_INCLUDE_DIR:INTERNAL=C:\Program Files\Python311\include
 //Python Properties
 _Python_INTERPRETER_PROPERTIES:INTERNAL=Python;3;11;9;64;<none>;cp311-win_amd64;;C:\Program Files\Python311\Lib;C:\Program Files\Python311\Lib;C:\Program Files\Python311\Lib\site-packages;C:\Program Files\Python311\Lib\site-packages
 _Python_INTERPRETER_SIGNATURE:INTERNAL=2a0539298ef8c7002c2ab95662118450
+//Interpreter reason failure
+_Python_Interpreter_REASON_FAILURE:INTERNAL=
 _Python_LIBRARY_RELEASE:INTERNAL=C:\Program Files\Python311\libs\python311.lib
 //NumPy reason failure
 _Python_NumPy_REASON_FAILURE:INTERNAL=
