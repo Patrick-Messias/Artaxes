@@ -19,7 +19,7 @@ class Walkforward(BaseClass):
         return None
 
 
-
+#USAR NUMBA??
 
 
 

@@ -1,0 +1,3 @@
+C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/engine_cpp.dir
+C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/ZERO_CHECK.dir

@@ -1,10 +1,33 @@
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
+json run_engine(const json& data) {
+    double capital = data["capital"];
+    auto prices = data["prices"];
+
+    double final_value = capital;
+    for (auto& p : prices) {
+        final_value *= (1.0 + p.get<double>());
+    }
+
+    json result;
+    result["final_value"] = final_value;
+    result["num_trades"] = prices.size();
+    return result;
+}
+
+
+
+/*
 #include <iostream>
 #include <string>
 #include <vector>
 #include <map>
 #include <nlohmann/json.hpp>  // Biblioteca para JSON
+#include <pybind11/pybind11.h>  // Para integração com Python
 
 using json = nlohmann::json;
+namespace py = pybind11;
 
 // Struct para representar dados de sinais (exemplo básico)
 struct SignalData {
@@ -67,9 +90,39 @@ int main() {
 
     std::cout << "Número de conjuntos de sinais processados: " << signals.size() << std::endl;
 
+    // Iterar sobre os sinais e mostrar key e amostra de dados
+    for (const auto& signal : signals) {
+        std::cout << "Key: " << signal.key << std::endl;
+        std::cout << "  Open (amostra): ";
+        for (size_t i = 0; i < std::min(signal.open.size(), size_t(3)); ++i) {
+            std::cout << signal.open[i] << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "  Signals (amostra): ";
+        for (size_t i = 0; i < std::min(signal.signals.size(), size_t(3)); ++i) {
+            std::cout << signal.signals[i] << " ";
+        }
+        std::cout << std::endl;
+        // Adicionar amostras para high, low, close se necessário
+    }
+
     return 0;
 }
 
+// Módulo pybind11 para integração com Python
+PYBIND11_MODULE(engine, m) {
+    m.def("run_backtest_from_json", [](const std::string& jsonStr) -> std::string {
+        try {
+            auto signals = parseJsonToSignals(jsonStr);
+            runBacktest(signals);
+            // Retornar resultados (placeholder; implementar retorno real de métricas)
+            return "Backtest completed successfully. Processed " + std::to_string(signals.size()) + " signal sets.";
+        } catch (const std::exception& e) {
+            return "Error: " + std::string(e.what());
+        }
+    });
+}
+*/
 
 
 

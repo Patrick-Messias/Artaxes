@@ -1,4 +1,4 @@
-import pandas as pd, numpy as np, json, sys, uuid, copy, datetime, json
+import pandas as pd, numpy as np, json, sys, uuid, copy, datetime
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
@@ -19,9 +19,7 @@ from Indicator import Indicator
 from BaseClass import BaseClass
 from Persistance import Persistance
 from itertools import product
-
 from Trade import Trade
-
 from MA import MA # type: ignore
 
 # =========================================================================================================================================|| Global Mapping (REMOVE FROM TIHS FILE LATER)
@@ -116,7 +114,7 @@ class Operation(BaseClass, Persistance):
         #self._memory_cache = {}
         #self._cache_size_limit = 100 * 1024 * 1024  # 100MB limit
 
-    # 1 - Data Pre-Processing
+    # 2 - Data Pre-Processing
     def _data_pre_processing(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
@@ -172,9 +170,27 @@ class Operation(BaseClass, Persistance):
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name]['signals'] = curr_asset_obj # Saves full DataFrame with signals and indicators for exporting to C++ backtest later
         return True
     
-    # 2 - Serialize Data to JSON for C++ Backtest
+
+    # 3 - Serialize Data to JSON and running C++ Backtest
+    def _run_cpp_operation(self):
+        print('wtf')
+        try:
+            import engine
+            json_str = self._serialize_to_json()
+            print("JSON serialized, calling C++...")
+            cpp_result = engine.run_backtest_from_json(json_str)
+            print("C++ result:", cpp_result)
+        except Exception as e:
+            print("Error in C++ call:", e)
+        return None
+
+    # || ===================================================================== || Helper Functions || ===================================================================== ||
+
+    def _deserialize_from_json(self, json_str: str):
+        data = json.loads(json_str)
+        return data
+
     def _serialize_to_json(self):
-        import json
         data = {}
         
         # Iterar sobre _results_map para DataFrames de sinais
@@ -196,11 +212,7 @@ class Operation(BaseClass, Persistance):
         data['date_end'] = self.date_end
         
         return json.dumps(data)
-
-
-
-    # || ===================================================================== || Helper Functions || ===================================================================== ||
-
+    
     def _calculate_indicator(self, ind_calc_name: str, ind_calc_obj, param_set_dict, curr_asset_df_obj: pd.DataFrame=None, curr_asset_name: str=None, datetime_reference_candles='open'): # Calculates each individual indicator and saves in the global mapping
 
         ind_timeframe = ind_calc_obj.timeframe
@@ -509,22 +521,19 @@ class Operation(BaseClass, Persistance):
         # 4. NOTE If Walkforward then at each IS saves data while Backtest then compares results, so even if not Day Trade still doesn't have bias  /
         # Operation checks if Walkforward then uses class to save data at each IS, then gets OS results from backtests
 
-        # III - Data Processing
-        print(f"\n>>> Data Processing - Serializing Data for C++ <<<")
-        self._serialize_to_json()
+        # III - Execution
+        print(f'\n>>> Serializing Data and Executing {type(self.operation).__name__} Operation in C++ <<<')
+        self._run_cpp_operation()
 
-        # VI - Execution
-        print(f'\n>>> Executing Operation {type(self.operation).__name__} in C++ <<<')
-
-        # V - Pos-Processing
+        # IV - Pos-Processing
         print(f"\n>>> Pos-Processing <<<")
         if self.metrics: self._data_pos_processing()
 
-        # VI - Saving   
+        # V - Saving   
         print(f"\n>>> Saving Results <<<")
         if self.save: self.save_results()
 
-        # VII - Cleanup
+        # VI - Cleanup
         print(f"\n>>> Cleaning Memory <<<")
         self.cleanup_memory()
 
@@ -533,7 +542,6 @@ class Operation(BaseClass, Persistance):
 
 
 if __name__ == "__main__":
-
     eurusd = Asset(
         name='EURUSD',
         type='currency_pair',
@@ -556,7 +564,7 @@ if __name__ == "__main__":
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
 
-    model_assets=['GBPUSD', 'EURUSD', 'USDJPY'] # Only keys #, 'GBPUSD'
+    model_assets=['EURUSD'] # Only keys #, 'GBPUSD'
     model_execution_tf = 'M15'
 
     Params = {

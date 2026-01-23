@@ -1,0 +1,10 @@
+^C:\USERS\PATRICK\DESKTOP\ART_BACKTESTING_PLATFORM\BACKEND\BUILD\CMAKEFILES\8EE25588F38E96897861125AF1ABA9A0\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend -BC:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/engine_cpp.slnx
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
