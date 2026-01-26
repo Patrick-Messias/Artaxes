@@ -1,9 +1,9 @@
-import pandas as pd, numpy as np, json, sys, uuid, copy, datetime
+import pandas as pd, numpy as np, json, sys, uuid, copy, datetime, psutil, time
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
 from typing import Union, Dict, List, Optional, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict, is_dataclass
 from Model import ModelParams, Model
 from Asset import Asset, AssetParams
 from Strat import Strat, StratParams, ExecutionSettings, DataSettings, TimeSettings
@@ -37,9 +37,9 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
                                         'param_set_dict': {
                                             dict # ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['param_set_dict']: dict
                                         },
-                                        'signals': {
-                                            pd.DataFrame # ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['signals']: pd.DataFrame
-                                        },
+                                        # 'signals': {
+                                        #     pd.DataFrame # ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['signals']: pd.DataFrame
+                                        # },
                                         'trades': {
                                             list[Trade] # ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['preliminary_backtest']: np.array['preliminary_pnl']
                                         }
@@ -68,8 +68,6 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
     }
 }
 
-
-
 # =========================================================================================================================================|| Global Mapping
 
 @dataclass
@@ -84,7 +82,7 @@ class OperationParams():
     metrics: Optional[Dict[str, Indicator]] = field(default_factory=dict)
 
     # Settings
-    operation_backtest_all_signals_are_positions: bool=False
+    operation_backtest_all_signals_are_positions: bool=False # If True, all signals are treated as position signals (entry/exit), else treated as simple signals (entry only, exit by SL/TP/Time)
     operation_timeframe: str=None
     date_start: str=None
     date_end: str=None
@@ -107,17 +105,18 @@ class Operation(BaseClass, Persistance):
         self.date_end = op_params.date_end
         self.save = op_params.save
 
-        self._results_map = {} #OptimizedOperationResult() # NOTE REDO OptimizedOperationResult() for new structure NOTE
+        self._results_map = {} 
         self.unique_datetime_df = pd.DataFrame
 
-        # Optimized Cache WIP to save data
-        #self._memory_cache = {}
-        #self._cache_size_limit = 100 * 1024 * 1024  # 100MB limit
-
-    # 2 - Data Pre-Processing
-    def _data_pre_processing(self):
+    # 2 - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtest
+    def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
+
+        avg_param_set_size_mb = None
+        batch_payload = {}
+        batch_count = 0
+        optimal_batch_size = None
 
         for model_name, model_obj in models.items():
             strats = model_obj.strat
@@ -146,74 +145,127 @@ class Operation(BaseClass, Persistance):
                     for param_set_name, param_set_dict in param_sets.items():
                         curr_asset_obj = asset_class.data_get(self.operation_timeframe) #self._resolve_asset(asset_name, self.operation_timeframe) #asset_class.data_get(self.operation_timeframe) # Gets current's Asset data
                         signals = strat_obj.signal_rules # Gets signal functions
-                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name] = {'param_set_dict': param_set_dict, 'signals': None, 'trades': None}
+                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name] = {'param_set_dict': param_set_dict, 'trades': None}
                         
                         # Calculates Indicators
-
-                        # NOTE   Corrigir, se asset=None então tem que criar um novo para cada Asset   NOTE
-
                         for ind_name, ind_obj in strat_indicators.items():
                             if ind_obj is None:
                                 print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Indicator {ind_name} is None, skipping calculation.')
                                 continue
-
                             curr_asset_obj = self._calculate_indicator(ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, asset_class.datetime_candle_references) # Calculates each indicator and saves in the global mapping
 
+                        # Calculates Signals
                         for curr_signal_def_name, curr_signal_def_obj in signals.items():
                             if curr_signal_def_obj is not None:
                                 curr_asset_obj[curr_signal_def_name] = curr_signal_def_obj(self, asset_name, curr_asset_obj, param_set_dict)
-
                                 num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
                                 print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
-                        #print(curr_asset_obj)   
                         #curr_asset_obj.to_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx', index=False)
-                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name]['signals'] = curr_asset_obj # Saves full DataFrame with signals and indicators for exporting to C++ backtest later
+
+                        # Estimates avérage size for param_set df
+                        if avg_param_set_size_mb is None:
+                            avg_param_set_size_mb = self._estimate_paramset_size_mb(curr_asset_obj)
+                            optimal_batch_size = self._calculate_optimal_batch_size(avg_param_set_size_mb)
+                            print(f'       > Estimated average param set size: {avg_param_set_size_mb:.2f} MB - Optimal batch size: {optimal_batch_size}')
+
+                        key = f"{model_name}_{strat_name}_{asset_name}_{param_set_name}"
+                        batch_payload[key] = {
+                            "data": curr_asset_obj,
+                            "params": param_set_dict,
+                            "time_settings": strat_obj.time_settings,
+                            "execution_settings": strat_obj.execution_settings,
+                            "signal_rules": {
+                                name: name in curr_asset_obj.columns for name in strat_obj.signal_rules.keys()
+                            }
+                        }
+                        batch_count += 1
+
+                        if batch_count >= optimal_batch_size:
+                            print(f'       > Processing batch of size: {len(batch_payload)}')
+                            trades = self._run_cpp_operation(batch_payload)
+                            self._save_trades(trades)
+                            batch_payload.clear()
+                            batch_count = 0
+
+        if batch_payload:
+            print(f'       > Processing final batch of size: {len(batch_payload)}')
+            trades = self._run_cpp_operation(batch_payload)
+            self._save_trades(trades)
+            batch_payload.clear()
+
         return True
     
+    # || ===================================================================== || Execution Functions || ===================================================================== ||
 
-    # 3 - Serialize Data to JSON and running C++ Backtest
-    def _run_cpp_operation(self):
+    def _run_cpp_operation(self, batch_payload: dict):
         try:
+            json_str = self._serialize_batch_to_json(batch_payload)
+
             sys.path.append(r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release")
             import engine_cpp # type: ignore
-            json_str = self._serialize_to_json()
+            
             print(f'       > JSON serialized, calling C++ ...')
-            cpp_result = engine_cpp.run_backtest_from_json(json_str)
-            print(f'       > C++ result:'),cpp_result
+            result_json = engine_cpp.run_backtest_from_json(json_str)
+            return self._deserialize_from_json(result_json)
         except Exception as e:
             print(f'       > Error in C++ call:',e)
         return None
 
+    def _estimate_paramset_size_mb(self, df):
+        return df.memory_usage(deep=True).sum() / (1024 ** 2)  
+    
+    def _get_available_memory_mb(self):
+        return psutil.virtual_memory().available / (1024 ** 2)
+    
+    def _calculate_optimal_batch_size(self, avg_paramset_size_mb, safety_margin=0.25, max_batch=1000, min_batch=1):
+        available_ram_mb = self._get_available_memory_mb()
+        usable_ram_mb = available_ram_mb * (1 - safety_margin)
 
-    # || ===================================================================== || Helper Functions || ===================================================================== ||
+        if avg_paramset_size_mb <= 0: return min_batch
+
+        z = int(usable_ram_mb // avg_paramset_size_mb)
+        return max(min_batch, min(z, max_batch))
+
+    def _save_trades(self, trades): # NOTE Should receive dict struct of trade or Trade class ? NOTE # Returns trades from C++ to results_map in [Trade]
+        for trade in trades:
+            model = trade["model"]
+            strat = trade["strat"]
+            asset = trade["asset"]
+            param_set = trade["param_set"]
+
+            self._results_map[self.name]["models"][model]["strats"][strat]["assets"][asset]["param_sets"][param_set]["trades"] = trade['trades']
 
     def _deserialize_from_json(self, json_str: str):
-        data = json.loads(json_str)
-        return data
+        return json.loads(json_str)  # trades and metrics, not DataFrames
 
-    def _serialize_to_json(self):
-        data = {}
-        
-        # Iterar sobre _results_map para DataFrames de sinais
-        if self.name in self._results_map and 'models' in self._results_map[self.name]:
-            for model_name, model_data in self._results_map[self.name]['models'].items():
-                if 'strats' in model_data:
-                    for strat_name, strat_data in model_data['strats'].items():
-                        if 'assets' in strat_data:
-                            for asset_name, asset_data in strat_data['assets'].items():
-                                if 'param_sets' in asset_data:
-                                    for param_set_name, param_set_data in asset_data['param_sets'].items():
-                                        if 'signals' in param_set_data and isinstance(param_set_data['signals'], pd.DataFrame):
-                                            key = f"{model_name}_{strat_name}_{asset_name}_{param_set_name}"
-                                            data[key] = param_set_data['signals'].to_json()
-        
-        # Adicionar variáveis
-        data['pre_backtest_signal_is_position'] = self.pre_backtest_signal_is_position
-        data['date_start'] = self.date_start
-        data['date_end'] = self.date_end
-        
+    def _serialize_batch_to_json(self, batch_payload):
+        data = {
+            "meta": {
+                "pre_backtest_signal_is_position": self.pre_backtest_signal_is_position,
+                "date_start": self.date_start,
+                "date_end": self.date_end
+            },
+            "datasets": {}
+        }
+
+        def _to_json_safe(obj):
+            if is_dataclass(obj):
+                return asdict(obj)
+            return obj
+
+        for key, payload in batch_payload.items():
+            data["datasets"][key] = {
+                "data": payload["data"].to_json(date_format="iso"),
+                "params": payload["params"],
+                "time_settings": _to_json_safe(payload["time_settings"]),
+                "execution_settings": _to_json_safe(payload["execution_settings"]),
+                "signal_rules": payload["signal_rules"]
+            }
+
         return json.dumps(data)
-    
+
+    # || ===================================================================== || Signals Functions || ===================================================================== ||
+
     def _calculate_indicator(self, ind_calc_name: str, ind_calc_obj, param_set_dict, curr_asset_df_obj: pd.DataFrame=None, curr_asset_name: str=None, datetime_reference_candles='open'): # Calculates each individual indicator and saves in the global mapping
 
         ind_timeframe = ind_calc_obj.timeframe
@@ -470,75 +522,21 @@ class Operation(BaseClass, Persistance):
     
         return merged
 
-
-
-    # # 2. Run Operation
-    # def _run_operation(self):
-    #     models = self._get_all_models()
-
-    #     if isinstance(self.operation, Walkforward): 
-    #         wfm_sets = self.operation.calculate_walkforward_matrix_sets()
-
-
-    #     for model_name, model_obj in models.items():
-    #         strats = model_obj.strat
-    #         assets = model_obj.assets
-
-
-    #          IMPORTANTE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!s
-    #         Não fazer case1/case2, apenas gerar todos os trades, salvnado informações necessárias para a operação, depois analisar wf/portfolio,etc
-    #         # Case 1 -> Backtest de Portfolio itera sobre unique datetime e cria posição de Strat-Asset-ParamSet(s) baseado em regras do modelo
-    #         # Case 2 -> Backtest onde cada Strat tem todo o seu próprio conjunto de assets e param_sets
-
-    #         for strat_name, strat_obj in strats.items():
-    #             params = strat_obj.params
-    #             strat_indicators = strat_obj.indicators
-
-
-        #C++ CODE
-        # NOTE Enside C++ Backtest code must receive wf_matrix and iterate and save each result from each wfm
-        # for mtx_key, mtx_dict in wf_matrix.items(): # WF IS-OS 12-12, 12-6, 12-3, etc
-        # ✔️ Python prepara tudo → monta _results_map, resolve assets, indicadores, sinais, param_sets, HTF→LTF, etc.
-        # ✔️ C++ só recebe blocos prontos → apenas um DataFrame final por asset + signals + param_set e executa somente a lógica de backtest /
-        # (loop, posição, PnL, SL/TP, etc.).
-                            
-
+    # || ================================================================================================================================================================= ||
+                        
     def run(self):
-
         # I - Init and Validation
         print(f"\n>>> Init and Validating Operation <<<")
     #    self._validate_operation()
 
-        # II - Data Pre-Processing
-        print(f"\n>>> Data Pre-Processing - Calculating Param Sets, Indicators and Signals <<<")
-        self._data_pre_processing()
-
-        # Não se faz preliminary backtest, vai direto para backtest(s) em C++
-
-        # ->>>>>>>> ORDERM ABAXIO
-        # 1. Testar até aqui, verificar que está tudo fucnionando
-        # 2. Planejar bem e criar o código em C++ para Backtest, Walkforward, WFM, etc
-        # 3. Retornar para python com os resultados dos backtests para analise de Portfolio
-        # 4. NOTE If Walkforward then at each IS saves data while Backtest then compares results, so even if not Day Trade still doesn't have bias  /
-        # Operation checks if Walkforward then uses class to save data at each IS, then gets OS results from backtests
-
-        # III - Execution
-        print(f'\n>>> Serializing Data and Executing {type(self.operation).__name__} Operation in C++ <<<')
-        self._run_cpp_operation()
-        print(f'\n\n\n\n\n')
-
+        # II - Data Pre-Processing and Execution
+        print(f"\n>>> Data Pre-Processing - Calculating Param Sets, Indicators, Signals and Backtest <<<")
+        self._operation()
         print(stopping_process)
-        # IV - Pos-Processing
+
+        # III - Pos-Processing, Saving, Cleaning
         print(f"\n>>> Pos-Processing <<<")
         if self.metrics: self._data_pos_processing()
-
-        # V - Saving   
-        print(f"\n>>> Saving Results <<<")
-        if self.save: self.save_results()
-
-        # VI - Cleanup
-        print(f"\n>>> Cleaning Memory <<<")
-        self.cleanup_memory()
 
         return self._operation_result
 
