@@ -9,15 +9,15 @@ class Trade(BaseClass): # Each Trade represents 1 Position too
         self.status = params.get('status', 'open')
         self.direction = params.get('direction', 'long')
         self.entry_price = params.get('entry_price', 0.0)
-        self.entry_time = params.get('entry_time', '00:00:00')
+        self.entry_datetime = params.get('entry_datetime', '00:00:00')
         self.lot_size = params.get('lot_size', 1.0)
         self.stop_loss = params.get('stop_loss')
         self.take_profit = params.get('take_profit')
         self.exit_price = None
-        self.exit_time = None
+        self.exit_datetime = None
         self.exit_reason = None
-        self.profit = None
-        self.profit_r = None
+        self.profit = None # % 
+        self.profit_r = None # Money
 
     #def close(self, close_params: dict): # USAR trade.modify_specific_value('status', 'close')
     #    return self.status='close'

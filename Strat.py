@@ -10,6 +10,10 @@ from MoneyManager import MoneyManager, MoneyManagerParams
 from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
 from Indicator import Indicator
 
+from Backtest import Backtest, BacktestParams
+from Optimization import Optimization
+from Walkforward import Walkforward
+
 # Import will be added later to avoid circular import
 # from StratMoneyManager import StratMoneyManager
 
@@ -179,6 +183,7 @@ def generate_signals(self, asset_name: str = None, indicators_cache: dict = None
 @dataclass
 class StratParams():
     name: str = field(default_factory=lambda: f'strat_{uuid.uuid4()}')
+    operation: Union[Backtest, Optimization, Walkforward]=None
     #strat_support_assets: Optional[Dict[str, Asset]] = field(default_factory=None) #Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
 
     params: Dict = field(default_factory=dict) 
@@ -217,6 +222,7 @@ class Strat(BaseClass):
     def __init__(self, strat_params: StratParams):
         super().__init__()
         self.name = strat_params.name
+        self.operation = strat_params.operation
         #self.strat_support_assets = strat_params.strat_support_assets
 
         self.params = strat_params.params

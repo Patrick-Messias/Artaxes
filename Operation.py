@@ -1,4 +1,4 @@
-import pandas as pd, numpy as np, json, sys, uuid, copy, datetime, psutil, time
+import pandas as pd, numpy as np, json, sys, uuid, copy, datetime, psutil
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
@@ -45,8 +45,10 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
                                         }
                                     },
                                     'walkforward': {
-                                        '{wf_param}': {
-                                            list[Trade] # ['portfolio_name']['models'][model_name]['strats']['strat_name']['walkforward'][wf_param]: Walkforward
+                                        'wf_param_set':{ # ex: '12_12'
+                                            '{wf_param}': {
+                                                list[Trade] # ['portfolio_name']['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets']['walkforward'][wf_param_set][wf_param]: Walkforward
+                                            }
                                         }
                                     }
                                 }
@@ -74,7 +76,7 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
 class OperationParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     data: Union[Model, Portfolio]=None # Can make an operation with a single model or portfolio
-    operation: Union[Backtest, Optimization, Walkforward]=None 
+    #operation: Union[Backtest, Optimization, Walkforward]=None 
     pre_backtest_signal_is_position: bool=False
     assets: Optional[Dict[str, Any]] = field(default_factory=dict) # Global Assets
 
@@ -93,7 +95,7 @@ class Operation(BaseClass, Persistance):
         super().__init__()
         self.name = op_params.name
         self.data = op_params.data
-        self.operation = op_params.operation
+        #self.operation = op_params.operation
         self.pre_backtest_signal_is_position = op_params.pre_backtest_signal_is_position
         self.assets = op_params.assets 
 
@@ -137,8 +139,8 @@ class Operation(BaseClass, Persistance):
                     if asset_class is None: raise ValueError(f"Asset '{asset_name}' not found in global assets.")
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
                     
-                    if isinstance(self.operation, Walkforward):
-                        isos = self.operation.isos if self.operation.isos is not None else ['12_12']
+                    if isinstance(strat_obj.operation, Walkforward):
+                        isos = strat_obj.operation.isos if strat_obj.operation.isos is not None else ['12_12']
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'] = {'walkforward': {}}
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets']['walkforward'] = {iso: None for iso in isos}
 
@@ -150,7 +152,7 @@ class Operation(BaseClass, Persistance):
                         # Calculates Indicators
                         for ind_name, ind_obj in strat_indicators.items():
                             if ind_obj is None:
-                                print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Indicator {ind_name} is None, skipping calculation.')
+                                print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Indicator {ind_name} is None, skipping calculation.')
                                 continue
                             curr_asset_obj = self._calculate_indicator(ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, asset_class.datetime_candle_references) # Calculates each indicator and saves in the global mapping
 
@@ -159,14 +161,14 @@ class Operation(BaseClass, Persistance):
                             if curr_signal_def_obj is not None:
                                 curr_asset_obj[curr_signal_def_name] = curr_signal_def_obj(self, asset_name, curr_asset_obj, param_set_dict)
                                 num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
-                                print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
+                                print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
                         #curr_asset_obj.to_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx', index=False)
 
                         # Estimates avérage size for param_set df
                         if avg_param_set_size_mb is None:
                             avg_param_set_size_mb = self._estimate_paramset_size_mb(curr_asset_obj)
                             optimal_batch_size = self._calculate_optimal_batch_size(avg_param_set_size_mb)
-                            print(f'       > Estimated average param set size: {avg_param_set_size_mb:.2f} MB - Optimal batch size: {optimal_batch_size}')
+                            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Estimated average param set size: {avg_param_set_size_mb:.2f} MB - Optimal batch size: {optimal_batch_size}')
 
                         key = f"{model_name}_{strat_name}_{asset_name}_{param_set_name}"
                         batch_payload[key] = {
@@ -181,14 +183,18 @@ class Operation(BaseClass, Persistance):
                         batch_count += 1
 
                         if batch_count >= optimal_batch_size:
-                            print(f'       > Processing batch of size: {len(batch_payload)}')
+                            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Processing batch of size: {len(batch_payload)}')
                             trades = self._run_cpp_operation(batch_payload)
+
+                            for t in trades: 
+                                print('Profit?', t["profit_r"])
+
                             self._save_trades(trades)
                             batch_payload.clear()
                             batch_count = 0
 
         if batch_payload:
-            print(f'       > Processing final batch of size: {len(batch_payload)}')
+            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Processing final batch of size: {len(batch_payload)}')
             trades = self._run_cpp_operation(batch_payload)
             self._save_trades(trades)
             batch_payload.clear()
@@ -199,17 +205,141 @@ class Operation(BaseClass, Persistance):
 
     def _run_cpp_operation(self, batch_payload: dict):
         try:
-            json_str = self._serialize_batch_to_json(batch_payload)
+            # 1. Preparação e Limpeza de Dados
+            for key in batch_payload:
+                df = batch_payload[key]['data']
+                cols_numeric = df.select_dtypes(include=[np.number]).columns
+                df[cols_numeric] = df[cols_numeric].ffill().fillna(0).astype(float)
+                
+                cols_signals = ['entry_long', 'entry_short', 'exit_tf_long', 'exit_tf_short', 
+                                'be_pos_long', 'be_pos_short']
+                for col in cols_signals:
+                    if col in df.columns:
+                        df[col] = df[col].fillna(0).astype(int)
+                
+                if 'datetime' in df.columns:
+                    df['datetime'] = df['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                
+                batch_payload[key]['data'] = df
 
-            sys.path.append(r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release")
-            import engine_cpp # type: ignore
+            # 2. Serialização para JSON
+            json_str = self._serialize_batch_to_json(batch_payload)
             
-            print(f'       > JSON serialized, calling C++ ...')
-            result_json = engine_cpp.run_backtest_from_json(json_str)
-            return self._deserialize_from_json(result_json)
+            # 3. Importação e Execução da Engine C++
+            path_to_dll = r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release"
+            if path_to_dll not in sys.path:
+                sys.path.append(path_to_dll)
+            import engine_cpp 
+            
+            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - JSON serialized, calling C++ ...')
+            raw_output = engine_cpp.run(json_str)
+            
+            # 4. CONVERSÃO CRÍTICA: Transformar caracteres/strings em lista de Dicionários
+            processed_trades = []
+            if raw_output:
+                # Se for uma lista de caracteres (como os 19M indicam), junta tudo
+                if isinstance(raw_output, list) and len(raw_output) > 0 and isinstance(raw_output[0], str) and len(raw_output[0]) == 1:
+                    full_json_str = "".join(raw_output)
+                    processed_trades = json.loads(full_json_str)
+                # Se for uma string única gigante
+                elif isinstance(raw_output, str):
+                    processed_trades = json.loads(raw_output)
+                # Se já for a lista correta
+                else:
+                    processed_trades = raw_output
+
+            # Validação do tipo final
+            if isinstance(processed_trades, list) and len(processed_trades) > 0:
+                print(f"DEBUG: Sucesso! {len(processed_trades)} trades convertidos para dicionários Python.")
+            
+            return processed_trades
+
         except Exception as e:
-            print(f'       > Error in C++ call:',e)
-        return None
+            print(f'< Error in Python-C++ Bridge: {e}')
+            return []
+
+    def _serialize_batch_to_json(self, batch_payload):
+        data = {
+            "meta": {
+                "pre_backtest_signal_is_position": self.pre_backtest_signal_is_position,
+                "date_start": str(self.date_start) if self.date_start else None,
+                "date_end": str(self.date_end) if self.date_end else None
+            },
+            "datasets": {}
+        }
+
+        # Função de suporte para tipos NumPy e Timestamps que o JSON nativo não aceita
+        def _json_default(obj):
+            if isinstance(obj, (datetime.datetime, pd.Timestamp)):
+                return obj.strftime('%Y-%m-%d %H:%M:%S')
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+            return str(obj)
+
+        for key, payload in batch_payload.items():
+            # data["datasets"][key] = ...
+            data["datasets"][key] = {
+                "data": payload["data"].to_dict(orient='list'),
+                "params": payload["params"],
+                "time_settings": asdict(payload["time_settings"]) if is_dataclass(payload["time_settings"]) else payload["time_settings"],
+                "execution_settings": asdict(payload["execution_settings"]) if is_dataclass(payload["execution_settings"]) else payload["execution_settings"],
+                "signal_rules": payload["signal_rules"]
+            }
+
+        # O uso do allow_nan=False forçaria um erro no Python se algo escapasse, 
+        # mas nossa limpeza acima (cols_numeric) deve resolver.
+        return json.dumps(data, default=_json_default)
+
+    def _save_trades(self, trades):
+        # Verifica se 'trades' é de fato uma lista de dicionários
+        if not trades or not isinstance(trades, list):
+            print("> Erro: 'trades' não é uma lista válida.")
+            return
+
+        if len(trades) > 0 and not isinstance(trades[0], dict):
+            print(f"> Erro: O primeiro elemento é {type(trades[0])}, esperava-se dicionário.")
+            return
+            
+        print(f"> Gravando {len(trades)} trades no mapa de resultados...")
+        
+        for trade in trades:
+            full_key = trade.get("asset", "")
+            # Ex: 'MA Trend Following_AT15_EURUSD_param_set-2-20-2-sma-M15'
+            
+            if "param_set" in full_key:
+                # Localiza onde terminam as chaves fixas e começam os parâmetros
+                idx = full_key.find("param_set")
+                header = full_key[:idx-1] 
+                param_set_name = full_key[idx:]
+                
+                parts = header.split('_')
+                if len(parts) >= 3:
+                    # parts[0] = 'MA Trend Following', parts[1] = 'AT15', parts[2] = 'EURUSD'
+                    model_name, strat_name, asset_name = parts[0], parts[1], parts[2]
+                    
+                    try:
+                        # Navega na estrutura do results_map
+                        target = self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["param_sets"][param_set_name]
+                        
+                        if target.get("trades") is None:
+                            target["trades"] = []
+                        
+                        target["trades"].append(trade)
+                    except KeyError as e:
+                        # print(f"Chave não encontrada: {e}")
+                        continue
+        
+        print(f"> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trades gravados com sucesso.")
+
+    def _deserialize_from_json(self, json_data):
+        # Se o engine_cpp.run já retornar um objeto Python (lista de dicts), não precisa de json.loads
+        if isinstance(json_data, str):
+            return json.loads(json_data)
+        return json_data # Pybind11 geralmente já converte std::vector<Trade> para list[dict]
 
     def _estimate_paramset_size_mb(self, df):
         return df.memory_usage(deep=True).sum() / (1024 ** 2)  
@@ -225,44 +355,6 @@ class Operation(BaseClass, Persistance):
 
         z = int(usable_ram_mb // avg_paramset_size_mb)
         return max(min_batch, min(z, max_batch))
-
-    def _save_trades(self, trades): # NOTE Should receive dict struct of trade or Trade class ? NOTE # Returns trades from C++ to results_map in [Trade]
-        for trade in trades:
-            model = trade["model"]
-            strat = trade["strat"]
-            asset = trade["asset"]
-            param_set = trade["param_set"]
-
-            self._results_map[self.name]["models"][model]["strats"][strat]["assets"][asset]["param_sets"][param_set]["trades"] = trade['trades']
-
-    def _deserialize_from_json(self, json_str: str):
-        return json.loads(json_str)  # trades and metrics, not DataFrames
-
-    def _serialize_batch_to_json(self, batch_payload):
-        data = {
-            "meta": {
-                "pre_backtest_signal_is_position": self.pre_backtest_signal_is_position,
-                "date_start": self.date_start,
-                "date_end": self.date_end
-            },
-            "datasets": {}
-        }
-
-        def _to_json_safe(obj):
-            if is_dataclass(obj):
-                return asdict(obj)
-            return obj
-
-        for key, payload in batch_payload.items():
-            data["datasets"][key] = {
-                "data": payload["data"].to_json(date_format="iso"),
-                "params": payload["params"],
-                "time_settings": _to_json_safe(payload["time_settings"]),
-                "execution_settings": _to_json_safe(payload["execution_settings"]),
-                "signal_rules": payload["signal_rules"]
-            }
-
-        return json.dumps(data)
 
     # || ===================================================================== || Signals Functions || ===================================================================== ||
 
@@ -290,17 +382,17 @@ class Operation(BaseClass, Persistance):
                 # Same asset or no specific asset (use current)
                 df_used = curr_asset_df_obj
                 ind_result = ind_calc_obj.calculate(curr_asset_df_obj)
-                print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Indicators - {ind_calc_name} - Ind Asset: {ind_calc_obj.asset} - Idx Asset {curr_asset_name} - Timeframe: {ind_timeframe} - Param Set: {ind_param_set_key}')
+                print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Indicators - {ind_calc_name} - Ind Asset: {ind_calc_obj.asset} - Idx Asset {curr_asset_name} - Timeframe: {ind_timeframe} - Param Set: {ind_param_set_key}')
             else:
                 # Different asset: get the data for the indicator asset
                 asset_class = global_assets.get(ind_asset_name, None)
                 if asset_class is None:
-                    raise ValueError(f"Asset '{ind_asset_name}' not found in global assets.")
+                    raise ValueError(f'< {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Asset \'{ind_asset_name}\' not found in global assets.')
                 datetime_reference_candles = asset_class.datetime_candle_references
                 ind_asset_df = asset_class.data_get(ind_timeframe)
                 df_used = ind_asset_df
                 ind_result = ind_calc_obj.calculate(ind_asset_df)
-                print(f'       > {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Indicators - {ind_calc_name} - Ind Asset: {ind_calc_obj.asset} - Idx Asset {curr_asset_name} - Timeframe: {ind_timeframe} - Param Set: {ind_param_set_key}')
+                print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Indicators - {ind_calc_name} - Ind Asset: {ind_calc_obj.asset} - Idx Asset {curr_asset_name} - Timeframe: {ind_timeframe} - Param Set: {ind_param_set_key}')
             
             # Ensure ind_column_df is a DataFrame with proper column name and datetime
             if isinstance(ind_result, pd.Series):
@@ -360,7 +452,7 @@ class Operation(BaseClass, Persistance):
     def _resolve_asset(self, asset: str, timeframe: str, curr_asset_df_obj: pd.DataFrame=None, date_start: pd.Timestamp=None, date_end: pd.Timestamp=None, columns: list[str]=None) -> pd.DataFrame: 
         asset_class = self.assets.get(asset, None)
         if asset_class is None:
-            raise ValueError(f"Asset '{asset}' not found in global assets.")
+            raise ValueError(f'< {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Asset \'{asset}\' not found in global assets.')
         df = asset_class.data_get(timeframe)
 
         if columns is not None:
@@ -522,23 +614,116 @@ class Operation(BaseClass, Persistance):
     
         return merged
 
-    # || ================================================================================================================================================================= ||
+    # || ===================================================================== || Op Simulator Functions || ===================================================================== ||
+
+    def _simulate_portfolio(self, portfolio_backtests_dict ='All'):
+        # 1. Selects over all models -> strats -> assets -> param_sets, while iterating verifies if any walkforward operation is present
+        # 2. Either selects 1 specific param_set for each strat/asset, iterates over all param_sets or select wf_param_set and iterates over walkforward param_sets
+        # 3. Selects all unique datetime from selected backtest trades
+        # 4. Iterates over datetimes, ranks param_sets based on previous trades results with some metric (ex: equity, profit factor, etc)
+        # 5. For each datetime checks for entries and exits on each strat/asset/param_set simulating a portfolio with real money management and trade management rules
+
+
+
+        if portfolio_backtests_dict == 'All': # Uses all backtests from _results_map, else if dict with paths, uses only those backtests 
+            pass
+
+        pass
+
+    def _walkforward(self):
+        # 1. Iterates over all models -> strats -> assets -> param_sets
+        # 2. For each param_set, splits data in multiple isos (in-sample and out-of-sample periods)
+        # 3. For each iso, selects results from already calculated trade results from backtest operation
+        # 4. Analyzes each iso results and aggregates to final walkforward results
+
+        pass
+
+    def _operation_analysis(self):
+        pass
+
+    # || ===================================================================== || Save and Clean Functions || ===================================================================== ||
+
+    def _print_metrics(self, key: str, trades: list):
+        pass
+
+    def _save_and_clean(self):
+        pass
+
+    # || ===================================================================== || Validation Functions || ===================================================================== ||
+
+    def _validate_operation(self):
+        pass
+
+    # || ===================================================================== || Metrics Functions || ===================================================================== ||
+
+    def report_pnl_summary(self):
+        print("\n" + "="*50)
+        print(f"Performance Summary - Operation: {self.name}")
+        print("="*50)
+
+        # Navega no primeiro nível: Modelos
+        models = self._results_map.get(self.name, {}).get("models", {})
+        
+        if not models:
+            print("No models found in results map.")
+            return
+
+        for model_name, model_data in models.items():
+            print(f"\Model: {model_name}")
+            
+            # Navega nas Estratégias
+            for strat_name, strat_data in model_data.get("strats", {}).items():
+                print(f"  └── Strat: {strat_name}")
+                
+                # Navega nos Ativos
+                for asset_name, asset_data in strat_data.get("assets", {}).items():
+                    print(f"      └── Asset: {asset_name}")
+                    
+                    # Navega nos Conjuntos de Parâmetros
+                    for param_key, param_data in asset_data.get("param_sets", {}).items():
+                        trades = param_data.get("trades", [])
+                        
+                        if not trades:
+                            print(f"          └── {param_key}: No trades.")
+                            continue
+                        
+                        # Extrai os lucros (o C++ envia como 'profit' para % ou 'profit_r' para valor nominal)
+                        # Como vimos no log, o C++ retorna uma lista de dicionários ou objetos
+                        pnls = [t.get('profit', 0) if isinstance(t, dict) else t.profit for t in trades]
+                        
+                        total_pnl = sum(pnls)
+                        win_rate = (len([p for p in pnls if p > 0]) / len(pnls)) * 100
+                        max_win = max(pnls)
+                        max_loss = min(pnls)
+                        
+                        print(f"          └── PARAMS: {param_key}")
+                        print(f"              TOTAL TRADES: {len(trades)}")
+                        print(f"              PnL ACUMULADO: {total_pnl:.2f}%")
+                        print(f"              WIN RATE: {win_rate:.2f}%")
+                        print(f"              MELHOR/PIOR: {max_win:.2f}% / {max_loss:.2f}%")
+        print("\n" + "="*50)
+
+    # || ======================================================================================================================================================================= ||
                         
     def run(self):
-        # I - Init and Validation
-        print(f"\n>>> Init and Validating Operation <<<")
-    #    self._validate_operation()
+        # I - Init and Validation of Operation
+        print(f"\n>>> I - Init and Validating Operation <<<")
+        self._validate_operation()
 
         # II - Data Pre-Processing and Execution
-        print(f"\n>>> Data Pre-Processing - Calculating Param Sets, Indicators, Signals and Backtest <<<")
+        print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
         self._operation()
-        print(stopping_process)
+        self.report_pnl_summary()
 
-        # III - Pos-Processing, Saving, Cleaning
-        print(f"\n>>> Pos-Processing <<<")
-        if self.metrics: self._data_pos_processing()
+        # III - Operation Portfolio Simulation, Operation Analysis and Metrics
+        print(f"\n>>> III - Operation Portfolio Simulation, Operation Analysis and Metrics <<<")
+        self._simulate_portfolio()
 
-        return self._operation_result
+        # IV - Pos-Processing, Saving and Cleaning
+        print(f"\n>>> IV - Pos-Processing, Saving and Cleaning <<<")
+        self._save_and_clean()
+
+        return self._results_map
 
 
 
@@ -592,7 +777,7 @@ if __name__ == "__main__":
         diff = df['close']*(sl_perc/100)
         ema_htf = df['ema_htf']
 
-        signal = ((df['close'] > df['sma']) )#& df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
+        signal = ((df['close'] > df['sma']) & df['close'] < df['open']) #& df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
         return signal
     
     def entry_short(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict): 
@@ -603,7 +788,7 @@ if __name__ == "__main__":
         diff = df['close']*(sl_perc/100)
         ema_htf = df['ema_htf']
 
-        signal = ((df['close'] < df['sma']) )#& df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
+        signal = ((df['close'] < df['sma']) & df['close'] > df['open']) #& df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
         return signal
 
     def exit_tf_long(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict):
@@ -614,6 +799,7 @@ if __name__ == "__main__":
     AT15 = Strat(
         StratParams(
             name="AT15",
+            operation=Backtest(BacktestParams(name='backtest_test')),
             execution_settings=ExecutionSettings(order_type='market', offset=0.0),
             data_settings=DataSettings(fill_method='ffill', fillna=0),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
@@ -656,7 +842,7 @@ if __name__ == "__main__":
         OperationParams(
             name='operation_test',
             data=model_1,
-            operation=Backtest(BacktestParams(name='backtest_test')),
+            #operation=Backtest(BacktestParams(name='backtest_test')),
             pre_backtest_signal_is_position=False,
             operation_backtest_all_signals_are_positions=False,
             assets=global_assets,
@@ -671,135 +857,3 @@ if __name__ == "__main__":
     operation.run()
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-
-    def transfer_htf_columns(
-        self,
-        ltf_df: pd.DataFrame,
-        ltf_tf: str,
-        htf_df: pd.DataFrame,
-        htf_tf: str,
-        datetime_reference_candles: str = 'open',  # 'open' (MT5) ou 'close'
-        columns: Optional[List[str]] = None,
-        add_htf_tag: bool = True
-    ) -> pd.DataFrame:
-        # Transfers HTF columns to LTF dataframe without lookahead bias.
-        # HTF values are only available AFTER the HTF candle has closed.
-        # Assumptions: - datetime column represents candle OPEN time (MT5-like) or CLOSE time.
-        
-        def get_tf_minutes(tf: str) -> Optional[int]:
-            if tf.startswith('M') and not tf.startswith('MN'):
-                return int(tf[1:])
-            elif tf.startswith('H'):
-                return int(tf[1:]) * 60
-            elif tf.startswith('D'):
-                return int(tf[1:]) * 1440
-            else:
-                return None  # W, MN → handled by timestamps, not minutes
-
-        # Defensive copies
-        ltf_df = ltf_df.copy()
-        htf_df = htf_df.copy()
-
-        # Datetime normalization
-        ltf_df['datetime'] = pd.to_datetime(ltf_df['datetime'])
-        htf_df['datetime'] = pd.to_datetime(htf_df['datetime'])
-
-        ltf_df = ltf_df.sort_values('datetime')
-        htf_df = htf_df.sort_values('datetime')
-
-        if columns is None:
-            columns = list(htf_df.columns)
-            columns.remove('datetime')
-
-        # Determine candle duration
-        htf_minutes = get_tf_minutes(htf_tf)
-
-        # Shift HTF timestamps so they become available ONLY after close
-        htf_aligned = htf_df[['datetime'] + columns].copy()
-
-        if datetime_reference_candles == 'open':
-            if htf_minutes is not None:
-                htf_aligned['datetime'] += pd.Timedelta(minutes=htf_minutes)
-            # W / MN → already safe using timestamps only
-
-        elif datetime_reference_candles != 'close':
-            raise ValueError("datetime_reference_candles must be 'open' or 'close'")
-
-        # Rename HTF columns, avoiding duplication
-        renamed_columns = {}
-        for col in columns:
-            if add_htf_tag is False or col.endswith(f"_{htf_tf}"):
-                renamed_columns[col] = col  # Keep as is
-            else:
-                renamed_columns[col] = f"{col}_{htf_tf}"
-        htf_aligned = htf_aligned.rename(columns=renamed_columns)
-
-        # ASOF merge (forward to replicate HTF value to LTF of the same day)
-        merged = pd.merge_asof(
-            ltf_df,
-            htf_aligned,
-            on='datetime',
-            direction='forward'  # Changed to forward for correct replication
-        )
-
-        # Remove HTF values before first HTF close
-        first_valid_time = htf_aligned['datetime'].iloc[0]
-        if add_htf_tag is False:
-            htf_cols = [renamed_columns[col] for col in columns]
-        else:
-            htf_cols = [col for col in merged.columns if col.endswith(f"_{htf_tf}")]
-        merged.loc[merged['datetime'] < first_valid_time, htf_cols] = np.nan
-   
-        return merged
-    
-    
-
-    def _resolve_indicator(self, all_indicators_from_strat: dict, param_set: dict, all_assets_global, curr_asset_df_obj: pd.DataFrame=None, curr_asset_name: str=None): #ind_name: str, 
-
-        ind_obj = all_indicators_from_strat[ind_name]
-        ind_timeframe = ind_obj.timeframe
-        ind_asset_name = ind_obj.asset
-
-        # Decomposes param_set to only those relevant to this indicator, to avoid recalculating for unrelated params
-        ind_param_set_obj = self.effective_params_from_global(ind_obj.params, param_set)
-        ind_param_set_key = self.param_suffix(ind_param_set_obj)
-
-        try: 
-            return self._results_map['indicators'][ind_name][ind_asset_name][ind_timeframe][ind_param_set_key]
-        except KeyError:
-            if curr_asset_df_obj is None or ind_asset_name != curr_asset_name:
-                asset_class = all_assets_global.get(ind_asset_name, None)
-                if asset_class is None:
-                    raise ValueError(f"Asset '{ind_asset_name}' not found in global assets.")
-                ind_asset_df_obj = asset_class.data_get(ind_asset_name, ind_timeframe)
-            self.ind_obj.params = ind_param_set_obj # Updates indicator params with current set
-            ind_column_df = ind_obj.calculate(ind_asset_df_obj) 
-
-        # different timeframes HTF -> LTF
-        if ind_timeframe != self.operation_timeframe:
-            ltf_df = copy.deepcopy(curr_asset_df_obj) # LTF Template
-            if 'datetime' in ind_asset_df_obj.columns:
-                ind_column_df['datetime'] = ind_asset_df_obj['datetime']
-            elif 'date' in ind_asset_df_obj.columns:
-                ind_column_df['date'] = ind_asset_df_obj['date']
-            ltf_df = [['datetime']] if 'ind_column_df' in ind_asset_df_obj.columns else [['date']]
-            ind_column_df = self._transfer_HTF_Columns(ltf_df, self.operation_timeframe, ind_column_df, ind_asset_df_obj.timeframe, ind_asset_df_obj.datetime_candle_references)
-
-        return ind_column_df 
-
-
-
-"""
