@@ -223,7 +223,6 @@ class Strat(BaseClass):
         super().__init__()
         self.name = strat_params.name
         self.operation = strat_params.operation
-        #self.strat_support_assets = strat_params.strat_support_assets
 
         self.params = strat_params.params
         self.execution_settings = strat_params.execution_settings
@@ -234,67 +233,10 @@ class Strat(BaseClass):
 
         self.signal_rules = strat_params.signal_rules
 
-        # self.entry_rules = strat_params.entry_rules
-        # self.tf_exit_rules = strat_params.tf_exit_rules
-        # self.sl_exit_rules = strat_params.sl_exit_rules
-        # self.tp_exit_rules = strat_params.tp_exit_rules
-        # self.be_pos_rules = strat_params.be_pos_rules
-        # self.be_neg_rules = strat_params.be_neg_rules
-        # self.nb_exit_rules = strat_params.nb_exit_rules
-
         # StratMoneyManager is optional - if None, will use default or PMA/MMM from Operation
         self.strat_money_manager = strat_params.strat_money_manager
 
         self.data = None
-
-    def generate_signals(self, df, ind_series_dict, param_id, params=None):
-        results = {
-            'param_id': param_id,
-            'signals_long':  call_rule_function(
-                self.entry_rules.get('entry_long', lambda df, inds: None),
-                df=df, ind_series_dict=ind_series_dict, param_id=param_id, params=params
-            ),
-            'signals_short': call_rule_function(
-                self.entry_rules.get('entry_short', lambda df, inds: None),
-                df=df, ind_series_dict=ind_series_dict, param_id=param_id, params=params
-            ),
-            'exit_rules': {}
-        }
-
-        for rule_group_name in ['tf_exit_rules', 'sl_exit_rules', 'tp_exit_rules', 'be_pos_rules', 'be_neg_rules']:
-            rule_group = getattr(self, rule_group_name, {}) or {}
-            for side in ['long', 'short']:
-                key = f"{rule_group_name}_{side}"
-                if f"{side}" in [k.split('_')[-1] for k in rule_group.keys()]:
-                    func_key = next(k for k in rule_group if k.endswith(side))
-                    results['exit_rules'][key] = call_rule_function(
-                        rule_group[func_key],
-                        df=df, ind_series_dict=ind_series_dict, param_id=param_id, params=params
-                    )
-
-        return results
-
-
-    def _prepare_backtest_columns(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Prepara colunas necessárias para o backtest"""
-        # Adiciona colunas padrão se não existirem
-        if 'entry_price_long' not in df.columns:
-            df['entry_price_long'] = df['close']
-        if 'entry_price_short' not in df.columns:
-            df['entry_price_short'] = df['close']
-            
-        return df
-
-
-
-
-
-
-
-
-
-
-
 
     def __repr__(self):
         return self.__str__()

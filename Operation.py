@@ -961,7 +961,7 @@ if __name__ == "__main__":
     model_2 = Model(
         ModelParams(
             name='MA Trend Following 2',
-            assets=['GBPUSD', 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
+            assets=['GBPUSD'], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT16': AT16},
             execution_timeframe='M30',
             model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model2_MM")),
