@@ -246,7 +246,7 @@ class Strat(BaseClass):
         self.strat_money_manager = strat_params.strat_money_manager
 
         self.data = None
-    
+
     def generate_signals(self, df, ind_series_dict, param_id, params=None):
         results = {
             'param_id': param_id,

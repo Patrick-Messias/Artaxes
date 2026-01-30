@@ -59,14 +59,8 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
             }
         }
     },
-    'indicators': {
-        '{ind_calc_name}': {
-            '{ind_asset_name}': {
-                '{ind_timeframe}': {
-                    '{ind_param_set_key}': pd.DataFrame # self._results_map['indicators'][ind_calc_name][ind_asset_name][ind_timeframe][ind_param_set_key]
-                }
-            }
-        } 
+    '{asset_name}': { # Indicators
+        '{cache_key}': pd.Series # self._results_map[asset_name][cache_key]
     }
 }
 
@@ -109,6 +103,11 @@ class Operation(BaseClass, Persistance):
         self._results_map = {} 
         self.unique_datetime_df = pd.DataFrame
 
+        self._curr_tf_context = None
+        self._curr_asset_name_context = None
+        self._curr_df_context = None
+        self._curr_datetime_references = None
+
     # 2 - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtest
     def _operation(self):
         models = self._get_all_models()
@@ -123,6 +122,8 @@ class Operation(BaseClass, Persistance):
             strats = model_obj.strat
             assets = model_obj.assets
             self._results_map[self.name]['models'][model_name] = {'strats': {}}
+            model_tf = model_obj.execution_timeframe
+            self._curr_tf_context = model_tf
 
             for strat_name, strat_obj in strats.items():
                 params = strat_obj.params
@@ -137,7 +138,8 @@ class Operation(BaseClass, Persistance):
                     asset_class = self.assets.get(asset_name, None) # Asset Class
                     if asset_class is None: raise ValueError(f"Asset '{asset_name}' not found in global assets.")
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
-                    
+                    self._curr_datetime_references = asset_class.datetime_candle_references
+
                     if isinstance(strat_obj.operation, Walkforward):
                         isos = strat_obj.operation.isos if strat_obj.operation.isos is not None else ['12_12']
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'] = {'walkforward': {}}
@@ -156,21 +158,24 @@ class Operation(BaseClass, Persistance):
                             static_inds[ind_name] = ind_obj
 
                     # Gets Asset Data
-                    base_asset_df = asset_class.data_get(self.operation_timeframe)
+                    base_asset_df = asset_class.data_get(model_tf)
+                    self._curr_asset_name_context = asset_name
                     
                     # Calculates Static Indicators (unce per Asset)
                     for ind_name, ind_obj in static_inds.items():
-                        base_asset_df = self._calculate_indicator(ind_name, ind_obj, {}, base_asset_df, asset_name, asset_class.datetime_candle_references)
+                        base_asset_df = self._calculate_indicator(model_tf, ind_name, ind_obj, {}, base_asset_df, asset_name, asset_class.datetime_candle_references)
 
                     for param_set_name, param_set_dict in param_sets.items():
                         curr_asset_obj = base_asset_df.copy()
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name] = {'param_set_dict': param_set_dict, 'trades': None}
-                        
+                        self._curr_df_context = curr_asset_obj
+
                         # Calculates Dynamic Indicators
                         for ind_name, ind_obj in dynamic_inds.items():
-                            curr_asset_obj = self._calculate_indicator(ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, asset_class.datetime_candle_references)
+                            curr_asset_obj = self._calculate_indicator(model_tf, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, asset_class.datetime_candle_references)
                         
                         # Calculates Signals
+                        param_set_dict['execution_timeframe'] = model_tf
                         signals = strat_obj.signal_rules # Gets signal functions
                         for curr_signal_def_name, curr_signal_def_obj in signals.items():
                             if curr_signal_def_obj is not None:
@@ -398,164 +403,86 @@ class Operation(BaseClass, Persistance):
 
     # || ===================================================================== || Signals Functions || ===================================================================== ||
 
-    def _calculate_indicator(self, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):
+    def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):
         """
-        Calcula indicadores tratando cache, multi-ativos e multi-timeframes com 
-        alinhamento robusto via transfer_htf_columns.
+        Calcula indicadores com cache único por instância e alinhamento MTF seguro.
         """
-        # 1. RESOLUÇÃO DE PARÂMETROS E CHAVE DE CACHE
-        # Resolvemos 'param1', 'param2' etc para criar uma chave de cache única por valor real
+        # 1. RESOLUÇÃO DE PARÂMETROS
         effective_params = ind_obj.params.copy()
         if param_set_dict:
             for k, v in effective_params.items():
                 if isinstance(v, str) and v in param_set_dict:
                     effective_params[k] = param_set_dict[v]
 
-        # Identificamos o alvo (pode ser outro ativo ou timeframe)
         target_asset = ind_obj.asset if ind_obj.asset else asset_name
-        target_tf = ind_obj.timeframe if ind_obj.timeframe else self.operation_timeframe
+        target_tf = ind_obj.timeframe if ind_obj.timeframe else model_timeframe
         
-        # String de parâmetros para garantir que sma_30 != sma_130 no cache
+        # 2. CHAVE DE CACHE ÚNICA
+        # Usamos o 'ind_name' (ex: 'ma_fast') + params para garantir que 
+        # mesmo que 'ma_fast' e 'ma_slow' tenham janelas iguais em algum momento,
+        # eles ocupem espaços distintos.
         params_str = "_".join([f"{k}_{v}" for k, v in sorted(effective_params.items())])
         cache_key = f"{ind_name}_{target_asset}_{target_tf}_{params_str}"
 
-        # 2. VERIFICAÇÃO DE CACHE GLOBAL
-        if asset_name not in _map: _map[asset_name] = {}
-        if cache_key in _map[asset_name]:
-            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Using cached indicator: {cache_key} for asset: {asset_name}')
-            curr_asset_obj[ind_name] = _map[asset_name][cache_key]
+        # Inicializa cache do ativo se não existir
+        if asset_name not in self._results_map: self._results_map[asset_name] = {}
+        
+        # Retorno rápido se já calculado nesta otimização
+        if cache_key in self._results_map[asset_name]:
+            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Using cached indicator: {ind_name} - Asset: {target_asset} - TF: {target_tf} - Params: {params_str}')
+            curr_asset_obj[ind_name] = self._results_map[asset_name][cache_key]
             return curr_asset_obj
 
-        # 3. SELEÇÃO DO ATIVO DE ORIGEM
+        # 3. OBTENÇÃO DOS DADOS DE ORIGEM
         if target_asset == asset_name:
             source_asset_class = self.assets.get(asset_name)
         else:
             source_asset_class = self.assets.get(target_asset)
             if not source_asset_class:
-                raise ValueError(f"Asset de referência '{target_asset}' não encontrado.")
+                raise ValueError(f"Asset '{target_asset}' não carregado na operação.")
 
-        # Busca os dados (OHLC) do timeframe alvo
         df_source = source_asset_class.data_get(target_tf)
 
-        # 4. CÁLCULO DO INDICADOR
-        # O cálculo é feito no DataFrame de origem (ex: Diário)
-        print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating indicator: {ind_name} for asset: {asset_name} using target asset: {target_asset} at timeframe: {target_tf} with params: {effective_params}')
+        # 4. CÁLCULO REAL
+        print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating indicator: {ind_name} - Asset: {target_asset} - TF: {target_tf} - Params: {params_str}')
         indicator_series = ind_obj.calculate(df_source, param_set_dict=param_set_dict)
 
-        # 5. ALINHAMENTO (JOIN LTF x HTF)
-        # Se o timeframe ou ativo for diferente, usamos sua função transfer_htf_columns
-        # que trata o deslocamento de tempo (shift) para evitar Look-ahead Bias.
-        if target_tf != self.operation_timeframe or target_asset != asset_name:
-            # Preparamos um DF temporário com a série calculada
+        # 5. VERIFICAÇÃO DE ALINHAMENTO (Sua dúvida do item 3)
+        # Verificamos se precisamos de processamento MTF ou se é o mesmo timeframe
+        is_same_asset = (target_asset == asset_name)
+        is_same_tf = (target_tf == model_timeframe)
+
+        if not (is_same_asset and is_same_tf):
+            # Caso MTF ou Ativo Diferente: Alinhamento robusto com sua função
+            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Aligning MTF indicator: {ind_name} - From Asset: {target_asset} - TF: {target_tf} To Asset: {asset_name} - TF: {model_timeframe}')
             df_temp_htf = pd.DataFrame({
                 'datetime': df_source['datetime'],
                 ind_name: indicator_series
             })
 
-            # Chamamos sua função robusta de transferência
             aligned_df = self.transfer_htf_columns(
-                ltf_df=curr_asset_obj[['datetime']], # Apenas o índice temporal do M15
-                ltf_tf=self.operation_timeframe,
+                ltf_df=curr_asset_obj[['datetime']], 
+                ltf_tf=model_timeframe,
                 htf_df=df_temp_htf,
                 htf_tf=target_tf,
                 datetime_reference_candles=datetime_candle_references,
-                add_htf_tag=False # Mantemos o nome original para não quebrar os sinais
+                add_htf_tag=False 
             )
             final_series = aligned_df[ind_name]
         else:
-            # Se for o mesmo ativo e mesmo timeframe, apenas garantimos o alinhamento de índices
-            # (ffill é usado apenas para preencher possíveis gaps de candles ausentes)
-            final_series = indicator_series.reindex(curr_asset_obj.index, method='ffill')
+            # Caso idêntico: Apenas alinhar índice e preencher gaps se houver
+            # O reindex é necessário apenas se os shapes forem diferentes
+            if len(indicator_series) != len(curr_asset_obj):
+                final_series = indicator_series.reindex(curr_asset_obj.index, method='ffill')
+            else:
+                final_series = indicator_series
+                final_series.index = curr_asset_obj.index
 
-        # 6. SALVAMENTO E RETORNO
-        _map[asset_name][cache_key] = final_series
+        # 6. ATUALIZAÇÃO DO CACHE E DO DATAFRAME ATUAL
+        self._results_map[asset_name][cache_key] = final_series
         curr_asset_obj[ind_name] = final_series
         
         return curr_asset_obj
-
-    # def _calculate_indicator(self, ind_calc_name: str, ind_calc_obj, param_set_dict, curr_asset_df_obj: pd.DataFrame=None, curr_asset_name: str=None, datetime_reference_candles='open'): # Calculates each individual indicator and saves in the global mapping
-
-    #     ind_timeframe = ind_calc_obj.timeframe
-    #     if ind_calc_obj.asset is None: 
-    #         ind_asset_name = curr_asset_name
-    #     else: ind_asset_name = ind_calc_obj.asset
-
-    #     # Decomposes param_set to only those relevant to this indicator, to avoid recalculating for unrelated params
-    #     ind_param_set_obj = self.effective_params_from_global(ind_calc_obj.params, param_set_dict)
-    #     ind_param_set_key = self.param_suffix(ind_param_set_obj)
-    #     ind_calc_obj.__dict__['params'] = ind_param_set_obj
-
-    #     # Check if already calculated
-    #     if ind_calc_name in self._results_map.get('indicators', {}) and \
-    #     ind_asset_name in self._results_map['indicators'][ind_calc_name] and \
-    #     ind_timeframe in self._results_map['indicators'][ind_calc_name][ind_asset_name] and \
-    #     ind_param_set_key in self._results_map['indicators'][ind_calc_name][ind_asset_name][ind_timeframe]:
-    #         ind_column_df = self._results_map['indicators'][ind_calc_name][ind_asset_name][ind_timeframe][ind_param_set_key]
-    #     else:
-    #         # Calculate the indicator
-    #         if ind_asset_name == curr_asset_name or ind_asset_name is None:
-    #             # Same asset or no specific asset (use current)
-    #             df_used = curr_asset_df_obj
-    #             ind_result = ind_calc_obj.calculate(curr_asset_df_obj, param_set_dict)
-    #             print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Indicators - {ind_calc_name} - Ind Asset: {ind_calc_obj.asset} - Idx Asset {curr_asset_name} - Timeframe: {ind_timeframe} - Param Set: {ind_param_set_key}')
-    #         else:
-    #             # Different asset: get the data for the indicator asset
-    #             asset_class = global_assets.get(ind_asset_name, None)
-    #             if asset_class is None:
-    #                 raise ValueError(f'< {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Asset \'{ind_asset_name}\' not found in global assets.')
-    #             datetime_reference_candles = asset_class.datetime_candle_references
-    #             ind_asset_df = asset_class.data_get(ind_timeframe)
-    #             df_used = ind_asset_df
-    #             ind_result = ind_calc_obj.calculate(ind_asset_df, param_set_dict)
-    #             print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Indicators - {ind_calc_name} - Ind Asset: {ind_calc_obj.asset} - Idx Asset {curr_asset_name} - Timeframe: {ind_timeframe} - Param Set: {ind_param_set_key}')
-            
-    #         # Ensure ind_column_df is a DataFrame with proper column name and datetime
-    #         if isinstance(ind_result, pd.Series):
-    #             ind_column_df = pd.DataFrame({'datetime': df_used['datetime'], ind_calc_name: ind_result})
-    #         else:
-    #             ind_column_df = ind_result  # Assume DataFrame if multiple columns
-
-    #         # Save to mapping
-    #         if 'indicators' not in self._results_map:
-    #             self._results_map['indicators'] = {}
-    #         if ind_calc_name not in self._results_map['indicators']:
-    #             self._results_map['indicators'][ind_calc_name] = {}
-    #         if ind_asset_name not in self._results_map['indicators'][ind_calc_name]:
-    #             self._results_map['indicators'][ind_calc_name][ind_asset_name] = {}
-    #         if ind_timeframe not in self._results_map['indicators'][ind_calc_name][ind_asset_name]:
-    #             self._results_map['indicators'][ind_calc_name][ind_asset_name][ind_timeframe] = {}
-    #         self._results_map['indicators'][ind_calc_name][ind_asset_name][ind_timeframe][ind_param_set_key] = ind_column_df
-            
-    #     # Now, add the columns to curr_asset_df_obj
-    #     if ind_timeframe == self.operation_timeframe:
-    #         if ind_asset_name == curr_asset_name or ind_asset_name is None: # Same asset and timeframe: just add columns
-    #             for col in ind_column_df.columns:
-    #                 if col not in curr_asset_df_obj.columns:
-    #                     curr_asset_df_obj[col] = ind_column_df[col]
-    #         else: # Different asset, same timeframe: merge on datetime intersection
-    #             # Align by datetime
-    #             merged = pd.merge(curr_asset_df_obj, ind_column_df, on='datetime', how='left', suffixes=('', f'_{ind_calc_name}'))
-    #             # Rename columns if needed, but for now, add as is
-    #             for col in ind_column_df.columns:
-    #                 if col != 'datetime' and col not in curr_asset_df_obj.columns:
-    #                     curr_asset_df_obj[col] = merged[col]
-    #     else:  # Different timeframe: transfer HTF to LTF
-    #         # Use transfer_htf_columns to transfer ind_column_df (HTF) to curr_asset_df_obj (LTF) / Assume ind_timeframe is HTF, self.operation_timeframe is LTF
-    #         transferred = self.transfer_htf_columns(
-    #             ltf_df=curr_asset_df_obj,
-    #             ltf_tf=self.operation_timeframe,
-    #             htf_df=ind_column_df,
-    #             htf_tf=ind_timeframe,
-    #             datetime_reference_candles=datetime_reference_candles,  # Assuming MT5 style
-    #             columns=[col for col in ind_column_df.columns if col != 'datetime'],
-    #             add_htf_tag=False
-    #         )
-    #         # Add the transferred columns to curr_asset_df_obj
-    #         htf_cols = [col for col in transferred.columns if col.endswith(f"_{ind_timeframe}") and col not in curr_asset_df_obj.columns]
-    #         for col in transferred.columns:
-    #             curr_asset_df_obj[col] = transferred[col]
-
-    #     return curr_asset_df_obj
 
     def _get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
@@ -570,22 +497,32 @@ class Operation(BaseClass, Persistance):
             return all_models
         else: return {}
 
-    def _resolve_asset(self, asset: str, timeframe: str, curr_asset_df_obj: pd.DataFrame=None, date_start: pd.Timestamp=None, date_end: pd.Timestamp=None, columns: list[str]=None) -> pd.DataFrame: 
-        asset_class = self.assets.get(asset, None)
-        if asset_class is None:
-            raise ValueError(f'< {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Asset \'{asset}\' not found in global assets.')
-        df = asset_class.data_get(timeframe)
+    def _assets(self, target_asset_name: str, target_tf: str, ltf_df: pd.DataFrame = None, model_timeframe: str = None):
+        # Fallback para o contexto se os argumentos opcionais forem None
+        actual_ltf_df = ltf_df if ltf_df is not None else self._curr_df_context
+        actual_model_tf = model_timeframe if model_timeframe is not None else self._curr_tf_context
+        actual_asset_name = self._curr_asset_name_context
 
-        if columns is not None:
-            df = df[columns + (['datetime'] if 'datetime' in df.columns else ['date'] if 'date' in df.columns else [])]
+        # Validação de segurança
+        if actual_ltf_df is None or actual_model_tf is None:
+            raise ValueError("Contexto de operação não definido. Certifique-se de chamar _assets dentro de um sinal válido.")
 
-        # different timeframes HTF -> LTF
-        if timeframe != self.operation_timeframe:
-            ltf_df = copy.deepcopy(curr_asset_df_obj) # LTF Template
-            df = self.transfer_htf_columns(ltf_df, self.operation_timeframe, df, timeframe, asset_class.datetime_candle_references)
-
-        # if not columns is empty: transfers columns 
-        return df
+        asset_obj = self.assets.get(target_asset_name)
+        df_target = asset_obj.data_get(target_tf)
+        
+        # Identidade: Se pedir o que já está na mão, retorna direto
+        if target_asset_name == actual_asset_name and target_tf == actual_model_tf:
+            return actual_ltf_df
+            
+        # Alinhamento MTF Seguro
+        return self.transfer_htf_columns(
+            ltf_df=actual_ltf_df[['datetime']], 
+            ltf_tf=actual_model_tf,
+            htf_df=df_target,
+            htf_tf=target_tf,
+            datetime_reference_candles=self._curr_datetime_references,
+            add_htf_tag=False
+        )
     
     def effective_params_from_global(self, ind_defaults, global_ps):
         eff = {}
@@ -897,11 +834,18 @@ if __name__ == "__main__":
 
 
     model_assets=['EURUSD'] # Only keys #, 'GBPUSD'
-    model_execution_tf = 'H1'
+    model_execution_tf = 'M15'
 
     Params = {
         'AT15': { 
             'execution_tf': model_execution_tf,
+            'sl_perc': range(2, 2+1, 1), # 3
+            'param1': range(20, 20+1, 30), #50
+            'param2': range(2, 2+1, 1), # 3
+            'param3': ['sma'] #, 'ema', 'ema'
+        },
+        'AT16': { 
+            'execution_tf': 'M30',
             'sl_perc': range(2, 2+1, 1), # 3
             'param1': range(20, 20+1, 30), #50
             'param2': range(2, 2+1, 1), # 3
@@ -914,10 +858,14 @@ if __name__ == "__main__":
         'sma': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         'ema_htf': MA(asset='GBPUSD', timeframe='D1', window=252, ma_type='ema') #, price_col='open'
     }
+    ind2 = { 
+        'sma': MA(asset=None, timeframe='M30', window='param1', ma_type='param3', price_col='close'),
+        'ema_htf': MA(asset='USDJPY', timeframe='H1', window='param1', ma_type='sma') #, price_col='open'
+    }
 
     def entry_long(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict): 
-        df_D1 = self._resolve_asset(curr_asset_name, 'D1', df)
-        df_EURUSD_D1 = self._resolve_asset('EURUSD', 'D1', df)
+        df_D1 = self._assets(curr_asset_name, 'D1')
+        df_EURUSD_D1 = self._assets('EURUSD', 'D1')
 
         sl_perc = curr_param_set['sl_perc']
         diff = df['close']*(sl_perc/100)
@@ -927,8 +875,8 @@ if __name__ == "__main__":
         return signal
     
     def entry_short(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict): 
-        df_D1 = self._resolve_asset(curr_asset_name, 'D1', df)
-        df_EURUSD_D1 = self._resolve_asset('EURUSD', 'D1', df)
+        df_D1 = self._assets(curr_asset_name, 'D1')
+        df_EURUSD_D1 = self._assets('EURUSD', 'D1')
 
         sl_perc = curr_param_set['sl_perc']
         diff = df['close']*(sl_perc/100)
@@ -970,6 +918,35 @@ if __name__ == "__main__":
             }
         )
     )
+    
+    AT16 = Strat(
+        StratParams(
+            name="AT16",
+            operation=Backtest(BacktestParams(name='backtest_test')),
+            execution_settings=ExecutionSettings(order_type='market', offset=0.0),
+            data_settings=DataSettings(fill_method='ffill', fillna=0),
+            mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+            params=Params['AT16'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
+            time_settings=TimeSettings(day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, friday_close=False, timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
+            indicators=ind2,
+            signal_rules={
+                'entry_long': entry_long,
+                'entry_short': entry_short,
+                'exit_tf_long': exit_tf_long,
+                'exit_tf_short': exit_tf_short,
+                'exit_sl_long': None,
+                'exit_sl_short': None,
+                'exit_tp_long': None,
+                'exit_tp_short': None,
+                'exit_nb_long': None,
+                'exit_nb_short': None,
+                'be_pos_long': None,
+                'be_pos_short': None,
+                'be_neg_long': None,
+                'be_neg_short': None
+            }
+        )
+    )
 
     model_1 = Model(
         ModelParams(
@@ -981,16 +958,26 @@ if __name__ == "__main__":
             model_system_manager=None  # Optional - will use default system management
         )
     )
+    model_2 = Model(
+        ModelParams(
+            name='MA Trend Following 2',
+            assets=['GBPUSD', 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
+            strat={'AT16': AT16},
+            execution_timeframe='M30',
+            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model2_MM")),
+            model_system_manager=None  # Optional - will use default system management
+        )
+    )
 
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=model_1,
+            data=[model_1, model_2],
             #operation=Backtest(BacktestParams(name='backtest_test')),
             pre_backtest_signal_is_position=False,
             operation_backtest_all_signals_are_positions=False,
             assets=global_assets,
-            operation_timeframe=model_execution_tf,
+            operation_timeframe=model_execution_tf, # Must always be the smaller timeframe among all strat execution_timeframe
             date_start=None, #'2020-01-01',
             date_end=None, #'2023-01-01',
             save=False,
