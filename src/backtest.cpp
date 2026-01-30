@@ -29,6 +29,10 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
         const auto& df_json = dataset.at("data");
         const auto& time_settings = dataset.at("time_settings");
 
+        auto params = meta.at("params");
+        double stop_loss_dist = (params.contains("stop_loss") && !params["stop_loss"].is_null()) 
+                        ? params["stop_loss"].get<double>() : 0.0;
+
         // 2. Extração de vetores com verificação de existência
         // Se a coluna não existir, inicializa vetor vazio para não travar
         auto get_v_double = [&](const std::string& key) {
@@ -82,18 +86,14 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
                     stop_loss = low[i];
                     take_profit = high[i];
                     trailing_sl = stop_loss;
-                    current_trade = { generate_id(), dataset_key, "open", "long", entry_price_val, datetime[i], 1.0 };
-                    current_trade.stop_loss = stop_loss;
-                    current_trade.take_profit = take_profit;
+                    current_trade = { generate_id(), dataset_key, "open", entry_price_val, datetime[i], 1.0, stop_loss, take_profit };
                 } else if (entry_short[i] == 1) {
                     in_position = true; is_long = false;
                     entry_price_val = open[i];
                     stop_loss = high[i];
                     take_profit = low[i];
                     trailing_sl = stop_loss;
-                    current_trade = { generate_id(), dataset_key, "open", "short", entry_price_val, datetime[i], 1.0 };
-                    current_trade.stop_loss = stop_loss;
-                    current_trade.take_profit = take_profit;
+                    current_trade = { generate_id(), dataset_key, "open", entry_price_val, datetime[i], -1.0, stop_loss, take_profit };
                 }
             } else {
                 // Gestão de Saída
@@ -118,12 +118,17 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
 
                 if (exit) {
                     double pnl = is_long ? (exit_price - entry_price_val) : (entry_price_val - exit_price);
+                    
                     current_trade.status = "closed";
                     current_trade.exit_price = exit_price;
                     current_trade.exit_datetime = datetime[i];
                     current_trade.exit_reason = reason;
+
+                    current_trade.lot_size = is_long ? 1.0 : -1.0;
+
                     current_trade.profit = (pnl / entry_price_val) * 100.0;
                     current_trade.profit_r = pnl;
+                    
                     trades.push_back(current_trade);
                     in_position = false;
                 }

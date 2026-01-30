@@ -5,11 +5,19 @@ class Indicator:
         self.asset = asset
         self.timeframe = timeframe
         self.params = params
-
         self.name = self.__class__.__name__.lower()
 
-    def calculate(self, df: pd.DataFrame):
-        raise NotImplementedError
+    def calculate(self, df: pd.DataFrame, param_set_dict: dict = None): 
+        # Solves indicator vars before calling real logic
+        effective_params = self.params.copy()
+        if param_set_dict:
+            for k, v in effective_params.items():
+                if isinstance(v, str) and v in param_set_dict:
+                    effective_params[k] = param_set_dict[v]
+        return self._calculate_logic(df, **effective_params)
+
+    def _calculate_logic(self, df: pd.DataFrame, **kwargs):
+        raise NotImplementedError("Subclasses must implement _calculate_logic method.")
 
     # 1. Agora deve retornar um dict com as keys do param_sets, sem recalcular desn, podendo ser chamado com param_set
     # def calculate_all_sets(self, df: pd.DataFrame, param_sets: dict = None, asset_name: str = None, timeframe: str = None, sep: str = '-') -> dict:

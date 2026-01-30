@@ -1,24 +1,13 @@
 import pandas as pd
 from Indicator import Indicator
 
+
 class MA(Indicator):
-    """
-    Moving Average indicator
-    
-    Parameters:
-        window: int, list or range - MA period (default: 21)
-        ma_type: str or list - 'sma' or 'ema' (default: 'sma')  
-        price_col: str - Price column (default: 'close')
-    """
-    
-    def __init__(self, asset=None, timeframe=None, **params):
-        super().__init__(asset, timeframe, **params)
-        self.params = params  # Define self.params explicitamente para garantir atualização
-    
-    def calculate(self, df: pd.DataFrame) -> pd.Series:
-        window = self.params.get('window', 21)
-        ma_type = self.params.get('ma_type', 'sma')
-        price_col = self.params.get('price_col', 'close')
+    def _calculate_logic(self, df: pd.DataFrame, **kwargs) -> pd.Series:
+        window = kwargs.get('window', 21)
+        #window = int(float(window))
+        ma_type = kwargs.get('ma_type', 'sma')
+        price_col = kwargs.get('price_col', 'close')
 
         if ma_type == 'sma':
             return df[price_col].rolling(window=window, min_periods=window).mean()
@@ -26,6 +15,32 @@ class MA(Indicator):
             return df[price_col].ewm(span=window, adjust=False).mean()
         else:
             raise ValueError(f"Unsupported MA type: {ma_type}")
+
+# class MA(Indicator):
+#     """
+#     Moving Average indicator
+    
+#     Parameters:
+#         window: int, list or range - MA period (default: 21)
+#         ma_type: str or list - 'sma' or 'ema' (default: 'sma')  
+#         price_col: str - Price column (default: 'close')
+#     """
+    
+#     def __init__(self, asset=None, timeframe=None, **params):
+#         super().__init__(asset, timeframe, **params)
+#         self.params = params  # Define self.params explicitamente para garantir atualização
+    
+#     def _calculate_logic(self, df: pd.DataFrame) -> pd.Series:
+#         window = self.params.get('window', 21)
+#         ma_type = self.params.get('ma_type', 'sma')
+#         price_col = self.params.get('price_col', 'close')
+
+#         if ma_type == 'sma':
+#             return df[price_col].rolling(window=window, min_periods=window).mean()
+#         elif ma_type == 'ema':
+#             return df[price_col].ewm(span=window, adjust=False).mean()
+#         else:
+#             raise ValueError(f"Unsupported MA type: {ma_type}")
         
 
         

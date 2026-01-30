@@ -10,7 +10,6 @@ inline nlohmann::json trades_to_json(const std::vector<Trade>& trades) {
             {"id", t.id},
             {"asset", t.asset},
             {"status", t.status},
-            {"direction", t.direction},
             {"entry_price", t.entry_price},
             {"entry_datetime", t.entry_datetime},
             {"lot_size", t.lot_size},

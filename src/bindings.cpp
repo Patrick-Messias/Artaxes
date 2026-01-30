@@ -13,7 +13,6 @@ PYBIND11_MODULE(engine_cpp, m) {
         .def_readonly("id", &Trade::id)
         .def_readonly("asset", &Trade::asset)
         .def_readonly("status", &Trade::status)
-        .def_readonly("direction", &Trade::direction)
         .def_readonly("entry_price", &Trade::entry_price)
         .def_readonly("entry_datetime", &Trade::entry_datetime)
         .def_readonly("lot_size", &Trade::lot_size)
