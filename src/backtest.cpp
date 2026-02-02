@@ -72,22 +72,37 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
         bool is_long = false;
         Trade current_trade;
         double entry_price_val = 0.0;
+        
+        // Checks if backtest has stop_loss then initialize variable, else ramains 0 and not used in logic
         double stop_loss = 0.0;
         double take_profit = 0.0;
         double trailing_sl = 0.0;
 
+        int number_of_bars_close = 0; //int number_of_bars_close = time_settings.value("number_of_bars_close", 0);
+        /*
+        auto count_bars_since_entry = [&](size_t current_index) { // On each open bar checks how many bars have passed since entry
+            if (current_trade.status != "open") return 0;
+            size_t count = 0;
+            for (size_t i = current_index; i > 0; --i) {
+                if (datetime[i] == current_trade.entry_datetime) break;
+                count++;
+            }
+            return count;
+        };
+        */
+       
         // 4. Loop de Backtest
         for (size_t i = 1; i < n; ++i) {
             if (!in_position) {
                 // Sinais de Entrada
-                if (entry_long[i] == 1) {
+                if (entry_long[i-1] == 1) {
                     in_position = true; is_long = true;
                     entry_price_val = open[i];
                     stop_loss = low[i];
                     take_profit = high[i];
                     trailing_sl = stop_loss;
                     current_trade = { generate_id(), dataset_key, "open", entry_price_val, datetime[i], 1.0, stop_loss, take_profit };
-                } else if (entry_short[i] == 1) {
+                } else if (entry_short[i-1] == 1) {
                     in_position = true; is_long = false;
                     entry_price_val = open[i];
                     stop_loss = high[i];
@@ -103,17 +118,25 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
 
                 // Trailing & Stop/TP básico
                 if (is_long) {
-                    trailing_sl = std::max(trailing_sl, low[i]);
-                    if (low[i] <= stop_loss) { exit = true; reason = "stop_loss"; exit_price = stop_loss; }
-                    else if (high[i] >= take_profit) { exit = true; reason = "take_profit"; exit_price = take_profit; }
-                    else if (low[i] <= trailing_sl) { exit = true; reason = "trailing_stop"; exit_price = trailing_sl; }
-                    else if (!exit_tf_long.empty() && exit_tf_long[i]) { exit = true; reason = "tf_exit"; }
+                    if (number_of_bars_close > 0 && count_bars_since_entry(i) >= number_of_bars_close) {
+                        exit = true; reason = "max_bars_reached"; exit_price = close[i]; }
+                    else {
+                        trailing_sl = std::max(trailing_sl, low[i]);
+                        if (low[i] <= stop_loss) { exit = true; reason = "stop_loss"; exit_price = stop_loss; }
+                        else if (high[i] >= take_profit) { exit = true; reason = "take_profit"; exit_price = take_profit; }
+                        else if (low[i] <= trailing_sl) { exit = true; reason = "trailing_stop"; exit_price = trailing_sl; }
+                        else if (!exit_tf_long.empty() && exit_tf_long[i]) { exit = true; reason = "tf_exit"; }
+                    }
                 } else {
-                    trailing_sl = std::min(trailing_sl, high[i]);
-                    if (high[i] >= stop_loss) { exit = true; reason = "stop_loss"; exit_price = stop_loss; }
-                    else if (low[i] <= take_profit) { exit = true; reason = "take_profit"; exit_price = take_profit; }
-                    else if (high[i] >= trailing_sl) { exit = true; reason = "trailing_stop"; exit_price = trailing_sl; }
-                    else if (!exit_tf_short.empty() && exit_tf_short[i]) { exit = true; reason = "tf_exit"; }
+                    if (number_of_bars_close > 0 && count_bars_since_entry(i) >= number_of_bars_close) {
+                        exit = true; reason = "max_bars_reached"; exit_price = close[i]; }
+                    else {
+                        trailing_sl = std::min(trailing_sl, high[i]);
+                        if (high[i] >= stop_loss) { exit = true; reason = "stop_loss"; exit_price = stop_loss; }
+                        else if (low[i] <= take_profit) { exit = true; reason = "take_profit"; exit_price = take_profit; }
+                        else if (high[i] >= trailing_sl) { exit = true; reason = "trailing_stop"; exit_price = trailing_sl; }
+                        else if (!exit_tf_short.empty() && exit_tf_short[i]) { exit = true; reason = "tf_exit"; }
+                    }
                 }
 
                 if (exit) {

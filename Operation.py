@@ -1,4 +1,4 @@
-import pandas as pd, numpy as np, json, sys, uuid, copy, datetime, psutil
+import polars as pl, numpy as np, json, sys, uuid, copy, datetime, psutil
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
@@ -7,7 +7,6 @@ from dataclasses import dataclass, field, asdict, is_dataclass
 from Model import ModelParams, Model
 from Asset import Asset, AssetParams
 from Strat import Strat, StratParams, ExecutionSettings, DataSettings, TimeSettings
-from OptimizedOperationResult import OptimizedOperationResult
 from Portfolio import Portfolio, PortfolioParams
 from Backtest import Backtest, BacktestParams
 from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
@@ -17,7 +16,6 @@ from Optimization import Optimization
 from Walkforward import Walkforward
 from Indicator import Indicator
 from BaseClass import BaseClass
-from Persistance import Persistance
 from itertools import product
 from Trade import Trade
 from MA import MA # type: ignore
@@ -60,7 +58,7 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
         }
     },
     '{asset_name}': { # Indicators
-        '{cache_key}': pd.Series # self._results_map[asset_name][cache_key]
+        '{cache_key}': pl.Series # self._results_map[asset_name][cache_key]
     }
 }
 
@@ -84,7 +82,7 @@ class OperationParams():
     date_end: str=None
     save: bool=False
     
-class Operation(BaseClass, Persistance):
+class Operation(BaseClass):
     def __init__(self, op_params: OperationParams):
         super().__init__()
         self.name = op_params.name
@@ -100,15 +98,21 @@ class Operation(BaseClass, Persistance):
         self.date_end = op_params.date_end
         self.save = op_params.save
 
-        self._results_map = {} 
-        self.unique_datetime_df = pd.DataFrame
+        self._results_map = {}  
+        self.unique_datetime_df = pl.DataFrame
 
-        self._curr_tf_context = None
-        self._curr_asset_name_context = None
-        self._curr_df_context = None
-        self._curr_datetime_references = None
+        self._curr_asset: Optional[str] = None
+        self._curr_df_context: Optional[pl.DataFrame] = None
+        self._curr_tf_context: Optional[str] = None
+        self._curr_datetime_references: Optional[str] = None
 
-    # 2 - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtest
+    # || ===================================================================== || I - Operation Validation || ===================================================================== ||
+
+    def _validate_operation(self):
+        pass
+
+    # || ===================================================================== || II - Data Processing || ===================================================================== ||
+
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
@@ -159,14 +163,14 @@ class Operation(BaseClass, Persistance):
 
                     # Gets Asset Data
                     base_asset_df = asset_class.data_get(model_tf)
-                    self._curr_asset_name_context = asset_name
+                    self._curr_asset = asset_name
                     
                     # Calculates Static Indicators (unce per Asset)
                     for ind_name, ind_obj in static_inds.items():
                         base_asset_df = self._calculate_indicator(model_tf, ind_name, ind_obj, {}, base_asset_df, asset_name, asset_class.datetime_candle_references)
 
                     for param_set_name, param_set_dict in param_sets.items():
-                        curr_asset_obj = base_asset_df.copy()
+                        curr_asset_obj = base_asset_df.clone()
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name] = {'param_set_dict': param_set_dict, 'trades': None}
                         self._curr_df_context = curr_asset_obj
 
@@ -179,8 +183,13 @@ class Operation(BaseClass, Persistance):
                         signals = strat_obj.signal_rules # Gets signal functions
                         for curr_signal_def_name, curr_signal_def_obj in signals.items():
                             if curr_signal_def_obj is not None:
-                                curr_asset_obj[curr_signal_def_name] = curr_signal_def_obj(self, asset_name, curr_asset_obj, param_set_dict)
-                                num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
+                                #curr_asset_obj[curr_signal_def_name] = curr_signal_def_obj(self, curr_asset_obj, param_set_dict)
+                                signal_series = curr_signal_def_obj(self, curr_asset_obj, param_set_dict)
+                                curr_asset_obj = curr_asset_obj.with_columns([
+                                    pl.Series(curr_signal_def_name, signal_series)
+                                ])
+                                
+                                num_true_signals = curr_asset_obj.select(pl.col(curr_signal_def_name).sum()).item() #num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
                                 print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
                         
                         #curr_asset_obj.to_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx', index=False)
@@ -218,15 +227,41 @@ class Operation(BaseClass, Persistance):
 
         return True
     
+    # || ===================================================================== || III - Portfolio Simulator || ===================================================================== ||
+
+    def _simulate_portfolio(self, portfolio_backtests_dict ='All'):
+        # 1. Selects over all models -> strats -> assets -> param_sets, while iterating verifies if any walkforward operation is present
+        # 2. Either selects 1 specific param_set for each strat/asset, iterates over all param_sets or select wf_param_set and iterates over walkforward param_sets
+        # 3. Selects all unique datetime from selected backtest trades
+        # 4. Iterates over datetimes, ranks param_sets based on previous trades results with some metric (ex: equity, profit factor, etc)
+        # 5. For each datetime checks for entries and exits on each strat/asset/param_set simulating a portfolio with real money management and trade management rules
+
+
+
+        if portfolio_backtests_dict == 'All': # Uses all backtests from _results_map, else if dict with paths, uses only those backtests 
+            pass
+
+        pass
+
+    def _walkforward(self):
+        # 1. Iterates over all models -> strats -> assets -> param_sets
+        # 2. For each param_set, splits data in multiple isos (in-sample and out-of-sample periods)
+        # 3. For each iso, selects results from already calculated trade results from backtest operation
+        # 4. Analyzes each iso results and aggregates to final walkforward results
+
+        pass
+
+    def _operation_analysis(self):
+        pass
+
     # || ===================================================================== || Execution Functions || ===================================================================== ||
-
-
 
     def _run_cpp_operation(self, batch_payload: dict):
         try:
-            # 1. Garantees DLL path
+            # 1. Garante o caminho da DLL
             path_to_dll = r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release"
-            if path_to_dll not in sys.path: sys.path.append(path_to_dll)
+            if path_to_dll not in sys.path: 
+                sys.path.append(path_to_dll)
             import engine_cpp
 
             payload_to_send = {"datasets": {}, "meta": {}}
@@ -234,37 +269,53 @@ class Operation(BaseClass, Persistance):
 
             for key, content in batch_payload.items():
                 last_key = key
-                df = content['data'].copy()
+                df = content['data'].clone()
                 
-                # OHLC numerical type
-                cols_num = df.select_dtypes(include=[np.number]).columns
-                df[cols_num] = df[cols_num].ffill().fillna(0.0).astype(float)
-                
-                # signals -> int
-                for col in ['entry_long', 'entry_short', 'exit_tf_long', 'exit_tf_short']:
-                    if col in df.columns:
-                        df[col] = df[col].fillna(0).astype(int)
-                
-                if 'datetime' in df.columns and not pd.api.types.is_string_dtype(df['datetime']):
-                    df['datetime'] = df['datetime'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                # --- TRATAMENTO DE DATETIME (CORREÇÃO DO ERRO) ---
+                if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
+                    df = df.with_columns(
+                        # No Polars moderno, usa-se to_string em vez de format
+                        pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S')
+                    )
 
-                # Complext objects convertion (TimeSettings, ExecutionSettings, etc)
+                # --- TRATAMENTO DE SINAIS (PREVENÇÃO DE ERROS DE DTYPE) ---
+                signals = [
+                    'entry_long', 'entry_short', 
+                    'exit_tf_long', 'exit_tf_short', 
+                    'exit_tp_long', 'exit_tp_short', 
+                    'exit_sl_long', 'exit_sl_short'
+                ]
+                cols_signals = [c for c in signals if c in df.columns]
+                
+                if cols_signals:
+                    # Cast para Int32 antes do fill_null evita ambiguidade com Boolean
+                    df = df.with_columns([
+                        pl.col(c).cast(pl.Int32, strict=False).fill_null(0) for c in cols_signals
+                    ])
+                
+                # --- TRATAMENTO NUMÉRICO (OHLC e Indicadores) ---
+                cols_num = [
+                    name for name, dtype in df.schema.items() 
+                    if dtype.is_numeric() and name not in signals
+                ]
+                
+                if cols_num:
+                    df = df.with_columns([
+                        pl.col(c).cast(pl.Float64).fill_null(0.0) for c in cols_num
+                    ])
+
+                # Conversão de objetos complexos para dicionários simples
                 def to_plain_dict(obj):
-                    if is_dataclass(obj):
-                        return asdict(obj)
-                    if hasattr(obj, 'to_dict'):
-                        return obj.to_dict()
-                    if isinstance(obj, dict):
-                        return {k: to_plain_dict(v) for k, v in obj.items()}
-                    if isinstance(obj, list):
-                        return [to_plain_dict(x) for x in obj]
+                    if is_dataclass(obj): return asdict(obj)
+                    if hasattr(obj, 'to_dict'): return obj.to_dict()
+                    if isinstance(obj, dict): return {k: to_plain_dict(v) for k, v in obj.items()}
+                    if isinstance(obj, list): return [to_plain_dict(x) for x in obj]
                     return obj
 
-                # Simplified time_settings and meta
                 clean_time_settings = to_plain_dict(content.get('time_settings', {}))
                 raw_meta = to_plain_dict(content.get('meta', {}))
                 
-                # Safely extract numeric parameters to C++
+                # Parâmetros numéricos para o C++
                 params = raw_meta.get('params', {}) if isinstance(raw_meta, dict) else {}
                 clean_params = {}
                 for pk, pv in params.items():
@@ -273,7 +324,7 @@ class Operation(BaseClass, Persistance):
                     else: clean_params[pk] = str(pv) if pv else ""
 
                 payload_to_send["datasets"][key] = {
-                    "data": df.to_dict(orient='list'),
+                    "data": df.to_dict(as_series=False),
                     "time_settings": clean_time_settings,
                     "meta": {"params": clean_params}
                 }
@@ -281,7 +332,7 @@ class Operation(BaseClass, Persistance):
             if last_key:
                 payload_to_send["meta"] = payload_to_send["datasets"][last_key]["meta"]
 
-            # Serialization with datetime handling
+            # Serialização JSON com suporte a tipos de data remanescentes
             def json_serial(obj):
                 if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
                     return obj.isoformat()
@@ -289,7 +340,6 @@ class Operation(BaseClass, Persistance):
 
             json_str = json.dumps(payload_to_send, default=json_serial)
             
-            # Execution
             print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - JSON Ready, calling C++...')
             raw_output = engine_cpp.run(json_str)
             
@@ -298,10 +348,8 @@ class Operation(BaseClass, Persistance):
         except Exception as e:
             print(f'< Error in Python-C++ Bridge: {e}')
             import traceback
-            traceback.print_exc() # Helps see if any line fails
+            traceback.print_exc()
             return []
-
-
 
     def _serialize_batch_to_json(self, batch_payload):
         data = {
@@ -313,9 +361,10 @@ class Operation(BaseClass, Persistance):
             "datasets": {}
         }
 
-        # Função de suporte para tipos NumPy e Timestamps que o JSON nativo não aceita
+        # Função de suporte para tipos NumPy e Datetimes do Polars
         def _json_default(obj):
-            if isinstance(obj, (datetime.datetime, pd.Timestamp)):
+            # Polars utiliza datetime nativo do Python ou objetos específicos que str() resolve
+            if isinstance(obj, (datetime.datetime, datetime.date)):
                 return obj.strftime('%Y-%m-%d %H:%M:%S')
             if isinstance(obj, np.integer):
                 return int(obj)
@@ -326,17 +375,19 @@ class Operation(BaseClass, Persistance):
             return str(obj)
 
         for key, payload in batch_payload.items():
-            # data["datasets"][key] = ...
+            # No Polars, to_dict(as_series=False) gera o formato {coluna: [lista_de_valores]}
+            # que é o equivalente ao orient='list' do Pandas.
+            df_dict = payload["data"].to_dict(as_series=False)
+
             data["datasets"][key] = {
-                "data": payload["data"].to_dict(orient='list'),
+                "data": df_dict,
                 "params": payload["params"],
                 "time_settings": asdict(payload["time_settings"]) if is_dataclass(payload["time_settings"]) else payload["time_settings"],
                 "execution_settings": asdict(payload["execution_settings"]) if is_dataclass(payload["execution_settings"]) else payload["execution_settings"],
                 "signal_rules": payload["signal_rules"]
             }
 
-        # O uso do allow_nan=False forçaria um erro no Python se algo escapasse, 
-        # mas nossa limpeza acima (cols_numeric) deve resolver.
+        # O Polars é muito rigoroso com tipos; a conversão para dict acima já prepara o terreno
         return json.dumps(data, default=_json_default)
 
     def _save_trades(self, trades):
@@ -352,6 +403,7 @@ class Operation(BaseClass, Persistance):
         print(f"> Gravando {len(trades)} trades no mapa de resultados...")
         
         for trade in trades:
+            # O motor C++ retorna o 'asset' contendo a chave composta que enviamos
             full_key = trade.get("asset", "")
             # Ex: 'MA Trend Following_AT15_EURUSD_param_set-2-20-2-sma-M15'
             
@@ -367,15 +419,15 @@ class Operation(BaseClass, Persistance):
                     model_name, strat_name, asset_name = parts[0], parts[1], parts[2]
                     
                     try:
-                        # Navega na estrutura do results_map
+                        # Navega na estrutura do results_map (Dicionário padrão Python)
                         target = self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["param_sets"][param_set_name]
                         
                         if target.get("trades") is None:
                             target["trades"] = []
                         
                         target["trades"].append(trade)
-                    except KeyError as e:
-                        # print(f"Chave não encontrada: {e}")
+                    except KeyError:
+                        # Se a chave não existir (ex: filtro de data ou erro no payload), ignora
                         continue
         
         print(f"> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trades gravados com sucesso.")
@@ -386,8 +438,8 @@ class Operation(BaseClass, Persistance):
             return json.loads(json_data)
         return json_data # Pybind11 geralmente já converte std::vector<Trade> para list[dict]
 
-    def _estimate_paramset_size_mb(self, df):
-        return df.memory_usage(deep=True).sum() / (1024 ** 2)  
+    def _estimate_paramset_size_mb(self, df: pl.DataFrame):
+        return df.estimated_size() / (1024 ** 2) # No Polars, estimated_size() retorna o tamanho em bytes
     
     def _get_available_memory_mb(self):
         return psutil.virtual_memory().available / (1024 ** 2)
@@ -403,10 +455,9 @@ class Operation(BaseClass, Persistance):
 
     # || ===================================================================== || Signals Functions || ===================================================================== ||
 
-    def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):
-        """
-        Calcula indicadores com cache único por instância e alinhamento MTF seguro.
-        """
+    def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):        
+        # Calcula indicadores com cache único por instância e alinhamento MTF seguro.
+        
         # 1. RESOLUÇÃO DE PARÂMETROS
         effective_params = ind_obj.params.copy()
         if param_set_dict:
@@ -430,22 +481,26 @@ class Operation(BaseClass, Persistance):
         # Retorno rápido se já calculado nesta otimização
         if cache_key in self._results_map[asset_name]:
             print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Using cached indicator: {ind_name} - Asset: {target_asset} - TF: {target_tf} - Params: {params_str}')
-            curr_asset_obj[ind_name] = self._results_map[asset_name][cache_key]
-            return curr_asset_obj
+            return curr_asset_obj.with_columns([
+                self._results_map[asset_name][cache_key].alias(ind_name)
+            ])
 
         # 3. OBTENÇÃO DOS DADOS DE ORIGEM
-        if target_asset == asset_name:
-            source_asset_class = self.assets.get(asset_name)
-        else:
-            source_asset_class = self.assets.get(target_asset)
-            if not source_asset_class:
-                raise ValueError(f"Asset '{target_asset}' não carregado na operação.")
+        source_asset_class = self.assets.get(target_asset)
+        if not source_asset_class:
+            raise ValueError(f"Asset '{target_asset}' não carregado na operação.")
 
         df_source = source_asset_class.data_get(target_tf)
 
         # 4. CÁLCULO REAL
         print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating indicator: {ind_name} - Asset: {target_asset} - TF: {target_tf} - Params: {params_str}')
-        indicator_series = ind_obj.calculate(df_source, param_set_dict=param_set_dict)
+        indicator_result = ind_obj.calculate(df_source, param_set_dict=param_set_dict)
+
+        # Garantir que temos uma Series
+        if isinstance(indicator_result, pl.DataFrame):
+            indicator_series = indicator_result.select(pl.all().exclude("datetime")).to_series()
+        else:
+            indicator_series = indicator_result
 
         # 5. VERIFICAÇÃO DE ALINHAMENTO (Sua dúvida do item 3)
         # Verificamos se precisamos de processamento MTF ou se é o mesmo timeframe
@@ -455,34 +510,36 @@ class Operation(BaseClass, Persistance):
         if not (is_same_asset and is_same_tf):
             # Caso MTF ou Ativo Diferente: Alinhamento robusto com sua função
             print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Aligning MTF indicator: {ind_name} - From Asset: {target_asset} - TF: {target_tf} To Asset: {asset_name} - TF: {model_timeframe}')
-            df_temp_htf = pd.DataFrame({
-                'datetime': df_source['datetime'],
-                ind_name: indicator_series
+            df_temp_htf = pl.DataFrame({
+                'datetime': df_source['datetime'].to_list() if hasattr(df_source['datetime'], 'to_list') else df_source['datetime'],
+                ind_name: indicator_series.to_numpy() if hasattr(indicator_series, 'to_numpy') else indicator_series
             })
 
             aligned_df = self.transfer_htf_columns(
-                ltf_df=curr_asset_obj[['datetime']], 
+                ltf_df=curr_asset_obj.select(['datetime']), 
                 ltf_tf=model_timeframe,
                 htf_df=df_temp_htf,
                 htf_tf=target_tf,
                 datetime_reference_candles=datetime_candle_references,
                 add_htf_tag=False 
             )
-            final_series = aligned_df[ind_name]
+            final_series = aligned_df[ind_name].fill_null(strategy="forward")
         else:
             # Caso idêntico: Apenas alinhar índice e preencher gaps se houver
             # O reindex é necessário apenas se os shapes forem diferentes
-            if len(indicator_series) != len(curr_asset_obj):
-                final_series = indicator_series.reindex(curr_asset_obj.index, method='ffill')
-            else:
-                final_series = indicator_series
-                final_series.index = curr_asset_obj.index
+            final_series = indicator_series
+            # if len(indicator_series) != len(curr_asset_obj):
+            #     final_series = indicator_series.reindex(curr_asset_obj.index, method='ffill')
+            # else:
+            #     final_series = indicator_series
+            #     final_series.index = curr_asset_obj.index
 
         # 6. ATUALIZAÇÃO DO CACHE E DO DATAFRAME ATUAL
         self._results_map[asset_name][cache_key] = final_series
-        curr_asset_obj[ind_name] = final_series
         
-        return curr_asset_obj
+        return curr_asset_obj.with_columns([
+            final_series.alias(ind_name)
+        ])
 
     def _get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
@@ -497,28 +554,24 @@ class Operation(BaseClass, Persistance):
             return all_models
         else: return {}
 
-    def _assets(self, target_asset_name: str, target_tf: str, ltf_df: pd.DataFrame = None, model_timeframe: str = None):
-        # Fallback para o contexto se os argumentos opcionais forem None
-        actual_ltf_df = ltf_df if ltf_df is not None else self._curr_df_context
-        actual_model_tf = model_timeframe if model_timeframe is not None else self._curr_tf_context
-        actual_asset_name = self._curr_asset_name_context
-
-        # Validação de segurança
-        if actual_ltf_df is None or actual_model_tf is None:
-            raise ValueError("Contexto de operação não definido. Certifique-se de chamar _assets dentro de um sinal válido.")
+    def _assets(self, target_asset_name: str, target_tf: str):
+        # Recupera do contexto da classe
+        actual_ltf_df = self._curr_df_context
+        actual_model_tf = self._curr_tf_context
+        actual_asset_name = self._curr_asset
 
         asset_obj = self.assets.get(target_asset_name)
-        df_target = asset_obj.data_get(target_tf)
+        htf_df = asset_obj.data_get(target_tf) # Retorna pl.DataFrame
         
-        # Identidade: Se pedir o que já está na mão, retorna direto
+        # Se for o mesmo ativo e TF, retorna o DF de contexto
         if target_asset_name == actual_asset_name and target_tf == actual_model_tf:
             return actual_ltf_df
             
-        # Alinhamento MTF Seguro
+        # Usa a função original para alinhar
         return self.transfer_htf_columns(
-            ltf_df=actual_ltf_df[['datetime']], 
+            ltf_df=actual_ltf_df.select(["datetime"]), # Apenas datetime para o join
             ltf_tf=actual_model_tf,
-            htf_df=df_target,
+            htf_df=htf_df,
             htf_tf=target_tf,
             datetime_reference_candles=self._curr_datetime_references,
             add_htf_tag=False
@@ -590,114 +643,60 @@ class Operation(BaseClass, Persistance):
 
     def transfer_htf_columns(
         self,
-        ltf_df: pd.DataFrame,
+        ltf_df: pl.DataFrame,
         ltf_tf: str,
-        htf_df: pd.DataFrame,
+        htf_df: pl.DataFrame,
         htf_tf: str,
-        datetime_reference_candles: str = 'open',  # 'open' (MT5) ou 'close'
+        datetime_reference_candles: str = 'open',
         columns: Optional[List[str]] = None,
         add_htf_tag: bool = True
-    ) -> pd.DataFrame:
-        # Transfers HTF columns to LTF dataframe without lookahead bias.
-        # HTF values are only available AFTER the HTF candle has closed.
-        # Assumptions: - datetime column represents candle OPEN time (MT5-like) or CLOSE time.
+    ) -> pl.DataFrame:
         
-        def get_tf_minutes(tf: str) -> Optional[int]:
+        def get_tf_timedelta(tf: str):
             if tf.startswith('M') and not tf.startswith('MN'):
-                return int(tf[1:])
+                return datetime.timedelta(minutes=int(tf[1:]))
             elif tf.startswith('H'):
-                return int(tf[1:]) * 60
+                return datetime.timedelta(hours=int(tf[1:]))
             elif tf.startswith('D'):
-                return int(tf[1:]) * 1440
-            else:
-                return None  # W, MN → handled by timestamps, not minutes
+                return datetime.timedelta(days=int(tf[1:]))
+            return None
 
-        # Defensive copies
-        ltf_df = ltf_df.copy()
-        htf_df = htf_df.copy()
-
-        # Datetime normalization
-        ltf_df['datetime'] = pd.to_datetime(ltf_df['datetime'])
-        htf_df['datetime'] = pd.to_datetime(htf_df['datetime'])
-
-        ltf_df = ltf_df.sort_values('datetime')
-        htf_df = htf_df.sort_values('datetime')
-
+        # No Polars trabalhamos com seleções, não cópias manuais
         if columns is None:
-            columns = list(htf_df.columns)
-            columns.remove('datetime')
+            columns = [c for c in htf_df.columns if c != 'datetime']
 
-        # Determine candle duration
-        htf_minutes = get_tf_minutes(htf_tf)
+        # Alinhamento de colunas HTF (renomeação)
+        renamed_columns = {}
+        for col in columns:
+            if not add_htf_tag or col.endswith(f"_{htf_tf}"):
+                renamed_columns[col] = col
+            else:
+                renamed_columns[col] = f"{col}_{htf_tf}"
 
-        # Shift HTF timestamps so they become available ONLY after close
-        htf_aligned = htf_df[['datetime'] + columns].copy()
+        # Preparar HTF aligned: Seleciona e renomeia
+        htf_aligned = htf_df.select(['datetime'] + columns).rename(renamed_columns)
 
+        # Shift para evitar Look-ahead bias: O dado só existe após o fechamento da barra
         if datetime_reference_candles == 'open':
-            if htf_minutes is not None:
-                htf_aligned['datetime'] += pd.Timedelta(minutes=htf_minutes)
-            # W / MN → already safe using timestamps only
-
+            delta = get_tf_timedelta(htf_tf)
+            if delta:
+                htf_aligned = htf_aligned.with_columns(
+                    pl.col("datetime") + delta
+                )
         elif datetime_reference_candles != 'close':
             raise ValueError("datetime_reference_candles must be 'open' or 'close'")
 
-        # Rename HTF columns, avoiding duplication
-        renamed_columns = {}
-        for col in columns:
-            if add_htf_tag is False or col.endswith(f"_{htf_tf}"):
-                renamed_columns[col] = col  # Keep as is
-            else:
-                renamed_columns[col] = f"{col}_{htf_tf}"
-        htf_aligned = htf_aligned.rename(columns=renamed_columns)
-
-        # Drop overlapping columns from ltf_df to avoid merge conflicts
-        overlapping_cols = set(ltf_df.columns) & set(htf_aligned.columns) - {'datetime'}
-        ltf_df = ltf_df.drop(columns=overlapping_cols)
-
-        # ASOF merge (forward to replicate HTF value to LTF of the same day)
-        merged = pd.merge_asof(
-            ltf_df,
+        # Join ASOF (ltf_df e htf_df devem estar ordenados por datetime)
+        # Removemos colunas conflitantes do LTF antes (exceto datetime)
+        cols_to_keep = [c for c in ltf_df.columns if c not in htf_aligned.columns or c == 'datetime']
+        
+        merged = ltf_df.select(cols_to_keep).join_asof(
             htf_aligned,
-            on='datetime',
-            direction='forward'  # Changed to forward for correct replication
+            on="datetime",
+            strategy="backward" # Busca o último valor HTF disponível no tempo do LTF
         )
 
-        # Remove HTF values before first HTF close
-        first_valid_time = htf_aligned['datetime'].iloc[0]
-        if add_htf_tag is False:
-            htf_cols = [renamed_columns[col] for col in columns]
-        else:
-            htf_cols = [col for col in merged.columns if col.endswith(f"_{htf_tf}")]
-        merged.loc[merged['datetime'] < first_valid_time, htf_cols] = np.nan
-    
         return merged
-
-    # || ===================================================================== || Op Simulator Functions || ===================================================================== ||
-
-    def _simulate_portfolio(self, portfolio_backtests_dict ='All'):
-        # 1. Selects over all models -> strats -> assets -> param_sets, while iterating verifies if any walkforward operation is present
-        # 2. Either selects 1 specific param_set for each strat/asset, iterates over all param_sets or select wf_param_set and iterates over walkforward param_sets
-        # 3. Selects all unique datetime from selected backtest trades
-        # 4. Iterates over datetimes, ranks param_sets based on previous trades results with some metric (ex: equity, profit factor, etc)
-        # 5. For each datetime checks for entries and exits on each strat/asset/param_set simulating a portfolio with real money management and trade management rules
-
-
-
-        if portfolio_backtests_dict == 'All': # Uses all backtests from _results_map, else if dict with paths, uses only those backtests 
-            pass
-
-        pass
-
-    def _walkforward(self):
-        # 1. Iterates over all models -> strats -> assets -> param_sets
-        # 2. For each param_set, splits data in multiple isos (in-sample and out-of-sample periods)
-        # 3. For each iso, selects results from already calculated trade results from backtest operation
-        # 4. Analyzes each iso results and aggregates to final walkforward results
-
-        pass
-
-    def _operation_analysis(self):
-        pass
 
     # || ===================================================================== || Save and Clean Functions || ===================================================================== ||
 
@@ -705,11 +704,6 @@ class Operation(BaseClass, Persistance):
         pass
 
     def _save_and_clean(self):
-        pass
-
-    # || ===================================================================== || Validation Functions || ===================================================================== ||
-
-    def _validate_operation(self):
         pass
 
     # || ===================================================================== || Metrics Functions || ===================================================================== ||
@@ -785,7 +779,6 @@ class Operation(BaseClass, Persistance):
 
         print("\n" + "="*95)
 
-
     # || ======================================================================================================================================================================= ||
                         
     def run(self):
@@ -840,6 +833,7 @@ if __name__ == "__main__":
         'AT15': { 
             'execution_tf': model_execution_tf,
             'sl_perc': range(2, 2+1, 1), # 3
+            'tp_perc': range(6, 6+1, 1), 
             'param1': range(20, 20+1, 30), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -847,6 +841,7 @@ if __name__ == "__main__":
         'AT16': { 
             'execution_tf': 'M30',
             'sl_perc': range(2, 2+1, 1), # 3
+            'tp_perc': range(6, 6+1, 1), 
             'param1': range(20, 20+1, 30), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -863,8 +858,8 @@ if __name__ == "__main__":
         'ema_htf': MA(asset='USDJPY', timeframe='H1', window='param1', ma_type='sma') #, price_col='open'
     }
 
-    def entry_long(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict): 
-        df_D1 = self._assets(curr_asset_name, 'D1')
+    def entry_long(self, df: pl.DataFrame, curr_param_set: dict): 
+        df_D1 = self._assets(self._curr_asset, 'D1')
         df_EURUSD_D1 = self._assets('EURUSD', 'D1')
 
         sl_perc = curr_param_set['sl_perc']
@@ -874,8 +869,8 @@ if __name__ == "__main__":
         signal = (df['close'] < df['sma']) & (df['close'] > df['open']) & (df['sma'] != 0.0) #& df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
         return signal
     
-    def entry_short(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict): 
-        df_D1 = self._assets(curr_asset_name, 'D1')
+    def entry_short(self, df: pl.DataFrame, curr_param_set: dict): 
+        df_D1 = self._assets(self._curr_asset, 'D1')
         df_EURUSD_D1 = self._assets('EURUSD', 'D1')
 
         sl_perc = curr_param_set['sl_perc']
@@ -885,10 +880,27 @@ if __name__ == "__main__":
         signal = (df['close'] > df['sma']) & (df['close'] < df['open']) & (df['sma'] != 0.0) #& df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
         return signal
 
-    def exit_tf_long(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict):
+    def exit_tf_long(self, df: pl.DataFrame, curr_param_set: dict):
         return (df['close'] > df['sma']) 
-    def exit_tf_short(self, curr_asset_name: str, df: pd.DataFrame, curr_param_set: dict):
+    def exit_tf_short(self, df: pl.DataFrame, curr_param_set: dict):
         return (df['close'] < df['sma'])
+
+
+    # 1. Seria melhor a opção de sl, tp, nb poder ser saidas calculadas em colunas do dataframe e como valores absolutos que podem ser adicionados ao preço de entrada?
+    # 2. Testar todos os sianis de entrada e saida no cpp
+    # 3. Substituir pandas -> polars?
+    
+
+
+    def exit_sl_long(self, df: pl.DataFrame, curr_param_set: dict):
+        return df['close'] - (df['close']*(curr_param_set['sl_perc']/100))
+    def exit_sl_short(self, df: pl.DataFrame, curr_param_set: dict):
+        return df['close'] + (df['close']*(curr_param_set['sl_perc']/100))
+
+    def exit_tp_long(self, df: pl.DataFrame, curr_param_set: dict):
+        return df['close'] + (df['close']*(curr_param_set['tp_perc']/100))
+    def exit_tp_short(self, df: pl.DataFrame, curr_param_set: dict):
+        return df['close'] - (df['close']*(curr_param_set['tp_perc']/100))
 
     AT15 = Strat(
         StratParams(
@@ -905,10 +917,10 @@ if __name__ == "__main__":
                 'entry_short': entry_short,
                 'exit_tf_long': exit_tf_long,
                 'exit_tf_short': exit_tf_short,
-                'exit_sl_long': None,
-                'exit_sl_short': None,
-                'exit_tp_long': None,
-                'exit_tp_short': None,
+                'exit_sl_long': exit_sl_long,
+                'exit_sl_short': exit_sl_short,
+                'exit_tp_long': exit_tp_long,
+                'exit_tp_short': exit_tp_short,
                 'exit_nb_long': None,
                 'exit_nb_short': None,
                 'be_pos_long': None,
@@ -934,10 +946,10 @@ if __name__ == "__main__":
                 'entry_short': entry_short,
                 'exit_tf_long': exit_tf_long,
                 'exit_tf_short': exit_tf_short,
-                'exit_sl_long': None,
-                'exit_sl_short': None,
-                'exit_tp_long': None,
-                'exit_tp_short': None,
+                'exit_sl_long': exit_sl_long,
+                'exit_sl_short': exit_sl_short,
+                'exit_tp_long': exit_tp_long,
+                'exit_tp_short': exit_tp_short,
                 'exit_nb_long': None,
                 'exit_nb_short': None,
                 'be_pos_long': None,
