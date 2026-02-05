@@ -69,7 +69,6 @@ class OperationParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     data: Union[Model, list[Model]]=None # Can make an operation with a single model or portfolio
     #operation: Union[Backtest, Optimization, Walkforward]=None 
-    pre_backtest_signal_is_position: bool=False
     assets: Optional[Dict[str, Any]] = field(default_factory=dict) # Global Assets
 
     # Metrics
@@ -87,7 +86,6 @@ class Operation(BaseClass):
         super().__init__()
         self.name = op_params.name
         self.data = op_params.data
-        self.pre_backtest_signal_is_position = op_params.pre_backtest_signal_is_position
         self.assets = op_params.assets 
 
         self.metrics = op_params.metrics
@@ -105,6 +103,14 @@ class Operation(BaseClass):
         self._curr_df_context: Optional[pl.DataFrame] = None
         self._curr_tf_context: Optional[str] = None
         self._curr_datetime_references: Optional[str] = None
+
+
+
+    # 1. Test HTF->LTF, create excel with temporary datetime added so can test if ok
+    # 2. Test batch system
+    # 3. Develop backtest system in cpp, test all exits  
+
+
 
     # || ===================================================================== || I - Operation Validation || ===================================================================== ||
 
@@ -191,8 +197,8 @@ class Operation(BaseClass):
                                 
                                 num_true_signals = curr_asset_obj.select(pl.col(curr_signal_def_name).sum()).item() #num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
                                 print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
-                        
-                        #curr_asset_obj.to_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx', index=False)
+
+                        #curr_asset_obj.write_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx')
 
                         # Estimates average size for Batch and Payload
                         if avg_param_set_size_mb is None:
@@ -262,7 +268,7 @@ class Operation(BaseClass):
             path_to_dll = r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release"
             if path_to_dll not in sys.path: 
                 sys.path.append(path_to_dll)
-            import engine_cpp
+            import engine_cpp # type: ignore
 
             payload_to_send = {"datasets": {}, "meta": {}}
             last_key = None
@@ -287,11 +293,19 @@ class Operation(BaseClass):
                 ]
                 cols_signals = [c for c in signals if c in df.columns]
                 
-                if cols_signals:
-                    # Cast para Int32 antes do fill_null evita ambiguidade com Boolean
+                # if cols_signals:
+                #     # Cast para Int32 antes do fill_null evita ambiguidade com Boolean
+                #     df = df.with_columns([
+                #         pl.col(c).cast(pl.Int32, strict=False).fill_null(0) for c in cols_signals
+                #     ])
+                if cols_signals: #  Cast para Int32 antes do fill_null evita ambiguidade com Boolean
                     df = df.with_columns([
-                        pl.col(c).cast(pl.Int32, strict=False).fill_null(0) for c in cols_signals
+                        pl.col(c).cast(pl.Int32).fill_null(0) for c in cols_signals
                     ])
+                    # Verificação rápida
+                    for c in cols_signals:
+                        if df.select(pl.col(c).sum()).item() > 0:
+                            print(f"DEBUG: Sinal {c} contém ativações enviadas ao C++.")
                 
                 # --- TRATAMENTO NUMÉRICO (OHLC e Indicadores) ---
                 cols_num = [
@@ -354,7 +368,6 @@ class Operation(BaseClass):
     def _serialize_batch_to_json(self, batch_payload):
         data = {
             "meta": {
-                "pre_backtest_signal_is_position": self.pre_backtest_signal_is_position,
                 "date_start": str(self.date_start) if self.date_start else None,
                 "date_end": str(self.date_end) if self.date_end else None
             },
@@ -650,7 +663,7 @@ class Operation(BaseClass):
         datetime_reference_candles: str = 'open',
         columns: Optional[List[str]] = None,
         add_htf_tag: bool = True
-    ) -> pl.DataFrame:
+        ) -> pl.DataFrame:
         
         def get_tf_timedelta(tf: str):
             if tf.startswith('M') and not tf.startswith('MN'):
@@ -708,7 +721,7 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Metrics Functions || ===================================================================== ||
 
-    def report_pnl_summary(self):
+    def _report_pnl_summary(self):
         print("\n" + "="*95)
         print(f"{'Performance Summary - Operation: ' + self.name:^95}")
         print("="*95)
@@ -779,6 +792,77 @@ class Operation(BaseClass):
 
         print("\n" + "="*95)
 
+    def _plot_pnl_curves(self, mode: str = 'param_sets'):
+        import matplotlib.pyplot as plt
+        import polars as pl
+
+        all_series = []
+        # Acessa os modelos dentro do results_map
+        models = self._results_map.get(self.name, {}).get("models", {})
+        
+        for m_name, m_data in models.items():
+            for s_name, s_data in m_data.get("strats", {}).items():
+                for a_name, a_data in s_data.get("assets", {}).items():
+                    for p_name, p_data in a_data.get("param_sets", {}).items():
+                        trades = p_data.get("trades", [])
+                        if not trades: continue
+                        
+                        # Criar DataFrame local
+                        # Garantimos que profit seja Float64 e datetime seja Datetime
+                        df_trades = pl.DataFrame(trades).select([
+                            pl.col("exit_datetime").str.to_datetime().alias("datetime"),
+                            pl.col("profit").cast(pl.Float64)
+                        ])
+                        
+                        # Agrupa lucro por datetime
+                        df_trades = df_trades.group_by("datetime").agg(pl.col("profit").sum()).sort("datetime")
+                        
+                        serie_name = f"{s_name}_{a_name}_{p_name}" if mode == 'param_sets' else s_name
+                        all_series.append(df_trades.rename({"profit": serie_name}))
+
+        if not all_series:
+            print("< Erro: Nenhum trade encontrado para plotagem.")
+            return
+
+        # 1. Alinhamento usando how='full' (substituindo o depreciado 'outer')
+        consolidated = all_series[0]
+        for i in range(1, len(all_series)):
+            consolidated = consolidated.join(all_series[i], on="datetime", how="full", coalesce=True)
+
+        # 2. Ordenação e Tratamento de nulos
+        consolidated = consolidated.sort("datetime")
+
+        # 3. Identifica apenas as colunas de PnL (exclui a coluna datetime)
+        pnl_cols = [c for c in consolidated.columns if c != "datetime"]
+        
+        # CORREÇÃO DO ERRO: Cast explícito antes do fill_null e aplicação apenas nas colunas PnL
+        consolidated = consolidated.with_columns([
+            pl.col(c).cast(pl.Float64).fill_null(0.0).cum_sum().alias(c) 
+            for c in pnl_cols
+        ])
+
+        # 4. Plotagem
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Converte para pandas para o matplotlib
+        pdf = consolidated.to_pandas().set_index("datetime")
+        
+        # Preenchimento frontal (Forward Fill) para garantir as retas entre trades
+        pdf = pdf.ffill().fillna(0.0)
+
+        for col in pdf.columns:
+            ax.plot(pdf.index, pdf[col], label=col, linewidth=1.5, alpha=0.8)
+
+        ax.set_title(f"Cumulative PnL Curves - Operation: {self.name}", fontsize=14, color='gold', pad=20)
+        ax.set_xlabel("Timeline", fontsize=10)
+        ax.set_ylabel("Cumulative Profit (%)", fontsize=10)
+        ax.legend(loc='upper left', fontsize='x-small', framealpha=0.2)
+        ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.show()
+
     # || ======================================================================================================================================================================= ||
                         
     def run(self):
@@ -789,7 +873,8 @@ class Operation(BaseClass):
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
         self._operation()
-        self.report_pnl_summary()
+        self._report_pnl_summary()
+        self._plot_pnl_curves()
 
         # III - Operation Portfolio Simulation, Operation Analysis and Metrics
         print(f"\n>>> III - Operation Portfolio Simulation, Operation Analysis and Metrics <<<")
@@ -832,16 +917,8 @@ if __name__ == "__main__":
     Params = {
         'AT15': { 
             'execution_tf': model_execution_tf,
-            'sl_perc': range(2, 2+1, 1), # 3
-            'tp_perc': range(6, 6+1, 1), 
-            'param1': range(20, 20+1, 30), #50
-            'param2': range(2, 2+1, 1), # 3
-            'param3': ['sma'] #, 'ema', 'ema'
-        },
-        'AT16': { 
-            'execution_tf': 'M30',
-            'sl_perc': range(2, 2+1, 1), # 3
-            'tp_perc': range(6, 6+1, 1), 
+            'sl_perc': range(3, 3+1, 1), # 3
+            'tp_perc': range(9, 9+1, 1), 
             'param1': range(20, 20+1, 30), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -853,10 +930,6 @@ if __name__ == "__main__":
         'sma': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         'ema_htf': MA(asset='GBPUSD', timeframe='D1', window=252, ma_type='ema') #, price_col='open'
     }
-    ind2 = { 
-        'sma': MA(asset=None, timeframe='M30', window='param1', ma_type='param3', price_col='close'),
-        'ema_htf': MA(asset='USDJPY', timeframe='H1', window='param1', ma_type='sma') #, price_col='open'
-    }
 
     def entry_long(self, df: pl.DataFrame, curr_param_set: dict): 
         df_D1 = self._assets(self._curr_asset, 'D1')
@@ -866,7 +939,8 @@ if __name__ == "__main__":
         diff = df['close']*(sl_perc/100)
         ema_htf = df['ema_htf']
 
-        signal = (df['close'] < df['sma']) & (df['close'] > df['open']) & (df['sma'] != 0.0) #& df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
+        signal = (df['close'] < df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'].shift(2) < df['open'].shift(2)) 
+        #(df['close'] < df['sma']) & (df['sma'] != 0.0) # & (df['close'] > df['open']) #& df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
         return signal
     
     def entry_short(self, df: pl.DataFrame, curr_param_set: dict): 
@@ -877,21 +951,17 @@ if __name__ == "__main__":
         diff = df['close']*(sl_perc/100)
         ema_htf = df['ema_htf']
 
-        signal = (df['close'] > df['sma']) & (df['close'] < df['open']) & (df['sma'] != 0.0) #& df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
+        signal = (df['close'] > df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'].shift(2) > df['open'].shift(2)) 
+        #(df['close'] > df['sma']) & (df['sma'] != 0.0) # & (df['close'] < df['open']) #& df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
         return signal
 
     def exit_tf_long(self, df: pl.DataFrame, curr_param_set: dict):
-        return (df['close'] > df['sma']) 
-    def exit_tf_short(self, df: pl.DataFrame, curr_param_set: dict):
-        return (df['close'] < df['sma'])
-
-
-    # 1. Seria melhor a opção de sl, tp, nb poder ser saidas calculadas em colunas do dataframe e como valores absolutos que podem ser adicionados ao preço de entrada?
-    # 2. Testar todos os sianis de entrada e saida no cpp
-    # 3. Substituir pandas -> polars?
+        return (df['close'] > df['open']) & (df['close'].shift(1) > df['open'].shift(1))
     
+    def exit_tf_short(self, df: pl.DataFrame, curr_param_set: dict):
+        return (df['close'] < df['open']) & (df['close'].shift(1) < df['open'].shift(1))
 
-
+    """
     def exit_sl_long(self, df: pl.DataFrame, curr_param_set: dict):
         return df['close'] - (df['close']*(curr_param_set['sl_perc']/100))
     def exit_sl_short(self, df: pl.DataFrame, curr_param_set: dict):
@@ -901,12 +971,17 @@ if __name__ == "__main__":
         return df['close'] + (df['close']*(curr_param_set['tp_perc']/100))
     def exit_tp_short(self, df: pl.DataFrame, curr_param_set: dict):
         return df['close'] - (df['close']*(curr_param_set['tp_perc']/100))
+    """
+    exit_sl_long = None
+    exit_sl_short = None
+    exit_tp_long = None
+    exit_tp_short = None
 
     AT15 = Strat(
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(order_type='market', offset=0.0),
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0),
             data_settings=DataSettings(fill_method='ffill', fillna=0),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=Params['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
@@ -921,6 +996,7 @@ if __name__ == "__main__":
                 'exit_sl_short': exit_sl_short,
                 'exit_tp_long': exit_tp_long,
                 'exit_tp_short': exit_tp_short,
+
                 'exit_nb_long': None,
                 'exit_nb_short': None,
                 'be_pos_long': None,
@@ -931,35 +1007,6 @@ if __name__ == "__main__":
         )
     )
     
-    AT16 = Strat(
-        StratParams(
-            name="AT16",
-            operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(order_type='market', offset=0.0),
-            data_settings=DataSettings(fill_method='ffill', fillna=0),
-            mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
-            params=Params['AT16'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
-            time_settings=TimeSettings(day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, friday_close=False, timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
-            indicators=ind2,
-            signal_rules={
-                'entry_long': entry_long,
-                'entry_short': entry_short,
-                'exit_tf_long': exit_tf_long,
-                'exit_tf_short': exit_tf_short,
-                'exit_sl_long': exit_sl_long,
-                'exit_sl_short': exit_sl_short,
-                'exit_tp_long': exit_tp_long,
-                'exit_tp_short': exit_tp_short,
-                'exit_nb_long': None,
-                'exit_nb_short': None,
-                'be_pos_long': None,
-                'be_pos_short': None,
-                'be_neg_long': None,
-                'be_neg_short': None
-            }
-        )
-    )
-
     model_1 = Model(
         ModelParams(
             name='MA Trend Following',
@@ -970,23 +1017,12 @@ if __name__ == "__main__":
             model_system_manager=None  # Optional - will use default system management
         )
     )
-    model_2 = Model(
-        ModelParams(
-            name='MA Trend Following 2',
-            assets=['GBPUSD'], # CURR_ASSET refers to this one in strat_support_assets
-            strat={'AT16': AT16},
-            execution_timeframe='M30',
-            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model2_MM")),
-            model_system_manager=None  # Optional - will use default system management
-        )
-    )
 
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_1, model_2],
+            data=[model_1],
             #operation=Backtest(BacktestParams(name='backtest_test')),
-            pre_backtest_signal_is_position=False,
             operation_backtest_all_signals_are_positions=False,
             assets=global_assets,
             operation_timeframe=model_execution_tf, # Must always be the smaller timeframe among all strat execution_timeframe

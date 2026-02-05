@@ -19,6 +19,8 @@ from Walkforward import Walkforward
 
 @dataclass
 class ExecutionSettings:
+    hedge: bool=False
+    strat_num_pos: list[int]=field(default_factory=lambda: [1,1])
     order_type: str='market'
     offset: float=0.0
 

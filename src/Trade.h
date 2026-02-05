@@ -6,9 +6,9 @@ struct Trade {
     std::string id;
     std::string asset;
     std::string status;          // "open" | "closed"
-    double entry_price;
+    std::optional<double> entry_price;
     std::string entry_datetime;
-    double lot_size;
+    std::optional<double> lot_size;
     std::optional<double> stop_loss;
     std::optional<double> take_profit;
 

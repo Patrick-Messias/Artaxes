@@ -1,3 +1,225 @@
+
+#include "Backtest.h"
+#include <iostream>
+#include <random>
+#include <sstream>
+#include <algorithm>
+#include <iomanip> // Para formatar logs
+
+using json = nlohmann::json;
+
+double calculate_lot_size(double price_entry, bool is_long_trade);
+
+static std::string generate_id() {
+    static std::mt19937_64 rng{std::random_device{}()};
+    std::stringstream ss;
+    ss << std::hex << rng();
+    return ss.str();
+}
+
+std::vector<Trade> Backtest::run(const std::string& dataset_key,
+                                 const json& dataset,
+                                 const json& meta) {
+    std::vector<Trade> trades;
+    std::vector<Trade> active_trades;
+    int log_count = 0; // Contador para não inundar o console
+
+    try {
+        if (!dataset.contains("data")) return {};
+        const auto& d = dataset.at("data");
+
+        auto num_pos_json = meta.value("strat_num_pos", json::array({1, 1}));
+        int max_long = num_pos_json[0].get<int>();
+        int max_short = num_pos_json[1].get<int>();
+        bool hedge_enabled = meta.value("hedge", false);
+
+        auto datetime = d.at("datetime").get<std::vector<std::string>>();
+        auto open = d.at("open").get<std::vector<double>>();
+        auto high = d.at("high").get<std::vector<double>>();
+        auto low = d.at("low").get<std::vector<double>>();
+        auto close = d.at("close").get<std::vector<double>>();
+
+        auto get_vec = [&](const std::string& key) {
+            return d.contains(key) ? d.at(key).get<std::vector<int>>() : std::vector<int>(datetime.size(), 0);
+        };
+        auto get_double_vec = [&](const std::string& key) {
+            return d.contains(key) ? d.at(key).get<std::vector<double>>() : std::vector<double>(datetime.size(), 0.0);
+        };
+
+        auto entry_long = get_vec("entry_long");
+        auto entry_short = get_vec("entry_short");
+        auto exit_tf_long = get_vec("exit_tf_long");
+        auto exit_tf_short = get_vec("exit_tf_short");
+        auto sl_long_v = get_double_vec("exit_sl_long");
+        auto tp_long_v = get_double_vec("exit_tp_long");
+        auto sl_short_v = get_double_vec("exit_sl_short");
+        auto tp_short_v = get_double_vec("exit_tp_short");
+        
+        for (size_t i = 1; i < datetime.size(); ++i){
+            double curr_open = open[i];
+            int prev = (i > 0) ? i - 1 : 0; //size_t prev = i-1;
+
+            // --- 1. EXIT BY SIGNAL (TF) ---
+            for (auto it = active_trades.begin(); it != active_trades.end(); ){
+                if (it->entry_datetime == datetime[i]) {
+                        ++it; 
+                        continue; // Pula este trade, ele acabou de abrir, não pode fechar agora.
+                    }
+
+                bool is_l = it->lot_size.value_or(0) > 0;
+                
+                // Se o seu objeto Trade não tem entry_index, o lucro zero é quase certo se os sinais coincidirem.
+                if((is_l && exit_tf_long[prev]) || (!is_l && exit_tf_short[prev])) {
+
+
+                    it->exit_price = curr_open;
+                    it->exit_datetime = datetime[i];
+                    it->exit_reason = "tf_exit";
+                    it->status = "closed";
+
+                    double entry_p = it->entry_price.value_or(0.0);
+                    if (entry_p > 0.0) {
+                        double pnl_raw = is_l ? (curr_open - entry_p) : (entry_p - curr_open);
+                        it->profit = (pnl_raw / entry_p) * 100.0;
+                    }
+
+                    // LOG DOS PRIMEIROS TRADES
+                    if (log_count < 5) {
+                        // 1. Extraímos os valores para variáveis locais double puras
+                        // O cast (double) garante que o compilador trate como número, não como optional
+                        double p_entry  = it->entry_price ? (double)*it->entry_price : 0.0;
+                        double p_exit   = it->exit_price  ? (double)*it->exit_price  : 0.0;
+                        double p_profit = it->profit      ? (double)*it->profit      : 0.0;
+
+                        // 2. Agora imprimimos apenas as variáveis locais
+                        std::cout << "[C++ LOG] EXIT TF | Data: " << datetime[i];
+                        std::cout << " | Entry: " << p_entry;
+                        std::cout << " | Exit: " << p_exit;
+                        std::cout << " | Side: "  << is_l ? 1 : -1;
+                        std::cout << " | PnL: " << p_profit << "%" << std::endl;
+                        
+                        log_count++;
+                    }
+
+                    trades.push_back(*it);
+                    it = active_trades.erase(it);
+                } else { ++it; }
+            }
+
+            // --- 2. ENTRY ---
+            int cur_l=0, cur_s=0;
+            for(const auto& t: active_trades) (t.lot_size.value_or(0) > 0) ? cur_l++ : cur_s++;
+            
+            auto try_entry = [&](bool is_long_side) {
+                Trade t;
+                t.id = generate_id();
+                t.asset = dataset_key;
+                t.entry_datetime = datetime[i];
+                t.entry_price = curr_open;
+                t.status = "open";
+                t.lot_size = calculate_lot_size(curr_open, is_long_side);
+
+                double sl_val = (is_long_side) ? std::abs(sl_long_v[prev]) : std::abs(sl_short_v[prev]);
+                double tp_val = (is_long_side) ? std::abs(tp_long_v[prev]) : std::abs(tp_long_v[prev]);
+
+                if (sl_val > 0.0) {
+                    t.stop_loss = is_long_side ? (curr_open - sl_val) : (curr_open + sl_val);
+                } else {
+                    t.stop_loss = std::nullopt;
+                }
+
+                if (tp_val > 0.0) {
+                    t.take_profit = is_long_side ? (curr_open + tp_val) : (curr_open - tp_val);
+                } else {
+                    t.take_profit = std::nullopt;
+                }
+            
+                if (log_count < 5) {
+                    std::cout << "[C++ LOG] ENTRY | Data: " << datetime[i] << " | Price: " << curr_open << std::endl;
+                }
+                active_trades.push_back(t);
+            };
+
+            if (entry_long[prev] && (hedge_enabled ? cur_l < max_long : (cur_l < max_long && cur_s == 0)))
+                try_entry(true);
+            if (entry_short[prev] && (hedge_enabled ? cur_s < max_short : (cur_s < max_short && cur_l == 0)))
+                try_entry(false);
+            
+            // --- 3. EXIT INTRA-CANDLE (SL/TP) ---
+            for (auto it = active_trades.begin(); it != active_trades.end(); ){
+                bool hit = false;
+                double exit_p = 0;
+                std::string reason = "";
+                bool is_l = it->lot_size.value_or(0) > 0;
+                double sl = it->stop_loss.value_or(0.0);
+                double tp = it->take_profit.value_or(0.0);
+
+                if (is_l) {
+                    if (close[i] > open[i]) {
+                        if (sl > 0 && low[i] <= sl) { hit=true; exit_p=sl; reason="sl"; }
+                        else if (tp > 0 && high[i] >= tp) { hit=true; exit_p=tp; reason="tp"; }
+                    } else {
+                        if (tp > 0 && high[i] >= tp) { hit=true; exit_p=tp; reason="tp"; }
+                        else if (sl > 0 && low[i] <= sl) { hit=true; exit_p=sl; reason="sl"; }
+                    }
+                } else {
+                    if (close[i] > open[i]) {
+                        if (tp > 0 && low[i] <= tp) { hit=true; exit_p=tp; reason="tp"; }
+                        else if (sl > 0 && high[i] >= sl) { hit=true; exit_p=sl; reason="sl"; }
+                    } else {
+                        if (sl > 0 && high[i] >= sl) { hit=true; exit_p=sl; reason="sl"; }
+                        else if (tp > 0 && low[i] <= tp) { hit=true; exit_p=tp; reason="tp"; }
+                    }
+                }
+
+                if (hit) {
+                    it->exit_price = exit_p;
+                    it->exit_datetime = datetime[i];
+                    it->exit_reason = reason;
+                    it->status = "closed";
+                    double entry_p = it->entry_price.value_or(0.0);
+                    if (entry_p > 0.0) {
+                        double pnl_raw = is_l ? (exit_p - entry_p) : (entry_p - exit_p);
+                        it->profit = (pnl_raw / entry_p) * 100.0;
+                    }
+                    
+                    if (log_count < 5) {
+                        // 1. Extraímos os valores para variáveis locais double puras
+                        // O cast (double) garante que o compilador trate como número, não como optional
+                        double p_entry  = it->entry_price ? (double)*it->entry_price : 0.0;
+                        double p_exit   = it->exit_price  ? (double)*it->exit_price  : 0.0;
+                        double p_profit = it->profit      ? (double)*it->profit      : 0.0;
+
+                        // 2. Agora imprimimos apenas as variáveis locais
+                        std::cout << "[C++ LOG] EXIT TF | Data: " << datetime[i];
+                        std::cout << " | Entry: " << p_entry;
+                        std::cout << " | Exit: " << p_exit;
+                        std::cout << " | PnL: " << p_profit << "%" << std::endl;
+                        
+                        log_count++;
+                    }
+
+                    trades.push_back(*it);
+                    it = active_trades.erase(it);
+                } else { ++it; }
+            }
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[C++ Error]: " << e.what() << std::endl;
+    }
+    return trades;
+}
+
+double calculate_lot_size(double price_entry, bool is_long_trade) {
+    return (is_long_trade) ? 1.0 : -1.0;
+}
+
+
+
+
+
+
+/*
 #include "Backtest.h"
 #include <iostream>
 #include <random>
@@ -6,160 +228,172 @@
 
 using json = nlohmann::json;
 
-// Gerador de ID único
-static std::string generate_id() {
+double calculate_lot_size(double price_entry, bool is_long_trade);
+
+static std::string generate_id() { // Generates random number and returns as hexadecimal string 
     static std::mt19937_64 rng{std::random_device{}()};
     std::stringstream ss;
     ss << std::hex << rng();
     return ss.str();
 }
 
-static bool is_friday(const std::string& datetime) {
-    return false; // Implementar via <chrono> se necessário
-}
+
 
 std::vector<Trade> Backtest::run(const std::string& dataset_key,
                                  const json& dataset,
                                  const json& meta) {
     std::vector<Trade> trades;
+    std::vector<Trade> active_trades;
 
     try {
-        // 1. Acesso seguro às seções
         if (!dataset.contains("data")) return {};
-        const auto& df_json = dataset.at("data");
-        const auto& time_settings = dataset.at("time_settings");
+        const auto& d = dataset.at("data");
 
-        auto params = meta.at("params");
-        double stop_loss_dist = (params.contains("stop_loss") && !params["stop_loss"].is_null()) 
-                        ? params["stop_loss"].get<double>() : 0.0;
+        // Hedge and Limit Config
+        auto num_pos_json = meta.value("strat_num_pos", json::array({1, 1}));
+        int max_long = num_pos_json[0].get<int>();
+        int max_short = num_pos_json[1].get<int>();
+        bool hedge_enabled = meta.value("hedge", false);
 
-        // 2. Extração de vetores com verificação de existência
-        // Se a coluna não existir, inicializa vetor vazio para não travar
-        auto get_v_double = [&](const std::string& key) {
-            return df_json.contains(key) ? df_json.at(key).get<std::vector<double>>() : std::vector<double>();
+        // OHLC 
+        auto datetime = d.at("datetime").get<std::vector<std::string>>();
+        auto open = d.at("open").get<std::vector<double>>();
+        auto high = d.at("high").get<std::vector<double>>();
+        auto low = d.at("low").get<std::vector<double>>();
+        auto close = d.at("close").get<std::vector<double>>();
+
+        // Helpers for Signals
+        auto get_vec = [&](const std::string& key) {
+            return d.contains(key) ? d.at(key).get<std::vector<int>>() : std::vector<int>(datetime.size(), 0);
         };
-        auto get_v_str = [&](const std::string& key) {
-            return df_json.contains(key) ? df_json.at(key).get<std::vector<std::string>>() : std::vector<std::string>();
-        };
-        auto get_v_int = [&](const std::string& key) {
-            return df_json.contains(key) ? df_json.at(key).get<std::vector<int>>() : std::vector<int>();
+        auto get_double_vec = [&](const std::string& key) {
+            return d.contains(key) ? d.at(key).get<std::vector<double>>() : std::vector<double>(datetime.size(), 0.0);
         };
 
-        std::vector<double> open = get_v_double("open");
-        std::vector<double> high = get_v_double("high");
-        std::vector<double> low = get_v_double("low");
-        std::vector<double> close = get_v_double("close");
-        std::vector<std::string> datetime = get_v_str("datetime");
-
-        std::vector<int> entry_long = get_v_int("entry_long");
-        std::vector<int> entry_short = get_v_int("entry_short");
-        std::vector<int> exit_tf_long = get_v_int("exit_tf_long");
-        std::vector<int> exit_tf_short = get_v_int("exit_tf_short");
-        std::vector<int> be_pos_long = get_v_int("be_pos_long");
-        std::vector<int> be_pos_short = get_v_int("be_pos_short");
-
-        size_t n = open.size();
+        auto entry_long = get_vec("entry_long");
+        auto entry_short = get_vec("entry_short");
+        auto exit_tf_long = get_vec("exit_tf_long");
+        auto exit_tf_short = get_vec("exit_tf_short");
+        auto sl_long_v = get_double_vec("exit_sl_long");
+        auto tp_long_v = get_double_vec("exit_tp_long");
+        auto sl_short_v = get_double_vec("exit_sl_short");
+        auto tp_short_v = get_double_vec("exit_tp_short");
         
-        // 3. Validação de Alinhamento (Evita Access Violation)
-        if (n < 2) return {};
-        if (entry_long.size() < n || entry_short.size() < n || datetime.size() < n) {
-            std::cerr << "[C++] ERRO: Vetores desalinhados para " << dataset_key << std::endl;
-            return {};
+        for (size_t i = 1; i < datetime.size(); ++i){
+            double curr_open = open[i];
+            size_t prev = i-1;
+
+            // Exit by Previous Index (TF/NB/EOD/EOF)
+            for (auto it = active_trades.begin(); it != active_trades.end(); ){
+                bool is_l = it->lot_size.value_or(0) > 0;
+
+                if((is_l && exit_tf_long[prev]) || (!is_l && exit_tf_short[prev])) {
+                    it->exit_price=curr_open;
+                    it->exit_datetime=datetime[i];
+                    it->exit_reason="tf_exit";
+                    it->status="closed";
+
+                    double entry_p = it->entry_price.value_or(0.0);
+                    double pnl = is_l ? (curr_open - entry_p) : (entry_p - curr_open);
+                    if (entry_p > 0.0) {
+                        double pnl_raw = is_l ? (curr_open - entry_p) : (entry_p - curr_open);
+                        it->profit = (pnl_raw / entry_p) * 100.0;
+                    } else {
+                        it->profit = 0.0;
+                    }
+
+                    trades.push_back(*it);
+                    it = active_trades.erase(it);
+                } else { ++it; }
+            }
+
+            // Entry
+            int cur_l=0, cur_s=0;
+            for(const auto& t: active_trades) (t.lot_size.value_or(0) > 0) ? cur_l++ : cur_s++;
+            
+            auto try_entry = [&](bool is_long_side) {
+                Trade t;
+                t.id = generate_id();
+                t.asset = dataset_key;
+                t.entry_datetime = datetime[i];
+                t.entry_price = curr_open;
+                t.status = "open";
+
+                double calc_lot = calculate_lot_size(curr_open, is_long_side);
+                t.lot_size = calc_lot;
+
+                // SL and TP must have only the raw value defined
+                t.stop_loss = (is_long_side) ? (curr_open - sl_long_v[prev]) : (curr_open + sl_short_v[prev]);
+                t.take_profit = (is_long_side) ? (curr_open + tp_long_v[prev]) : (curr_open - tp_short_v[prev]);
+            
+                active_trades.push_back(t);
+            };
+
+            if (entry_long[prev] && (hedge_enabled ? cur_l < max_long : (cur_l < max_long && cur_s == 0)))
+                try_entry(true);
+            if (entry_short[prev] && (hedge_enabled ? cur_s < max_short : (cur_s < max_short && cur_l == 0)))
+                try_entry(false);
+
+            // Exit Intra-Candle (SL/TP)
+            for (auto it = active_trades.begin(); it != active_trades.end(); ){
+                bool hit = false;
+                double exit_p = 0;
+                std::string reason = "";
+                bool is_l = it->lot_size.value_or(0) > 0;
+
+                double sl = it->stop_loss.value_or(0.0);
+                double tp = it->take_profit.value_or(0.0);
+
+                // TP and SL already defined in entry
+                if (is_l) { // Long
+                    if (close[i] > open[i]) {
+                        if (sl > 0 && low[i] <= sl) { hit=true; exit_p=sl; reason="sl"; }
+                        else if (tp > 0 && high[i] >= tp) { hit=true; exit_p=tp; reason="tp"; }
+                    } else {
+                        if (tp > 0 && high[i] >= tp) { hit=true; exit_p=tp; reason="tp"; }
+                        else if (sl > 0 && low[i] <= sl) { hit=true; exit_p=sl; reason="sl"; }
+                    }
+                } else { // Short
+                    if (close[i] > open[i]) {
+                        if (tp > 0 && low[i] <= tp) { hit=true; exit_p=tp; reason="tp"; }
+                        else if (sl > 0 && high[i] >= sl) { hit=true; exit_p=sl; reason="sl"; }
+                    } else {
+                        if (sl > 0 && high[i] >= sl) { hit=true; exit_p=sl; reason="sl"; }
+                        else if (tp > 0 && low[i] <= tp) { hit=true; exit_p=tp; reason="tp"; }
+                    }
+                }
+
+                if (hit) {
+                    it->exit_price = exit_p;
+                    it->exit_datetime = datetime[i];
+                    it->exit_reason = reason;
+                    it->status = "closed";
+                    double entry_p = it->entry_price.value_or(0.0);
+                    double pnl = is_l ? (exit_p - entry_p) : (entry_p - exit_p);
+                    if (entry_p > 0.0) {
+                        double pnl_raw = is_l ? (exit_p - entry_p) : (entry_p - exit_p);
+                        it->profit = (pnl_raw / entry_p) * 100.0;
+                    } else {
+                        it->profit = 0.0;
+                    }
+
+                    trades.push_back(*it);
+                    it = active_trades.erase(it);
+                } else { ++it; }
+            }
         }
 
-        bool day_trade = time_settings.value("day_trade", false);
-        bool in_position = false;
-        bool is_long = false;
-        Trade current_trade;
-        double entry_price_val = 0.0;
-        
-        // Checks if backtest has stop_loss then initialize variable, else ramains 0 and not used in logic
-        double stop_loss = 0.0;
-        double take_profit = 0.0;
-        double trailing_sl = 0.0;
-
-        int number_of_bars_close = 0; //int number_of_bars_close = time_settings.value("number_of_bars_close", 0);
-        /*
-        auto count_bars_since_entry = [&](size_t current_index) { // On each open bar checks how many bars have passed since entry
-            if (current_trade.status != "open") return 0;
-            size_t count = 0;
-            for (size_t i = current_index; i > 0; --i) {
-                if (datetime[i] == current_trade.entry_datetime) break;
-                count++;
-            }
-            return count;
-        };
-        */
-       
-        // 4. Loop de Backtest
-        for (size_t i = 1; i < n; ++i) {
-            if (!in_position) {
-                // Sinais de Entrada
-                if (entry_long[i-1] == 1) {
-                    in_position = true; is_long = true;
-                    entry_price_val = open[i];
-                    stop_loss = low[i];
-                    take_profit = high[i];
-                    trailing_sl = stop_loss;
-                    current_trade = { generate_id(), dataset_key, "open", entry_price_val, datetime[i], 1.0, stop_loss, take_profit };
-                } else if (entry_short[i-1] == 1) {
-                    in_position = true; is_long = false;
-                    entry_price_val = open[i];
-                    stop_loss = high[i];
-                    take_profit = low[i];
-                    trailing_sl = stop_loss;
-                    current_trade = { generate_id(), dataset_key, "open", entry_price_val, datetime[i], -1.0, stop_loss, take_profit };
-                }
-            } else {
-                // Gestão de Saída
-                bool exit = false;
-                std::string reason;
-                double exit_price = open[i];
-
-                // Trailing & Stop/TP básico
-                if (is_long) {
-                    if (number_of_bars_close > 0 && count_bars_since_entry(i) >= number_of_bars_close) {
-                        exit = true; reason = "max_bars_reached"; exit_price = close[i]; }
-                    else {
-                        trailing_sl = std::max(trailing_sl, low[i]);
-                        if (low[i] <= stop_loss) { exit = true; reason = "stop_loss"; exit_price = stop_loss; }
-                        else if (high[i] >= take_profit) { exit = true; reason = "take_profit"; exit_price = take_profit; }
-                        else if (low[i] <= trailing_sl) { exit = true; reason = "trailing_stop"; exit_price = trailing_sl; }
-                        else if (!exit_tf_long.empty() && exit_tf_long[i]) { exit = true; reason = "tf_exit"; }
-                    }
-                } else {
-                    if (number_of_bars_close > 0 && count_bars_since_entry(i) >= number_of_bars_close) {
-                        exit = true; reason = "max_bars_reached"; exit_price = close[i]; }
-                    else {
-                        trailing_sl = std::min(trailing_sl, high[i]);
-                        if (high[i] >= stop_loss) { exit = true; reason = "stop_loss"; exit_price = stop_loss; }
-                        else if (low[i] <= take_profit) { exit = true; reason = "take_profit"; exit_price = take_profit; }
-                        else if (high[i] >= trailing_sl) { exit = true; reason = "trailing_stop"; exit_price = trailing_sl; }
-                        else if (!exit_tf_short.empty() && exit_tf_short[i]) { exit = true; reason = "tf_exit"; }
-                    }
-                }
-
-                if (exit) {
-                    double pnl = is_long ? (exit_price - entry_price_val) : (entry_price_val - exit_price);
-                    
-                    current_trade.status = "closed";
-                    current_trade.exit_price = exit_price;
-                    current_trade.exit_datetime = datetime[i];
-                    current_trade.exit_reason = reason;
-
-                    current_trade.lot_size = is_long ? 1.0 : -1.0;
-
-                    current_trade.profit = (pnl / entry_price_val) * 100.0;
-                    current_trade.profit_r = pnl;
-                    
-                    trades.push_back(current_trade);
-                    in_position = false;
-                }
-            }
-        }
     } catch (const std::exception& e) {
-        std::cerr << "[C++] Exception in Backtest::run: " << e.what() << std::endl;
+        std::cerr << "[C++ Error]: " << e.what() << std::endl;
     }
-
     return trades;
 }
+
+double calculate_lot_size(double price_entry, bool is_long_trade) { // W I P
+    double lot_size = 1.0;
+    return (is_long_trade) ? lot_size : lot_size*-1;
+}
+*/
+
+
+
