@@ -23,16 +23,11 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
     std::vector<Trade> trades;
     std::vector<Trade> active_trades;
     int log_count = 0; // Contador para não inundar o console
-    int log_size = 50;
+    int log_size = log_count + 50;
 
     try {
         if (!dataset.contains("data")) return {};
         const auto& d = dataset.at("data");
-
-        auto num_pos_json = meta.value("strat_num_pos", json::array({1, 1}));
-        int max_long = num_pos_json[0].get<int>();
-        int max_short = num_pos_json[1].get<int>();
-        bool hedge_enabled = meta.value("hedge", false);
 
         auto datetime = d.at("datetime").get<std::vector<std::string>>();
         auto open = d.at("open").get<std::vector<double>>();
@@ -55,10 +50,31 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
         auto tp_long_v = get_double_vec("exit_tp_long");
         auto sl_short_v = get_double_vec("exit_sl_short");
         auto tp_short_v = get_double_vec("exit_tp_short");
+
+        auto exec_set = dataset.value("execution_settings", json::object());
+
+        auto num_pos_json = exec_set.value("strat_num_pos", json::array({1, 1}));
+        int max_long = num_pos_json[0].get<int>();
+        int max_short = num_pos_json[1].get<int>();
+        bool hedge_enabled = exec_set.value("hedge", false);
+
+        int exit_nb_l = exec_set.value("exit_nb_long", 0);
+        int exit_nb_s = exec_set.value("exit_nb_short", 0);
+        int exit_nb_only_if_pnl_is = exec_set.value("exit_nb_only_if_pnl_is", 0);
+
+        // Log de depuração para confirmar
+        std::cout << "[C++ DEBUG] NB Long: " << exit_nb_l 
+                << " | NB Short: " << exit_nb_s 
+                << " | Hedge: " << (hedge_enabled ? "ON" : "OFF") << std::endl;
         
         for (size_t i = 1; i < datetime.size(); ++i){
             double curr_open = open[i];
             int prev = (i > 0) ? i - 1 : 0; //size_t prev = i-1;
+
+            for (auto& t : active_trades) {
+                if (!t.bars_held.has_value()) {t.bars_held = 0;}
+                (*t.bars_held)++;
+            }
 
             // --- 1. EXIT BY SIGNAL (TF) ---
             for (auto it = active_trades.begin(); it != active_trades.end(); ){
@@ -66,16 +82,32 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
                         ++it; 
                         continue; // Pula este trade, ele acabou de abrir, não pode fechar agora.
                     }
-
                 bool is_l = it->lot_size.value_or(0) > 0;
+                bool hit = false;
+                std::string reason = "";
+
+                int nb_limit = is_l ? exit_nb_l : exit_nb_s;
+                if(nb_limit > 0 && it->bars_held >= nb_limit){
+                    if (exit_nb_only_if_pnl_is == 0) {hit=true;}
+                    else {
+                        double entry_p = it->entry_price.value_or(0.0);
+                        double current_pnl = is_l ? (curr_open - entry_p) : (entry_p - curr_open);
+
+                        if (exit_nb_only_if_pnl_is > 0 && current_pnl >= 0) hit=true;
+                        else if (exit_nb_only_if_pnl_is < 0 && current_pnl <= 0) hit=true;
+                    }
+                    reason = "nb";
+                }
+                else if ((is_l && exit_tf_long[prev]) || (!is_l && exit_tf_short[prev])) {
+                    reason = "tf";
+                    hit = true;
+                }
                 
                 // Se o seu objeto Trade não tem entry_index, o lucro zero é quase certo se os sinais coincidirem.
-                if((is_l && exit_tf_long[prev]) || (!is_l && exit_tf_short[prev])) {
-
-
+                if(hit) {   
+                    it->exit_reason = reason;
                     it->exit_price = curr_open;
                     it->exit_datetime = datetime[i];
-                    it->exit_reason = "tf_exit";
                     it->status = "closed";
 
                     double entry_p = it->entry_price.value_or(0.0);
@@ -94,7 +126,7 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
 
                         // 2. Agora imprimimos apenas as variáveis locais
                         int side = is_l ? (1) : (-1);
-                        std::cout << "[C++ LOG] EXIT tf | Data: " << datetime[i];
+                        std::cout << "[C++ LOG] EXIT " << reason << " | Data: " << datetime[i];
                         std::cout << " | Entry: " << p_entry;
                         std::cout << " | Exit: " << p_exit;
                         std::cout << " | Side: "  << side;
@@ -138,7 +170,7 @@ std::vector<Trade> Backtest::run(const std::string& dataset_key,
             
                 if (log_count < log_size) {
                     int side = is_long_side ? (1) : (-1);
-                    std::cout << "[C++ LOG] ENTRY | Data: " << datetime[i] << " | Price: " << curr_open << " | SL: " << sl_val << " | Side: " << side << std::endl;
+                    std::cout << "[C++ LOG] ENTRY | Data: " << datetime[i] << " | Price: " << curr_open << " | SL: " << sl_val << " | TP: " << tp_val << " | Side: " << side << std::endl;
                 }
                 active_trades.push_back(t);
             };

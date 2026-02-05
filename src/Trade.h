@@ -17,4 +17,5 @@ struct Trade {
     std::optional<std::string> exit_reason;
     std::optional<double> profit;     // %
     std::optional<double> profit_r;   // money
+    std::optional<int> bars_held=0;
 };

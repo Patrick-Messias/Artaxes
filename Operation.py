@@ -75,7 +75,6 @@ class OperationParams():
     metrics: Optional[Dict[str, Indicator]] = field(default_factory=dict)
 
     # Settings
-    operation_backtest_all_signals_are_positions: bool=True # If True, all signals are treated as position signals (entry/exit), else treated as simple signals (entry only, exit by SL/TP/Time)
     operation_timeframe: str=None
     date_start: str=None
     date_end: str=None
@@ -90,7 +89,6 @@ class Operation(BaseClass):
 
         self.metrics = op_params.metrics
 
-        self.operation_backtest_all_signals_are_positions = op_params.operation_backtest_all_signals_are_positions
         self.operation_timeframe = op_params.operation_timeframe
         self.date_start = op_params.date_start
         self.date_end = op_params.date_end
@@ -212,8 +210,8 @@ class Operation(BaseClass):
                             "data": curr_asset_obj,
                             "meta": {
                                 "params": param_set_dict,
-                                "time_settings": strat_obj.time_settings,
-                                "execution_settings": strat_obj.execution_settings
+                                "time_settings": asdict(strat_obj.time_settings),
+                                "execution_settings": asdict(strat_obj.execution_settings)
                             }
                         }
                         batch_count += 1
@@ -261,109 +259,6 @@ class Operation(BaseClass):
         pass
 
     # || ===================================================================== || Execution Functions || ===================================================================== ||
-
-    # def _run_cpp_operation(self, batch_payload: dict):
-    #     try:
-    #         # 1. Garante o caminho da DLL
-    #         path_to_dll = r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release"
-    #         if path_to_dll not in sys.path: 
-    #             sys.path.append(path_to_dll)
-    #         import engine_cpp # type: ignore
-
-    #         payload_to_send = {"datasets": {}, "meta": {}}
-    #         last_key = None
-
-    #         for key, content in batch_payload.items():
-    #             last_key = key
-    #             df = content['data'].clone()
-                
-    #             # --- TRATAMENTO DE DATETIME (CORREÇÃO DO ERRO) ---
-    #             if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
-    #                 df = df.with_columns(
-    #                     # No Polars moderno, usa-se to_string em vez de format
-    #                     pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S')
-    #                 )
-
-    #             # --- TRATAMENTO DE SINAIS (PREVENÇÃO DE ERROS DE DTYPE) ---
-    #             signals = [
-    #                 'entry_long', 'entry_short', 
-    #                 'exit_tf_long', 'exit_tf_short', 
-    #                 'exit_tp_long', 'exit_tp_short', 
-    #                 'exit_sl_long', 'exit_sl_short'
-    #             ]
-    #             cols_signals = [c for c in signals if c in df.columns]
-                
-    #             # if cols_signals:
-    #             #     # Cast para Int32 antes do fill_null evita ambiguidade com Boolean
-    #             #     df = df.with_columns([
-    #             #         pl.col(c).cast(pl.Int32, strict=False).fill_null(0) for c in cols_signals
-    #             #     ])
-    #             if cols_signals: #  Cast para Int32 antes do fill_null evita ambiguidade com Boolean
-    #                 df = df.with_columns([
-    #                     pl.col(c).cast(pl.Int32).fill_null(0) for c in cols_signals
-    #                 ])
-    #                 # Verificação rápida
-    #                 for c in cols_signals:
-    #                     if df.select(pl.col(c).sum()).item() > 0:
-    #                         print(f"DEBUG: Sinal {c} contém ativações enviadas ao C++.")
-                
-    #             # --- TRATAMENTO NUMÉRICO (OHLC e Indicadores) ---
-    #             cols_num = [
-    #                 name for name, dtype in df.schema.items() 
-    #                 if dtype.is_numeric() and name not in signals
-    #             ]
-                
-    #             if cols_num:
-    #                 df = df.with_columns([
-    #                     pl.col(c).cast(pl.Float64).fill_null(0.0) for c in cols_num
-    #                 ])
-
-    #             # Conversão de objetos complexos para dicionários simples
-    #             def to_plain_dict(obj):
-    #                 if is_dataclass(obj): return asdict(obj)
-    #                 if hasattr(obj, 'to_dict'): return obj.to_dict()
-    #                 if isinstance(obj, dict): return {k: to_plain_dict(v) for k, v in obj.items()}
-    #                 if isinstance(obj, list): return [to_plain_dict(x) for x in obj]
-    #                 return obj
-
-    #             clean_time_settings = to_plain_dict(content.get('time_settings', {}))
-    #             raw_meta = to_plain_dict(content.get('meta', {}))
-                
-    #             # Parâmetros numéricos para o C++
-    #             params = raw_meta.get('params', {}) if isinstance(raw_meta, dict) else {}
-    #             clean_params = {}
-    #             for pk, pv in params.items():
-    #                 if pv is None: clean_params[pk] = 0.0
-    #                 elif isinstance(pv, (int, float, np.number)): clean_params[pk] = float(pv)
-    #                 else: clean_params[pk] = str(pv) if pv else ""
-
-    #             payload_to_send["datasets"][key] = {
-    #                 "data": df.to_dict(as_series=False),
-    #                 "time_settings": clean_time_settings,
-    #                 "meta": {"params": clean_params}
-    #             }
-
-    #         if last_key:
-    #             payload_to_send["meta"] = payload_to_send["datasets"][last_key]["meta"]
-
-    #         # Serialização JSON com suporte a tipos de data remanescentes
-    #         def json_serial(obj):
-    #             if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
-    #                 return obj.isoformat()
-    #             return str(obj)
-
-    #         json_str = json.dumps(payload_to_send, default=json_serial)
-            
-    #         print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - JSON Ready, calling C++...')
-    #         raw_output = engine_cpp.run(json_str)
-            
-    #         return json.loads(raw_output) if isinstance(raw_output, str) else (raw_output or [])
-
-    #     except Exception as e:
-    #         print(f'< Error in Python-C++ Bridge: {e}')
-    #         import traceback
-    #         traceback.print_exc()
-    #         return []
 
     def _run_cpp_operation(self, batch_payload: dict):
         try:
@@ -428,24 +323,32 @@ class Operation(BaseClass):
                 # --- 4. PREPARAÇÃO DO PAYLOAD ---
                 def to_plain_dict(obj):
                     if is_dataclass(obj): return asdict(obj)
-                    if hasattr(obj, 'to_dict'): return obj.to_dict()
-                    if isinstance(obj, dict): return {k: to_plain_dict(v) for k, v in obj.items()}
-                    if isinstance(obj, list): return [to_plain_dict(x) for x in obj]
-                    return obj
+                    if isinstance(obj, dict): return obj
+                    return {}
 
-                clean_time_settings = to_plain_dict(content.get('time_settings', {}))
-                raw_meta = to_plain_dict(content.get('meta', {}))
+                # 1. Pegamos o dicionário 'meta' que veio do _operation (onde estão as configs)
+                # No seu batch_payload, as configs estão dentro da chave 'meta'
+                content_meta = content.get('meta', {})
+
+                # 2. Agora extraímos de DENTRO do content_meta
+                # Usamos to_plain_dict para garantir que se for dataclass, vire dict
+                clean_time_settings = to_plain_dict(content_meta.get('time_settings', {}))
+                clean_execution_settings = to_plain_dict(content_meta.get('execution_settings', {}))
                 
-                params = raw_meta.get('params', {}) if isinstance(raw_meta, dict) else {}
+                # 3. Tratamento dos parâmetros (params)
+                params = content_meta.get('params', {})
                 clean_params = {}
-                for pk, pv in params.items():
-                    if pv is None: clean_params[pk] = 0.0
-                    elif isinstance(pv, (int, float, np.number)): clean_params[pk] = float(pv)
-                    else: clean_params[pk] = str(pv) if pv else ""
+                if isinstance(params, dict):
+                    for pk, pv in params.items():
+                        if pv is None: clean_params[pk] = 0.0
+                        elif isinstance(pv, (int, float, np.number)): clean_params[pk] = float(pv)
+                        else: clean_params[pk] = str(pv) if pv else ""
 
+                # 4. Montagem do payload final que o C++ vai receber
                 payload_to_send["datasets"][key] = {
                     "data": df.to_dict(as_series=False),
                     "time_settings": clean_time_settings,
+                    "execution_settings": clean_execution_settings,
                     "meta": {"params": clean_params}
                 }
 
@@ -471,43 +374,43 @@ class Operation(BaseClass):
             traceback.print_exc()
             return []
 
-    def _serialize_batch_to_json(self, batch_payload):
-        data = {
-            "meta": {
-                "date_start": str(self.date_start) if self.date_start else None,
-                "date_end": str(self.date_end) if self.date_end else None
-            },
-            "datasets": {}
-        }
+    # def _serialize_batch_to_json(self, batch_payload):
+    #     data = {
+    #         "meta": {
+    #             "date_start": str(self.date_start) if self.date_start else None,
+    #             "date_end": str(self.date_end) if self.date_end else None
+    #         },
+    #         "datasets": {}
+    #     }
 
-        # Função de suporte para tipos NumPy e Datetimes do Polars
-        def _json_default(obj):
-            # Polars utiliza datetime nativo do Python ou objetos específicos que str() resolve
-            if isinstance(obj, (datetime.datetime, datetime.date)):
-                return obj.strftime('%Y-%m-%d %H:%M:%S')
-            if isinstance(obj, np.integer):
-                return int(obj)
-            if isinstance(obj, np.floating):
-                return float(obj)
-            if isinstance(obj, np.ndarray):
-                return obj.tolist()
-            return str(obj)
+    #     # Função de suporte para tipos NumPy e Datetimes do Polars
+    #     def _json_default(obj):
+    #         # Polars utiliza datetime nativo do Python ou objetos específicos que str() resolve
+    #         if isinstance(obj, (datetime.datetime, datetime.date)):
+    #             return obj.strftime('%Y-%m-%d %H:%M:%S')
+    #         if isinstance(obj, np.integer):
+    #             return int(obj)
+    #         if isinstance(obj, np.floating):
+    #             return float(obj)
+    #         if isinstance(obj, np.ndarray):
+    #             return obj.tolist()
+    #         return str(obj)
 
-        for key, payload in batch_payload.items():
-            # No Polars, to_dict(as_series=False) gera o formato {coluna: [lista_de_valores]}
-            # que é o equivalente ao orient='list' do Pandas.
-            df_dict = payload["data"].to_dict(as_series=False)
+    #     for key, payload in batch_payload.items():
+    #         # No Polars, to_dict(as_series=False) gera o formato {coluna: [lista_de_valores]}
+    #         # que é o equivalente ao orient='list' do Pandas.
+    #         df_dict = payload["data"].to_dict(as_series=False)
 
-            data["datasets"][key] = {
-                "data": df_dict,
-                "params": payload["params"],
-                "time_settings": asdict(payload["time_settings"]) if is_dataclass(payload["time_settings"]) else payload["time_settings"],
-                "execution_settings": asdict(payload["execution_settings"]) if is_dataclass(payload["execution_settings"]) else payload["execution_settings"],
-                "signal_rules": payload["signal_rules"]
-            }
+    #         data["datasets"][key] = {
+    #             "data": df_dict,
+    #             "params": payload["params"],
+    #             "time_settings": asdict(payload["time_settings"]) if is_dataclass(payload["time_settings"]) else payload["time_settings"],
+    #             "execution_settings": asdict(payload["execution_settings"]) if is_dataclass(payload["execution_settings"]) else payload["execution_settings"],
+    #             "signal_rules": payload["signal_rules"]
+    #         }
 
-        # O Polars é muito rigoroso com tipos; a conversão para dict acima já prepara o terreno
-        return json.dumps(data, default=_json_default)
+    #     # O Polars é muito rigoroso com tipos; a conversão para dict acima já prepara o terreno
+    #     return json.dumps(data, default=_json_default)
 
     def _save_trades(self, trades):
         # Verifica se 'trades' é de fato uma lista de dicionários
@@ -1023,8 +926,8 @@ if __name__ == "__main__":
     Params = {
         'AT15': { 
             'execution_tf': model_execution_tf,
-            'sl_perc': range(3, 3+1, 1), # 3
-            'tp_perc': range(9, 9+1, 1), 
+            'sl_perc': range(1, 1+1, 1), # 3
+            'tp_perc': range(2, 2+1, 1), 
             'param1': range(20, 20+1, 30), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -1070,31 +973,37 @@ if __name__ == "__main__":
     
     def exit_sl_long(self, df: pl.DataFrame, curr_param_set: dict):
         return df.select(
-            (pl.col("high") - pl.col("low"))
+            ((pl.col("high") - pl.col("low"))*curr_param_set['sl_perc'])
             .rolling_mean(window_size=21)
             .fill_null(0)
         ).to_series()
     def exit_sl_short(self, df: pl.DataFrame, curr_param_set: dict):
         return df.select(
-            (pl.col("high") - pl.col("low"))
+            ((pl.col("high") - pl.col("low"))*curr_param_set['sl_perc'])
             .rolling_mean(window_size=21)
             .fill_null(0)
         ).to_series()
     
-    """
     def exit_tp_long(self, df: pl.DataFrame, curr_param_set: dict):
-        return df['close'] + (df['close']*(curr_param_set['tp_perc']/100))
+        return df.select(
+            ((pl.col("high") - pl.col("low"))*curr_param_set['tp_perc'])
+            .rolling_mean(window_size=21)
+            .fill_null(0)
+        ).to_series()
     def exit_tp_short(self, df: pl.DataFrame, curr_param_set: dict):
-        return df['close'] - (df['close']*(curr_param_set['tp_perc']/100))
-    """
-    exit_tp_long = None
-    exit_tp_short = None
+        return df.select(
+            ((pl.col("high") - pl.col("low"))*curr_param_set['tp_perc'])
+            .rolling_mean(window_size=21)
+            .fill_null(0)
+        ).to_series()
+
 
     AT15 = Strat(
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0),
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0, 
+                                                 exit_nb_only_if_pnl_is=1, exit_nb_long=5, exit_nb_short=5),
             data_settings=DataSettings(fill_method='ffill', fillna=0),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=Params['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
@@ -1110,8 +1019,6 @@ if __name__ == "__main__":
                 'exit_tp_long': exit_tp_long,
                 'exit_tp_short': exit_tp_short,
 
-                'exit_nb_long': None,
-                'exit_nb_short': None,
                 'be_pos_long': None,
                 'be_pos_short': None,
                 'be_neg_long': None,
@@ -1135,8 +1042,6 @@ if __name__ == "__main__":
         OperationParams(
             name='operation_test',
             data=[model_1],
-            #operation=Backtest(BacktestParams(name='backtest_test')),
-            operation_backtest_all_signals_are_positions=False,
             assets=global_assets,
             operation_timeframe=model_execution_tf, # Must always be the smaller timeframe among all strat execution_timeframe
             date_start=None, #'2020-01-01',
@@ -1147,5 +1052,29 @@ if __name__ == "__main__":
     )
 
     operation.run()
+
+"""
+- Implement all remaining Strat and Operation config minor methods
+
+- Pente fino em cada método e operação
+- Sistema de Simulação de Portfolio com suporte de Modelos para filtro/seleção de Asset, Strat e Backtest (param_set)
+- Walkforward / WFM
+- Modulo de Summary, Plot e Analise de Resultados
+- Sistema de armazenamento de dados de Asset (substituir var local global_assets)
+- Support for tick data
+
+
+
+
+
+
+
+"""
+
+
+
+
+
+
 
 

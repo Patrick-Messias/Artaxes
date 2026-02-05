@@ -23,10 +23,12 @@ class ExecutionSettings:
     strat_num_pos: list[int]=field(default_factory=lambda: [1,1])
     order_type: str='market'
     offset: float=0.0
+    exit_nb_only_if_pnl_is: int = 0 # 0 = Positive or Negative, 1 Only if Positive, -1 Only if Negative | Except SL
+    exit_nb_long: int = 0
+    exit_nb_short: int = 0
 
 @dataclass
 class TimeSettings:
-    number_of_bars_close: Optional[int] = 0
     day_trade: bool = False
     timeTI: Optional[list[int]] = None
     timeEF: Optional[list[int]] = None
@@ -77,8 +79,6 @@ class StratParams():
         'exit_sl_short': None,
         'exit_tp_long': None,
         'exit_tp_short': None,
-        # 'exit_nb_long': None,
-        # 'exit_nb_short': None,
         'be_pos_long': None,
         'be_pos_short': None,
         'be_neg_long': None,
@@ -118,132 +118,5 @@ class Strat(BaseClass):
 
 
 
-                                                   #MOVE FUNCTIONS BELOW TO MODEL OR OPERATION WHERE THINGS WILL ACTUALLY HAPPEN
-
-# def _generate_param_comb(params: dict) -> list: # Gera as combinações possíveis de parametros
-#     param_values = []
-#     param_names = []
-
-#     for param_name, param_range in params.items():
-#         if isinstance(param_range, range): param_values.append(list(param_range))
-#         elif isinstance(param_range, list): param_values.append(param_range)
-#         else: param_values.append([param_range])
-#         param_names.append(param_name)
-
-#     combinations = list(itertools.product(*param_values))
-
-#     return [dict(zip(param_names, combo)) for combo in combinations]
-
-# def _resolve_indicator_func(ind: Indicator):
-#     # 1 - Explicit func_path
-#     if ind.func_path:
-#         mod_name, func_name = ind.func_path.rsplit('.', 1)
-
-#         if mod_name == "TA": 
-#             if hasattr(TA, func_name): return getattr(TA, func_name)
-#         try:
-#             mod = importlib.import_module(mod_name)
-#             if hasattr(mod, func_name): return getattr(mod, func_name)
-#         except Exception: pass
-
-#     # 2 - Local Indicators.py
-#     try:
-#         Indicators = importlib.import_module("Indicators")
-#         if hasattr(Indicators, ind.name): return getattr(Indicators, ind.name)
-#     except Exception: pass
-    
-#     # 3 - finta.TA
-#     try:
-#         if hasattr(TA, ind.name): return getattr(TA, ind.name)
-#     except Exception: pass
-
-#     return None
-
-# def _build_col_name(ind: Indicator, params: Dict[str, any]) -> str:
-#     if ind.output_name_template: return ind.output_name_template.format(name=ind.name, **params)
-#     suffix = "__".join([f"{k}={params[k]}" for k in sorted(params.keys())])
-#     return f"{ind.name}__{suffix}"
-
-# def _select_input(df: pd.DataFrame, ind: Indicator) -> pd.DataFrame:
-#     # Para indicadores que precisam de OHLCV (como SMA), retorna o DataFrame completo
-#     if ind.input_cols and len(ind.input_cols) == 1 and ind.input_cols[0] == "close":
-#         return df  # Retorna DataFrame completo para indicadores que usam apenas close
-#     elif ind.input_cols: 
-#         return df[ind.input_cols].copy()
-#     return df
-
-# def _apply_func(func, data, params):
-#     try: return func(data, **params)
-#     except TypeError:
-#         if isinstance(data, pd.DataFrame) and 'close' in data: 
-#             return func(data['close'].values, **params)
-#         return func(np.asarray(data), **params)
-
-# def _calculate_indicator(df: pd.DataFrame, ind: Indicator, params: dict) -> pd.DataFrame: # Calculates for one indicator and one parameter
-#     # Must use indicator name to search for the function to calculate it in files or TA
-
-#     func = _resolve_indicator_func(ind)
-#     if func is None:
-#         print(f"Indicator not found: {ind.name}")
-#         return df
-    
-#     input_df = _select_input(df, ind)
-#     col_name = _build_col_name(ind, params)
-
-#     if ind.sliced_data:
-#         length_param = ind.sliced_data_length_param
-#         if not length_param or length_param not in params:
-#             print(f"Parameter window absent {ind.name}")
-#             return df
-        
-#         win = int(params[length_param])
-#         out = [np.nan] * len(df)
-
-#         for i in range(win - 1, len(df)):
-#             window = input_df.iloc[i - win + 1:i + 1]
-#             res = _apply_func(func, window, params)
-#             if isinstance(res, (pd.Series, list, np.ndarray)): out[i] = pd.Series(res).iloc[-1]
-#             elif isinstance(res, pd.DataFrame): out[i] = res.iloc[-1, -1] # takes last col/val
-#             else: out[i] = res
-#         df[col_name] = out
-#         return df
-
-#     # Full data (rolling window done in func or not existent)
-#     res = _apply_func(func, input_df, params)
-#     if isinstance(res, pd.Series): df[col_name] = res.values
-#     elif isinstance(res, pd.DataFrame):
-#         for c in res.columns: df[f"{col_name}_{c}"] = res[c].values
-#     else: df[col_name] = res
-#     return df
-
-#                                                    #MOVE FUNCTIONS BELOW TO MODEL OR OPERATION WHERE THINGS WILL ACTUALLY HAPPEN
-
-# def calculate_indicators(df: pd.DataFrame, indicators: dict = None) -> pd.DataFrame: # Calculates for all indicators and all parameters
-#     """
-#     Calcula indicadores para um DataFrame de dados
-    
-#     Args:
-#         df: DataFrame com dados OHLCV
-#         indicators: Dicionário com indicadores para calcular
-        
-#     Returns:
-#         DataFrame com os indicadores calculados
-#     """
-#     if indicators is None: 
-#         return df
-    
-#     # Calculate Indicators
-#     for ind_name, ind in indicators.items():
-#         param_combinations = _generate_param_comb(ind.params)
-
-#         for params in param_combinations:
-#             df = _calculate_indicator(df, ind, params)
-
-#     return df
-
-
-# def generate_signals(self, asset_name: str = None, indicators_cache: dict = None) -> pd.DataFrame:
-#     # Must take DF and indicators, use all model rules to generate when have signals to enter, exit, etc
-#     return None
 
 
