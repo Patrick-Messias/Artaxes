@@ -262,6 +262,109 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Execution Functions || ===================================================================== ||
 
+    # def _run_cpp_operation(self, batch_payload: dict):
+    #     try:
+    #         # 1. Garante o caminho da DLL
+    #         path_to_dll = r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release"
+    #         if path_to_dll not in sys.path: 
+    #             sys.path.append(path_to_dll)
+    #         import engine_cpp # type: ignore
+
+    #         payload_to_send = {"datasets": {}, "meta": {}}
+    #         last_key = None
+
+    #         for key, content in batch_payload.items():
+    #             last_key = key
+    #             df = content['data'].clone()
+                
+    #             # --- TRATAMENTO DE DATETIME (CORREÇÃO DO ERRO) ---
+    #             if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
+    #                 df = df.with_columns(
+    #                     # No Polars moderno, usa-se to_string em vez de format
+    #                     pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S')
+    #                 )
+
+    #             # --- TRATAMENTO DE SINAIS (PREVENÇÃO DE ERROS DE DTYPE) ---
+    #             signals = [
+    #                 'entry_long', 'entry_short', 
+    #                 'exit_tf_long', 'exit_tf_short', 
+    #                 'exit_tp_long', 'exit_tp_short', 
+    #                 'exit_sl_long', 'exit_sl_short'
+    #             ]
+    #             cols_signals = [c for c in signals if c in df.columns]
+                
+    #             # if cols_signals:
+    #             #     # Cast para Int32 antes do fill_null evita ambiguidade com Boolean
+    #             #     df = df.with_columns([
+    #             #         pl.col(c).cast(pl.Int32, strict=False).fill_null(0) for c in cols_signals
+    #             #     ])
+    #             if cols_signals: #  Cast para Int32 antes do fill_null evita ambiguidade com Boolean
+    #                 df = df.with_columns([
+    #                     pl.col(c).cast(pl.Int32).fill_null(0) for c in cols_signals
+    #                 ])
+    #                 # Verificação rápida
+    #                 for c in cols_signals:
+    #                     if df.select(pl.col(c).sum()).item() > 0:
+    #                         print(f"DEBUG: Sinal {c} contém ativações enviadas ao C++.")
+                
+    #             # --- TRATAMENTO NUMÉRICO (OHLC e Indicadores) ---
+    #             cols_num = [
+    #                 name for name, dtype in df.schema.items() 
+    #                 if dtype.is_numeric() and name not in signals
+    #             ]
+                
+    #             if cols_num:
+    #                 df = df.with_columns([
+    #                     pl.col(c).cast(pl.Float64).fill_null(0.0) for c in cols_num
+    #                 ])
+
+    #             # Conversão de objetos complexos para dicionários simples
+    #             def to_plain_dict(obj):
+    #                 if is_dataclass(obj): return asdict(obj)
+    #                 if hasattr(obj, 'to_dict'): return obj.to_dict()
+    #                 if isinstance(obj, dict): return {k: to_plain_dict(v) for k, v in obj.items()}
+    #                 if isinstance(obj, list): return [to_plain_dict(x) for x in obj]
+    #                 return obj
+
+    #             clean_time_settings = to_plain_dict(content.get('time_settings', {}))
+    #             raw_meta = to_plain_dict(content.get('meta', {}))
+                
+    #             # Parâmetros numéricos para o C++
+    #             params = raw_meta.get('params', {}) if isinstance(raw_meta, dict) else {}
+    #             clean_params = {}
+    #             for pk, pv in params.items():
+    #                 if pv is None: clean_params[pk] = 0.0
+    #                 elif isinstance(pv, (int, float, np.number)): clean_params[pk] = float(pv)
+    #                 else: clean_params[pk] = str(pv) if pv else ""
+
+    #             payload_to_send["datasets"][key] = {
+    #                 "data": df.to_dict(as_series=False),
+    #                 "time_settings": clean_time_settings,
+    #                 "meta": {"params": clean_params}
+    #             }
+
+    #         if last_key:
+    #             payload_to_send["meta"] = payload_to_send["datasets"][last_key]["meta"]
+
+    #         # Serialização JSON com suporte a tipos de data remanescentes
+    #         def json_serial(obj):
+    #             if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
+    #                 return obj.isoformat()
+    #             return str(obj)
+
+    #         json_str = json.dumps(payload_to_send, default=json_serial)
+            
+    #         print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - JSON Ready, calling C++...')
+    #         raw_output = engine_cpp.run(json_str)
+            
+    #         return json.loads(raw_output) if isinstance(raw_output, str) else (raw_output or [])
+
+    #     except Exception as e:
+    #         print(f'< Error in Python-C++ Bridge: {e}')
+    #         import traceback
+    #         traceback.print_exc()
+    #         return []
+
     def _run_cpp_operation(self, batch_payload: dict):
         try:
             # 1. Garante o caminho da DLL
@@ -277,48 +380,52 @@ class Operation(BaseClass):
                 last_key = key
                 df = content['data'].clone()
                 
-                # --- TRATAMENTO DE DATETIME (CORREÇÃO DO ERRO) ---
+                # --- 1. TRATAMENTO DE DATETIME ---
                 if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
                     df = df.with_columns(
-                        # No Polars moderno, usa-se to_string em vez de format
                         pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S')
                     )
 
-                # --- TRATAMENTO DE SINAIS (PREVENÇÃO DE ERROS DE DTYPE) ---
-                signals = [
+                # --- 2. TRATAMENTO DE SINAIS (BINÁRIOS VS PREÇO) ---
+                # Apenas sinais de entrada/saída lógica devem ser Int32 (0 ou 1)
+                signals_int = [
                     'entry_long', 'entry_short', 
-                    'exit_tf_long', 'exit_tf_short', 
+                    'exit_tf_long', 'exit_tf_short'
+                ]
+                
+                # SL e TP são distâncias de preço, devem ser Float64 para não virarem 0
+                signals_float = [
                     'exit_tp_long', 'exit_tp_short', 
                     'exit_sl_long', 'exit_sl_short'
                 ]
-                cols_signals = [c for c in signals if c in df.columns]
-                
-                # if cols_signals:
-                #     # Cast para Int32 antes do fill_null evita ambiguidade com Boolean
-                #     df = df.with_columns([
-                #         pl.col(c).cast(pl.Int32, strict=False).fill_null(0) for c in cols_signals
-                #     ])
-                if cols_signals: #  Cast para Int32 antes do fill_null evita ambiguidade com Boolean
+
+                # Aplicando Cast para Inteiro nos sinais lógicos
+                cols_to_int = [c for c in signals_int if c in df.columns]
+                if cols_to_int:
                     df = df.with_columns([
-                        pl.col(c).cast(pl.Int32).fill_null(0) for c in cols_signals
+                        pl.col(c).cast(pl.Int32).fill_null(0) for c in cols_to_int
                     ])
-                    # Verificação rápida
-                    for c in cols_signals:
-                        if df.select(pl.col(c).sum()).item() > 0:
-                            print(f"DEBUG: Sinal {c} contém ativações enviadas ao C++.")
                 
-                # --- TRATAMENTO NUMÉRICO (OHLC e Indicadores) ---
-                cols_num = [
+                # --- 3. TRATAMENTO NUMÉRICO (OHLC, Indicadores e SL/TP) ---
+                # Identifica colunas numéricas, garantindo que SL/TP entrem como Float
+                cols_to_float = [
                     name for name, dtype in df.schema.items() 
-                    if dtype.is_numeric() and name not in signals
+                    if (dtype.is_numeric() or name in signals_float) and name not in signals_int
                 ]
                 
-                if cols_num:
+                if cols_to_float:
                     df = df.with_columns([
-                        pl.col(c).cast(pl.Float64).fill_null(0.0) for c in cols_num
+                        pl.col(c).cast(pl.Float64).fill_null(0.0) for c in cols_to_float
                     ])
 
-                # Conversão de objetos complexos para dicionários simples
+                # Verificação de Debug para o console Python
+                for c in ['exit_sl_long', 'exit_sl_short']:
+                    if c in df.columns:
+                        val_check = df.select(pl.col(c).max()).item()
+                        if val_check == 0:
+                            print(f"AVISO: Coluna {c} está chegando zerada ao Bridge!")
+
+                # --- 4. PREPARAÇÃO DO PAYLOAD ---
                 def to_plain_dict(obj):
                     if is_dataclass(obj): return asdict(obj)
                     if hasattr(obj, 'to_dict'): return obj.to_dict()
@@ -329,7 +436,6 @@ class Operation(BaseClass):
                 clean_time_settings = to_plain_dict(content.get('time_settings', {}))
                 raw_meta = to_plain_dict(content.get('meta', {}))
                 
-                # Parâmetros numéricos para o C++
                 params = raw_meta.get('params', {}) if isinstance(raw_meta, dict) else {}
                 clean_params = {}
                 for pk, pv in params.items():
@@ -346,7 +452,7 @@ class Operation(BaseClass):
             if last_key:
                 payload_to_send["meta"] = payload_to_send["datasets"][last_key]["meta"]
 
-            # Serialização JSON com suporte a tipos de data remanescentes
+            # --- 5. SERIALIZAÇÃO E CHAMADA C++ ---
             def json_serial(obj):
                 if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
                     return obj.isoformat()
@@ -961,19 +1067,26 @@ if __name__ == "__main__":
     def exit_tf_short(self, df: pl.DataFrame, curr_param_set: dict):
         return (df['close'] < df['open']) & (df['close'].shift(1) < df['open'].shift(1))
 
-    """
+    
     def exit_sl_long(self, df: pl.DataFrame, curr_param_set: dict):
-        return df['close'] - (df['close']*(curr_param_set['sl_perc']/100))
+        return df.select(
+            (pl.col("high") - pl.col("low"))
+            .rolling_mean(window_size=21)
+            .fill_null(0)
+        ).to_series()
     def exit_sl_short(self, df: pl.DataFrame, curr_param_set: dict):
-        return df['close'] + (df['close']*(curr_param_set['sl_perc']/100))
-
+        return df.select(
+            (pl.col("high") - pl.col("low"))
+            .rolling_mean(window_size=21)
+            .fill_null(0)
+        ).to_series()
+    
+    """
     def exit_tp_long(self, df: pl.DataFrame, curr_param_set: dict):
         return df['close'] + (df['close']*(curr_param_set['tp_perc']/100))
     def exit_tp_short(self, df: pl.DataFrame, curr_param_set: dict):
         return df['close'] - (df['close']*(curr_param_set['tp_perc']/100))
     """
-    exit_sl_long = None
-    exit_sl_short = None
     exit_tp_long = None
     exit_tp_short = None
 
