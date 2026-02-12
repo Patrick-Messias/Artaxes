@@ -75,7 +75,7 @@ events:
       The output was:
       0
       Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-      Compila├º├úo de 05/02/2026 16:20:03 iniciada.
+      Compila├º├úo de 11/02/2026 22:59:19 iniciada.
       
       Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\4.2.1\\CompilerIdCXX\\CompilerIdCXX.vcxproj" no n├│ 1 (destinos padr├úo).
       PrepareForBuild:
@@ -104,7 +104,7 @@ events:
           0 Aviso(s)
           0 Erro(s)
       
-      Tempo Decorrido 00:00:00.75
+      Tempo Decorrido 00:00:01.04
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -325,6 +325,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
         - "C:/vcpkg/installed/x64-windows/tools/python3"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -620,6 +621,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
         - "C:/vcpkg/installed/x64-windows/tools/python3"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -854,6 +856,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
         - "C:/vcpkg/installed/x64-windows/tools/python3"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -1147,6 +1150,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
         - "C:/vcpkg/installed/x64-windows/tools/python3"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -1381,6 +1385,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
         - "C:/vcpkg/installed/x64-windows/tools/python3"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -1439,6 +1444,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/python3/"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1480,6 +1486,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/python3/"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1521,6 +1528,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/python3/"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1583,6 +1591,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/python3/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/python3/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/python3/rc"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.com"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/rc"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/rc"
@@ -1706,6 +1717,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/python3/rc.com"
       - "C:/vcpkg/installed/x64-windows/tools/python3/rc.exe"
       - "C:/vcpkg/installed/x64-windows/tools/python3/rc"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.com"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/rc.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/rc.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/rc"
@@ -1829,6 +1843,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/python3/rc.com"
       - "C:/vcpkg/installed/x64-windows/tools/python3/rc.exe"
       - "C:/vcpkg/installed/x64-windows/tools/python3/rc"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.com"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc"
       - "C:/Program Files/Python311/Scripts/rc.com"
       - "C:/Program Files/Python311/Scripts/rc.exe"
       - "C:/Program Files/Python311/Scripts/rc"
@@ -1929,6 +1946,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
         - "C:/vcpkg/installed/x64-windows/tools/python3"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -1969,8 +1987,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-e0u63c"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-e0u63c"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-oagor7"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-oagor7"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -1984,39 +2002,39 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-e0u63c'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-oagor7'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_05f16.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_35b7e.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 05/02/2026 16:20:04 iniciada.
+        Compila├º├úo de 11/02/2026 22:59:20 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-e0u63c\\cmTC_05f16.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-oagor7\\cmTC_35b7e.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-e0u63c\\Debug\\".
-          Criando o diret├│rio "cmTC_05f16.dir\\Debug\\cmTC_05f16.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-oagor7\\Debug\\".
+          Criando o diret├│rio "cmTC_35b7e.dir\\Debug\\cmTC_35b7e.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_05f16.dir\\Debug\\cmTC_05f16.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_05f16.dir\\Debug\\cmTC_05f16.tlog\\unsuccessfulbuild".
+          Criando "cmTC_35b7e.dir\\Debug\\cmTC_35b7e.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_35b7e.dir\\Debug\\cmTC_35b7e.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_05f16.dir\\Debug\\\\" /Fd"cmTC_05f16.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_35b7e.dir\\Debug\\\\" /Fd"cmTC_35b7e.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_05f16.dir\\Debug\\\\" /Fd"cmTC_05f16.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_35b7e.dir\\Debug\\\\" /Fd"cmTC_35b7e.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-e0u63c\\Debug\\cmTC_05f16.exe" /INCREMENTAL /ILK:"cmTC_05f16.dir\\Debug\\cmTC_05f16.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-e0u63c/Debug/cmTC_05f16.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-e0u63c/Debug/cmTC_05f16.lib" /MACHINE:X64  /machine:x64 cmTC_05f16.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_05f16.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-e0u63c\\Debug\\cmTC_05f16.exe
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-oagor7\\Debug\\cmTC_35b7e.exe" /INCREMENTAL /ILK:"cmTC_35b7e.dir\\Debug\\cmTC_35b7e.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-oagor7/Debug/cmTC_35b7e.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-oagor7/Debug/cmTC_35b7e.lib" /MACHINE:X64  /machine:x64 cmTC_35b7e.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_35b7e.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-oagor7\\Debug\\cmTC_35b7e.exe
         FinalizeBuildStatus:
-          Excluindo o arquivo "cmTC_05f16.dir\\Debug\\cmTC_05f16.tlog\\unsuccessfulbuild".
-          Tocando "cmTC_05f16.dir\\Debug\\cmTC_05f16.tlog\\cmTC_05f16.lastbuildstate".
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-e0u63c\\cmTC_05f16.vcxproj" (destinos padr├úo).
+          Excluindo o arquivo "cmTC_35b7e.dir\\Debug\\cmTC_35b7e.tlog\\unsuccessfulbuild".
+          Tocando "cmTC_35b7e.dir\\Debug\\cmTC_35b7e.tlog\\cmTC_35b7e.lastbuildstate".
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-oagor7\\cmTC_35b7e.vcxproj" (destinos padr├úo).
         
         Compila├º├úo com ├¬xito.
             0 Aviso(s)
             0 Erro(s)
         
-        Tempo Decorrido 00:00:01.32
+        Tempo Decorrido 00:00:00.71
         
       exitCode: 0
   -
@@ -2052,7 +2070,7 @@ events:
     backtrace:
       - "C:/vcpkg/installed/x64-windows/share/python3/vcpkg-cmake-wrapper.cmake:42 (find_path)"
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:862 (include)"
-      - "CMakeLists.txt:19 (find_package)"
+      - "CMakeLists.txt:14 (find_package)"
     mode: "path"
     variable: "_Python3_INCLUDE_DIR"
     description: "Path to a file."
@@ -2114,7 +2132,7 @@ events:
     backtrace:
       - "C:/vcpkg/installed/x64-windows/share/python3/vcpkg-cmake-wrapper.cmake:52 (find_library)"
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:862 (include)"
-      - "CMakeLists.txt:19 (find_package)"
+      - "CMakeLists.txt:14 (find_package)"
     mode: "library"
     variable: "_Python3_LIBRARY_RELEASE"
     description: "Path to a library."
@@ -2180,7 +2198,7 @@ events:
     backtrace:
       - "C:/vcpkg/installed/x64-windows/share/python3/vcpkg-cmake-wrapper.cmake:60 (find_library)"
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:862 (include)"
-      - "CMakeLists.txt:19 (find_package)"
+      - "CMakeLists.txt:14 (find_package)"
     mode: "library"
     variable: "_Python3_LIBRARY_DEBUG"
     description: "Path to a library."
@@ -2246,7 +2264,7 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython3.cmake:671 (include)"
       - "C:/vcpkg/installed/x64-windows/share/python3/vcpkg-cmake-wrapper.cmake:83 (_find_package)"
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:862 (include)"
-      - "CMakeLists.txt:19 (find_package)"
+      - "CMakeLists.txt:14 (find_package)"
     mode: "program"
     variable: "_Python3_EXECUTABLE_DEBUG"
     description: "Path to a program."
@@ -2298,6 +2316,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools"
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -2337,7 +2356,7 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython3.cmake:671 (include)"
       - "C:/vcpkg/installed/x64-windows/share/python3/vcpkg-cmake-wrapper.cmake:83 (_find_package)"
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:862 (include)"
-      - "CMakeLists.txt:19 (find_package)"
+      - "CMakeLists.txt:14 (find_package)"
     mode: "library"
     variable: "_Python3_RUNTIME_LIBRARY_RELEASE"
     description: "Path to a library."
@@ -2936,7 +2955,7 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython3.cmake:671 (include)"
       - "C:/vcpkg/installed/x64-windows/share/python3/vcpkg-cmake-wrapper.cmake:83 (_find_package)"
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:862 (include)"
-      - "CMakeLists.txt:19 (find_package)"
+      - "CMakeLists.txt:14 (find_package)"
     mode: "library"
     variable: "_Python3_RUNTIME_LIBRARY_DEBUG"
     description: "Path to a library."
@@ -3390,12 +3409,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/share/pybind11/pybind11Common.cmake:427 (_pybind11_generate_lto)"
       - "C:/vcpkg/installed/x64-windows/share/pybind11/pybind11Config.cmake:257 (include)"
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
-      - "CMakeLists.txt:20 (find_package)"
+      - "CMakeLists.txt:15 (find_package)"
     checks:
       - "Performing Test HAS_MSVC_GL_LTCG"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6wn7pt"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6wn7pt"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-xjd600"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-xjd600"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -3408,69 +3427,69 @@ events:
       variable: "HAS_MSVC_GL_LTCG"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6wn7pt'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-xjd600'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_0c464.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_652ef.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 05/02/2026 16:20:07 iniciada.
+        Compila├º├úo de 11/02/2026 22:59:22 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\cmTC_0c464.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\cmTC_652ef.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\Debug\\".
-          Criando o diret├│rio "cmTC_0c464.dir\\Debug\\cmTC_0c464.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\Debug\\".
+          Criando o diret├│rio "cmTC_652ef.dir\\Debug\\cmTC_652ef.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_0c464.dir\\Debug\\cmTC_0c464.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_0c464.dir\\Debug\\cmTC_0c464.tlog\\unsuccessfulbuild".
+          Criando "cmTC_652ef.dir\\Debug\\cmTC_652ef.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_652ef.dir\\Debug\\cmTC_652ef.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\cmTC_0c464.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\cmTC_652ef.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_0c464.dir\\Debug\\cmTC_0c464_MD.tlog\\".
+          Criando o diret├│rio "cmTC_652ef.dir\\Debug\\cmTC_652ef_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c464.dir\\Debug\\\\" /scanDependencies "cmTC_0c464.dir\\Debug\\\\" /Fo"cmTC_0c464.dir\\Debug\\\\" /Fd"cmTC_0c464.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_652ef.dir\\Debug\\\\" /scanDependencies "cmTC_652ef.dir\\Debug\\\\" /Fo"cmTC_652ef.dir\\Debug\\\\" /Fd"cmTC_652ef.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c464.dir\\Debug\\\\" /scanDependencies "cmTC_0c464.dir\\Debug\\\\" /Fo"cmTC_0c464.dir\\Debug\\\\" /Fd"cmTC_0c464.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_652ef.dir\\Debug\\\\" /scanDependencies "cmTC_652ef.dir\\Debug\\\\" /Fo"cmTC_652ef.dir\\Debug\\\\" /Fd"cmTC_652ef.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\src.cxx"
           src.cxx
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c464.dir\\Debug\\\\" /Fo"cmTC_0c464.dir\\Debug\\\\" /Fd"cmTC_0c464.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_0c464.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_652ef.dir\\Debug\\\\" /Fo"cmTC_652ef.dir\\Debug\\\\" /Fd"cmTC_652ef.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_652ef.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c464.dir\\Debug\\\\" /Fo"cmTC_0c464.dir\\Debug\\\\" /Fd"cmTC_0c464.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_0c464.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_652ef.dir\\Debug\\\\" /Fo"cmTC_652ef.dir\\Debug\\\\" /Fd"cmTC_652ef.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_652ef.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\src.cxx"
           src.cxx
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\Debug\\cmTC_0c464.exe" /INCREMENTAL /ILK:"cmTC_0c464.dir\\Debug\\cmTC_0c464.ilk" /NOLOGO "-LTCG" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6wn7pt/Debug/cmTC_0c464.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6wn7pt/Debug/cmTC_0c464.lib" /MACHINE:X64  /machine:x64 cmTC_0c464.dir\\Debug\\src.obj
-        LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\cmTC_0c464.vcxproj]
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\Debug\\cmTC_652ef.exe" /INCREMENTAL /ILK:"cmTC_652ef.dir\\Debug\\cmTC_652ef.ilk" /NOLOGO "-LTCG" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-xjd600/Debug/cmTC_652ef.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-xjd600/Debug/cmTC_652ef.lib" /MACHINE:X64  /machine:x64 cmTC_652ef.dir\\Debug\\src.obj
+        LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\cmTC_652ef.vcxproj]
           Gerando c├│digo
           Finalizada a gera├º├úo de c├│digo
-          cmTC_0c464.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\Debug\\cmTC_0c464.exe
+          cmTC_652ef.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\Debug\\cmTC_652ef.exe
         FinalizeBuildStatus:
-          Excluindo o arquivo "cmTC_0c464.dir\\Debug\\cmTC_0c464.tlog\\unsuccessfulbuild".
-          Tocando "cmTC_0c464.dir\\Debug\\cmTC_0c464.tlog\\cmTC_0c464.lastbuildstate".
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\cmTC_0c464.vcxproj" (destinos padr├úo).
+          Excluindo o arquivo "cmTC_652ef.dir\\Debug\\cmTC_652ef.tlog\\unsuccessfulbuild".
+          Tocando "cmTC_652ef.dir\\Debug\\cmTC_652ef.tlog\\cmTC_652ef.lastbuildstate".
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\cmTC_652ef.vcxproj" (destinos padr├úo).
         
         Compila├º├úo com ├¬xito.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\cmTC_0c464.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\cmTC_652ef.vcxproj" (destino padr├úo) (1) ->
         (Link destino) -> 
-          LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6wn7pt\\cmTC_0c464.vcxproj]
+          LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-xjd600\\cmTC_652ef.vcxproj]
         
             1 Aviso(s)
             0 Erro(s)
         
-        Tempo Decorrido 00:00:01.21
+        Tempo Decorrido 00:00:01.22
         
       exitCode: 0
   -
     kind: "find_package-v1"
     backtrace:
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
-      - "CMakeLists.txt:20 (find_package)"
+      - "CMakeLists.txt:15 (find_package)"
     name: "pybind11"
     configs:
       -
@@ -3566,7 +3585,7 @@ events:
     kind: "find_package-v1"
     backtrace:
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
-      - "CMakeLists.txt:21 (find_package)"
+      - "CMakeLists.txt:16 (find_package)"
     name: "nlohmann_json"
     configs:
       -
@@ -3659,6 +3678,360 @@ events:
         - "C:/Program Files (x86)/backtest_engine"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/Internal/CheckSourceCompiles.cmake:104 (try_compile)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CheckCXXSourceCompiles.cmake:103 (cmake_check_source_compiles)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindThreads.cmake:162 (check_cxx_source_compiles)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindThreads.cmake:226 (_threads_check_libc)"
+      - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)"
+      - "C:/vcpkg/installed/x64-windows/share/tbb/TBBConfig.cmake:3 (find_dependency)"
+      - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
+      - "CMakeLists.txt:17 (find_package)"
+    checks:
+      - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
+    directories:
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-tj8p7g"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-tj8p7g"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
+      CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
+      CMAKE_EXE_LINKER_FLAGS: "/machine:x64"
+      VCPKG_INSTALLED_DIR: "C:/vcpkg/installed"
+      VCPKG_PREFER_SYSTEM_LIBS: "OFF"
+      VCPKG_TARGET_TRIPLET: "x64-windows"
+      Z_VCPKG_ROOT_DIR: "C:/vcpkg"
+    buildResult:
+      variable: "CMAKE_HAVE_LIBC_PTHREAD"
+      cached: true
+      stdout: |
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-tj8p7g'
+        
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_e76c1.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
+        Compila├º├úo de 11/02/2026 22:59:23 iniciada.
+        
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj" no n├│ 1 (destinos padr├úo).
+        PrepareForBuild:
+          Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\Debug\\".
+          Criando o diret├│rio "cmTC_e76c1.dir\\Debug\\cmTC_e76c1.tlog\\".
+        InitializeBuildStatus:
+          Criando "cmTC_e76c1.dir\\Debug\\cmTC_e76c1.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_e76c1.dir\\Debug\\cmTC_e76c1.tlog\\unsuccessfulbuild".
+        ComputeStdModulesCompileInputs:
+          Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
+          Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
+          Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
+        MakeDirsForCl:
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.dir\\Debug\\microsoft\\STL".
+        SetModuleDependencies:
+          Criando o diret├│rio "cmTC_e76c1.dir\\Debug\\cmTC_e76c1_MD.tlog\\".
+          Scanning sources for module dependencies...
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e76c1.dir\\Debug\\\\" /scanDependencies "cmTC_e76c1.dir\\Debug\\\\" /Fo"cmTC_e76c1.dir\\Debug\\\\" /Fd"cmTC_e76c1.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx"
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+          Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+          Copyright (C) Microsoft Corporation. Todos os direitos reservados.
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e76c1.dir\\Debug\\\\" /scanDependencies "cmTC_e76c1.dir\\Debug\\\\" /Fo"cmTC_e76c1.dir\\Debug\\\\" /Fd"cmTC_e76c1.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx"
+          src.cxx
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+        C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_e76c1.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+        ClCompile:
+          Compiling...
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e76c1.dir\\Debug\\\\" /Fo"cmTC_e76c1.dir\\Debug\\\\" /Fd"cmTC_e76c1.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_e76c1.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx"
+          Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
+          Copyright (C) Microsoft Corporation. Todos os direitos reservados.
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e76c1.dir\\Debug\\\\" /Fo"cmTC_e76c1.dir\\Debug\\\\" /Fd"cmTC_e76c1.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_e76c1.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx"
+          src.cxx
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj" (destinos padr├úo) -- FALHA.
+        
+        FALHA da compila├º├úo.
+        
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj" (destino padr├úo) (1) ->
+        (SetModuleDependencies destino) -> 
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_e76c1.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+        
+        
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj" (destino padr├úo) (1) ->
+        (SetModuleDependencies destino) -> 
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+        
+        
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj" (destino padr├úo) (1) ->
+        (ClCompile destino) -> 
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tj8p7g\\cmTC_e76c1.vcxproj]
+        
+            1 Aviso(s)
+            4 Erro(s)
+        
+        Tempo Decorrido 00:00:00.61
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CheckLibraryExists.cmake:154 (try_compile)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindThreads.cmake:175 (check_library_exists)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindThreads.cmake:238 (_threads_check_lib)"
+      - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)"
+      - "C:/vcpkg/installed/x64-windows/share/tbb/TBBConfig.cmake:3 (find_dependency)"
+      - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
+      - "CMakeLists.txt:17 (find_package)"
+    checks:
+      - "Looking for pthread_create in pthreads"
+    directories:
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-aygqgg"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-aygqgg"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
+      CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
+      CMAKE_EXE_LINKER_FLAGS: "/machine:x64"
+      VCPKG_INSTALLED_DIR: "C:/vcpkg/installed"
+      VCPKG_PREFER_SYSTEM_LIBS: "OFF"
+      VCPKG_TARGET_TRIPLET: "x64-windows"
+      Z_VCPKG_ROOT_DIR: "C:/vcpkg"
+    buildResult:
+      variable: "CMAKE_HAVE_PTHREADS_CREATE"
+      cached: true
+      stdout: |
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-aygqgg'
+        
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_dcb63.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
+        Compila├º├úo de 11/02/2026 22:59:24 iniciada.
+        
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\cmTC_dcb63.vcxproj" no n├│ 1 (destinos padr├úo).
+        PrepareForBuild:
+          Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\Debug\\".
+          Criando o diret├│rio "cmTC_dcb63.dir\\Debug\\cmTC_dcb63.tlog\\".
+        InitializeBuildStatus:
+          Criando "cmTC_dcb63.dir\\Debug\\cmTC_dcb63.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_dcb63.dir\\Debug\\cmTC_dcb63.tlog\\unsuccessfulbuild".
+        ComputeStdModulesCompileInputs:
+          Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
+          Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
+          Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
+        MakeDirsForCl:
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\cmTC_dcb63.dir\\Debug\\microsoft\\STL".
+        SetModuleDependencies:
+          Criando o diret├│rio "cmTC_dcb63.dir\\Debug\\cmTC_dcb63_MD.tlog\\".
+          Scanning sources for module dependencies...
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_dcb63.dir\\Debug\\\\" /scanDependencies "cmTC_dcb63.dir\\Debug\\\\" /Fo"cmTC_dcb63.dir\\Debug\\\\" /Fd"cmTC_dcb63.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\CheckFunctionExists.cxx"
+          Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
+          Copyright (C) Microsoft Corporation. Todos os direitos reservados.
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_dcb63.dir\\Debug\\\\" /scanDependencies "cmTC_dcb63.dir\\Debug\\\\" /Fo"cmTC_dcb63.dir\\Debug\\\\" /Fd"cmTC_dcb63.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\CheckFunctionExists.cxx"
+          CheckFunctionExists.cxx
+        ClCompile:
+          Compiling...
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_dcb63.dir\\Debug\\\\" /Fo"cmTC_dcb63.dir\\Debug\\\\" /Fd"cmTC_dcb63.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_dcb63.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\CheckFunctionExists.cxx"
+          Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
+          Copyright (C) Microsoft Corporation. Todos os direitos reservados.
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_dcb63.dir\\Debug\\\\" /Fo"cmTC_dcb63.dir\\Debug\\\\" /Fd"cmTC_dcb63.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_dcb63.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\CheckFunctionExists.cxx"
+          CheckFunctionExists.cxx
+        Link:
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\Debug\\cmTC_dcb63.exe" /INCREMENTAL /ILK:"cmTC_dcb63.dir\\Debug\\cmTC_dcb63.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-aygqgg/Debug/cmTC_dcb63.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-aygqgg/Debug/cmTC_dcb63.lib" /MACHINE:X64  /machine:x64 cmTC_dcb63.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\cmTC_dcb63.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\cmTC_dcb63.vcxproj" (destinos padr├úo) -- FALHA.
+        
+        FALHA da compila├º├úo.
+        
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\cmTC_dcb63.vcxproj" (destino padr├úo) (1) ->
+        (Link destino) -> 
+          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-aygqgg\\cmTC_dcb63.vcxproj]
+        
+            0 Aviso(s)
+            1 Erro(s)
+        
+        Tempo Decorrido 00:00:00.68
+        
+      exitCode: 1
+  -
+    kind: "try_compile-v1"
+    backtrace:
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CheckLibraryExists.cmake:154 (try_compile)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindThreads.cmake:175 (check_library_exists)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindThreads.cmake:239 (_threads_check_lib)"
+      - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:93 (find_package)"
+      - "C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake:125 (__find_dependency_common)"
+      - "C:/vcpkg/installed/x64-windows/share/tbb/TBBConfig.cmake:3 (find_dependency)"
+      - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
+      - "CMakeLists.txt:17 (find_package)"
+    checks:
+      - "Looking for pthread_create in pthread"
+    directories:
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-emttao"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-emttao"
+    cmakeVariables:
+      CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
+      CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
+      CMAKE_EXE_LINKER_FLAGS: "/machine:x64"
+      VCPKG_INSTALLED_DIR: "C:/vcpkg/installed"
+      VCPKG_PREFER_SYSTEM_LIBS: "OFF"
+      VCPKG_TARGET_TRIPLET: "x64-windows"
+      Z_VCPKG_ROOT_DIR: "C:/vcpkg"
+    buildResult:
+      variable: "CMAKE_HAVE_PTHREAD_CREATE"
+      cached: true
+      stdout: |
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-emttao'
+        
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_e3251.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
+        Compila├º├úo de 11/02/2026 22:59:25 iniciada.
+        
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\cmTC_e3251.vcxproj" no n├│ 1 (destinos padr├úo).
+        PrepareForBuild:
+          Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\Debug\\".
+          Criando o diret├│rio "cmTC_e3251.dir\\Debug\\cmTC_e3251.tlog\\".
+        InitializeBuildStatus:
+          Criando "cmTC_e3251.dir\\Debug\\cmTC_e3251.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_e3251.dir\\Debug\\cmTC_e3251.tlog\\unsuccessfulbuild".
+        ComputeStdModulesCompileInputs:
+          Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
+          Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
+          Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
+        MakeDirsForCl:
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\cmTC_e3251.dir\\Debug\\microsoft\\STL".
+        SetModuleDependencies:
+          Criando o diret├│rio "cmTC_e3251.dir\\Debug\\cmTC_e3251_MD.tlog\\".
+          Scanning sources for module dependencies...
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e3251.dir\\Debug\\\\" /scanDependencies "cmTC_e3251.dir\\Debug\\\\" /Fo"cmTC_e3251.dir\\Debug\\\\" /Fd"cmTC_e3251.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\CheckFunctionExists.cxx"
+          Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
+          Copyright (C) Microsoft Corporation. Todos os direitos reservados.
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e3251.dir\\Debug\\\\" /scanDependencies "cmTC_e3251.dir\\Debug\\\\" /Fo"cmTC_e3251.dir\\Debug\\\\" /Fd"cmTC_e3251.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\CheckFunctionExists.cxx"
+          CheckFunctionExists.cxx
+        ClCompile:
+          Compiling...
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e3251.dir\\Debug\\\\" /Fo"cmTC_e3251.dir\\Debug\\\\" /Fd"cmTC_e3251.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_e3251.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\CheckFunctionExists.cxx"
+          Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
+          Copyright (C) Microsoft Corporation. Todos os direitos reservados.
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_e3251.dir\\Debug\\\\" /Fo"cmTC_e3251.dir\\Debug\\\\" /Fd"cmTC_e3251.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_e3251.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\CheckFunctionExists.cxx"
+          CheckFunctionExists.cxx
+        Link:
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\Debug\\cmTC_e3251.exe" /INCREMENTAL /ILK:"cmTC_e3251.dir\\Debug\\cmTC_e3251.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-emttao/Debug/cmTC_e3251.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-emttao/Debug/cmTC_e3251.lib" /MACHINE:X64  /machine:x64 cmTC_e3251.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\cmTC_e3251.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\cmTC_e3251.vcxproj" (destinos padr├úo) -- FALHA.
+        
+        FALHA da compila├º├úo.
+        
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\cmTC_e3251.vcxproj" (destino padr├úo) (1) ->
+        (Link destino) -> 
+          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-emttao\\cmTC_e3251.vcxproj]
+        
+            0 Aviso(s)
+            1 Erro(s)
+        
+        Tempo Decorrido 00:00:00.75
+        
+      exitCode: 1
+  -
+    kind: "find_package-v1"
+    backtrace:
+      - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:908 (_find_package)"
+      - "CMakeLists.txt:17 (find_package)"
+    name: "TBB"
+    configs:
+      -
+        filename: "TBBConfig.cmake"
+        kind: "cmake"
+      -
+        filename: "tbb-config.cmake"
+        kind: "cmake"
+    version_request:
+      exact: false
+    settings:
+      required: "required_explicit"
+      quiet: false
+      global: false
+      policy_scope: true
+      bypass_provider: false
+      names:
+        - "TBB"
+      path_suffixes:
+        - ""
+      paths:
+        CMAKE_FIND_USE_CMAKE_PATH: true
+        CMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH: true
+        CMAKE_FIND_USE_SYSTEM_ENVIRONMENT_PATH: true
+        CMAKE_FIND_USE_CMAKE_SYSTEM_PATH: true
+        CMAKE_FIND_USE_INSTALL_PREFIX: true
+        CMAKE_FIND_USE_PACKAGE_ROOT_PATH: true
+        CMAKE_FIND_USE_CMAKE_PACKAGE_REGISTRY: true
+        CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY: true
+        CMAKE_FIND_ROOT_PATH_MODE: "BOTH"
+    candidates:
+      -
+        path: "C:/vcpkg/installed/x64-windows/debug/TBBConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "C:/vcpkg/installed/x64-windows/debug/tbb-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "C:/vcpkg/installed/x64-windows/debug/TBBConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "C:/vcpkg/installed/x64-windows/debug/tbb-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "C:/vcpkg/installed/x64-windows/TBBConfig.cmake"
+        mode: "config"
+        reason: "no_exist"
+      -
+        path: "C:/vcpkg/installed/x64-windows/tbb-config.cmake"
+        mode: "config"
+        reason: "no_exist"
+    found:
+      path: "C:/vcpkg/installed/x64-windows/share/tbb/TBBConfig.cmake"
+      mode: "config"
+      version: "2022.3.0"
+    search_context:
+      CMAKE_PREFIX_PATH:
+        - "C:/vcpkg/installed/x64-windows/debug"
+        - "C:/vcpkg/installed/x64-windows"
+      ENV{PATH}:
+        - "C:\\Program Files\\Python311\\Scripts\\"
+        - "C:\\Program Files\\Python311\\"
+        - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
+        - "C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\java8path"
+        - "C:\\Program Files (x86)\\Common Files\\Oracle\\Java\\javapath"
+        - "C:\\Windows\\system32"
+        - "C:\\Windows"
+        - "C:\\Windows\\System32\\Wbem"
+        - "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\"
+        - "C:\\Windows\\System32\\OpenSSH\\"
+        - "C:\\Program Files\\Git\\cmd"
+        - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
+        - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
+        - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
+        - "C:\\sqlite"
+        - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
+        - "C:\\msys64\\mingw64\\bin"
+        - "C:\\Program Files\\CMake\\bin"
+      CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
+      CMAKE_SYSTEM_PREFIX_PATH:
+        - "C:/Program Files"
+        - "C:/Program Files (x86)"
+        - "C:/Program Files/CMake"
+        - "C:/Program Files (x86)/backtest_engine"
+      CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
+  -
     kind: "find-v1"
     backtrace:
       - "C:/vcpkg/scripts/buildsystems/vcpkg.cmake:188 (find_program)"
@@ -3666,7 +4039,7 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython/Support.cmake:4439 (add_library)"
       - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython3.cmake:674:EVAL:2 (__Python3_add_library)"
       - "C:/vcpkg/installed/x64-windows/share/pybind11/pybind11NewTools.cmake:282 (python3_add_library)"
-      - "CMakeLists.txt:24 (pybind11_add_module)"
+      - "CMakeLists.txt:20 (pybind11_add_module)"
     mode: "program"
     variable: "Z_VCPKG_PWSH_PATH"
     description: "Path to a program."
@@ -3690,6 +4063,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -3730,6 +4104,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/"
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -3770,6 +4145,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/"
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -3829,6 +4205,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/pwsh"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/pwsh"
@@ -3949,6 +4328,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/pwsh"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/pwsh"
@@ -4069,6 +4451,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/pwsh"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh"
       - "C:/Program Files/Python311/Scripts/pwsh.com"
       - "C:/Program Files/Python311/Scripts/pwsh.exe"
       - "C:/Program Files/Python311/Scripts/pwsh"
@@ -4168,6 +4553,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools"
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
@@ -4207,7 +4593,7 @@ events:
       - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython/Support.cmake:4439 (add_library)"
       - "C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython3.cmake:674:EVAL:2 (__Python3_add_library)"
       - "C:/vcpkg/installed/x64-windows/share/pybind11/pybind11NewTools.cmake:282 (python3_add_library)"
-      - "CMakeLists.txt:24 (pybind11_add_module)"
+      - "CMakeLists.txt:20 (pybind11_add_module)"
     mode: "program"
     variable: "Z_VCPKG_BUILTIN_POWERSHELL_PATH"
     description: "Path to a program."
@@ -4231,6 +4617,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4271,6 +4658,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/"
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4311,6 +4699,7 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/"
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4370,6 +4759,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/powershell"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/powershell"
@@ -4490,6 +4882,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/powershell.com"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/powershell"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/powershell.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/powershell"
@@ -4610,6 +5005,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/powershell.com"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/powershell"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell"
       - "C:/Program Files/Python311/Scripts/powershell.com"
       - "C:/Program Files/Python311/Scripts/powershell.exe"
       - "C:/Program Files/Python311/Scripts/powershell"
@@ -4641,6 +5039,7 @@ events:
         - "C:/vcpkg/installed/x64-windows/tools"
         - "C:/vcpkg/installed/x64-windows/tools/bzip2"
         - "C:/vcpkg/installed/x64-windows/tools/pkgconf"
+        - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin"
       CMAKE_PREFIX_PATH:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"

@@ -1,9 +1,13 @@
-#pragma once
+#ifndef ENGINE_H
+#define ENGINE_H
+
 #include <string>
 #include <vector>
-#include "Trade.h"
 
 class Engine {
 public:
-    static std::vector<Trade> run(const std::string& payload_json);
+    // O retorno deve ser std::string para bater com o .cpp e com o Pybind11
+    std::string run(const std::string& payload_json);
 };
+
+#endif

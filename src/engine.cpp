@@ -1,79 +1,75 @@
-#include "Engine.h"
-#include "Backtest.h"
+#include "engine.h"
+#include "operation.h"
 #include <nlohmann/json.hpp>
-#include <execution>   
-#include <mutex>
 #include <iostream>
-#include <vector>
+#include <string>
+#include <iomanip>
 
 using json = nlohmann::json;
 
-std::vector<Trade> Engine::run(const std::string& payload_json) {
-    std::vector<Trade> all_trades;
-    std::mutex trades_mutex;
-
-    std::cout << "\n[C++ Debug] --- Iniciando Chamada Engine::run ---" << std::endl;
-
+std::string Engine::run(const std::string& payload_json) {
     try {
-        // 1. Parsing do JSON
-        if (payload_json.empty()) {
-            std::cerr << "[C++ Debug] Erro: String JSON recebida está vazia!" << std::endl;
-            return {};
-        }
-        
+        if (payload_json.empty()) return "[]";
+
         json payload = json::parse(payload_json);
 
-        // 2. Diagnóstico de Chaves (Aqui vamos descobrir por que o erro 'datasets' ocorre)
-        std::cout << "[C++ Debug] Chaves encontradas no nível principal: ";
-        for (auto& el : payload.items()) {
-            std::cout << "[" << el.key() << "] ";
+        std::string header = payload["asset_header"];
+        auto datetime = payload["data"]["datetime"].get<std::vector<std::string>>();
+        auto sim_params = payload["simulations"];
+        auto exec_settings = payload["execution_settings"];
+        auto time_settings = payload["time_settings"];
+
+        std::map<std::string, std::vector<double>> data_map;
+        
+        std::cout << "\n[C++ DEBUG] --- INSPECIONANDO PAYLOAD RECEBIDO ---" << std::endl;
+        std::cout << " > Colunas detectadas no JSON: ";
+        for (auto it = payload["data"].begin(); it != payload["data"].end(); ++it) {
+            std::cout << "[" << it.key() << "] ";
         }
-        std::cout << std::endl;
+        std::cout << "\n" << std::endl;
 
-        // 3. Verificação de existência com fallback
-        if (!payload.contains("datasets")) {
-            std::cerr << "[C++ Debug] ERRO FATAL: Chave 'datasets' não existe no payload enviado pelo Python." << std::endl;
-            return {}; // Retorna lista vazia para o Python não receber None
-        }
+        for (auto& el : payload["data"].items()) {
+            std::string col_name = el.key();
+            if (col_name == "datetime") continue;
 
-        const auto& datasets = payload.at("datasets");
-        const auto& meta = payload.contains("meta") ? payload.at("meta") : json::object();
+            try {
+                std::vector<double> values = el.value().get<std::vector<double>>();
+                data_map[col_name] = values;
 
-        std::cout << "[C++ Debug] Numero de datasets (ativos) encontrados: " << datasets.size() << std::endl;
-
-        // 4. Preparação e Processamento Sequencial (Para logs claros)
-        std::vector<std::pair<std::string, json>> items;
-        for (auto it = datasets.begin(); it != datasets.end(); ++it) {
-            items.emplace_back(it.key(), it.value());
-        }
-
-        std::for_each(std::execution::seq, items.begin(), items.end(),
-            [&](const auto& item) {
-                const std::string& asset_name = item.first;
-                const json& data_content = item.second;
-
-                try {
-                    // Executa o backtest
-                    auto trades = Backtest::run(asset_name, data_content, meta);
-                    
-                    std::lock_guard<std::mutex> lock(trades_mutex);
-                    all_trades.insert(all_trades.end(), trades.begin(), trades.end());
-                    
-                    std::cout << "[C++ Debug] Ativo '" << asset_name << "' processado com sucesso. Trades: " << trades.size() << std::endl;
-                } catch (const std::exception& inner_e) {
-                    std::cerr << "[C++ Debug] Erro no ativo '" << asset_name << "': " << inner_e.what() << std::endl;
+                // Print dos índices 50 a 60
+                std::cout << " > Inspecionando coluna '" << col_name << "' (indices 50-60):" << std::endl;
+                if (values.size() > 60) {
+                    std::cout << "   Values: ";
+                    for (int i = 50; i <= 60; ++i) {
+                        std::cout << std::fixed << std::setprecision(5) << values[i] << (i == 60 ? "" : ", ");
+                    }
+                    std::cout << std::endl;
+                } else {
+                    std::cout << "   [AVISO] Coluna muito curta para amostra 50-60. Tamanho: " << values.size() << std::endl;
                 }
+
+            } catch (const std::exception& e) {
+                std::cerr << " > ERROR na coluna '" << col_name << "': " << e.what() << std::endl;
             }
-        );
+        }
 
-    } catch (const json::parse_error& e) {
-        std::cerr << "[C++ Debug] Erro de Parse JSON: " << e.what() << std::endl;
+        // Verificação específica para MA nas simulações
+        std::cout << "\n[C++ DEBUG] Verificando 'indicator_data' na primeira simulacao:" << std::endl;
+        if (!sim_params.empty() && sim_params[0].contains("indicator_data")) {
+            for (auto& el : sim_params[0]["indicator_data"].items()) {
+                std::cout << " > Indicador extra detectado: [" << el.key() << "]" << std::endl;
+            }
+        } else {
+            std::cout << " > [AVISO] 'indicator_data' nao encontrado ou vazio nas simulacoes." << std::endl;
+        }
+
+        std::cout << "\n[C++ DEBUG] Payload processado. Chamando Operation::run...\n" << std::endl;
+        
+        json results = Operation::run(header, data_map, datetime, sim_params, exec_settings, time_settings);
+        return results.dump();
+
     } catch (const std::exception& e) {
-        std::cerr << "[C++ Debug] Erro Geral C++: " << e.what() << std::endl;
+        std::cerr << "[C++ Engine Error]: " << e.what() << std::endl;
+        return "[]";
     }
-
-    std::cout << "[C++ Debug] --- Finalizando. Total de Trades: " << all_trades.size() << " ---\n" << std::endl;
-
-    // Garante que o Python receba uma lista, mesmo que vazia, evitando NoneType Error
-    return all_trades;
 }

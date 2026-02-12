@@ -2,6 +2,10 @@ import polars as pl
 from Indicator import Indicator
 
 class MA(Indicator):
+    def __init__(self, asset=None, timeframe=None, **params):
+        super().__init__(asset, timeframe, **params)
+        self.name = "ma"
+
     def _calculate_logic(self, df: pl.DataFrame, **kwargs) -> pl.Series:
         window = int(kwargs.get('window', 21))
         ma_type = kwargs.get('ma_type', 'sma')

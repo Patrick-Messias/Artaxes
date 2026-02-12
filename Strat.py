@@ -23,9 +23,6 @@ class ExecutionSettings:
     strat_num_pos: list[int]=field(default_factory=lambda: [1,1])
     order_type: str='market'
     offset: float=0.0
-    exit_nb_only_if_pnl_is: int = 0 # 0 = Positive or Negative, 1 Only if Positive, -1 Only if Negative | Except SL
-    exit_nb_long: int = 0
-    exit_nb_short: int = 0
 
 @dataclass
 class TimeSettings:
@@ -34,7 +31,7 @@ class TimeSettings:
     timeEF: Optional[list[int]] = None
     timeTF: Union[bool, List[int]] = False
     next_index_day_close: bool = False
-    friday_close: bool = False
+    day_of_week_close_and_stop_trade: Optional[List[int]] = None
     timeExcludeHours: Optional[List[int]] = None
     dateExcludeTradingDays: Optional[List[int]] = None
     dateExcludeMonths: Optional[List[int]] = None
@@ -75,10 +72,12 @@ class StratParams():
         'entry_short': None,
         'exit_tf_long': None,
         'exit_tf_short': None,
-        'exit_sl_long': None,
-        'exit_sl_short': None,
-        'exit_tp_long': None,
-        'exit_tp_short': None,
+        'entry_long_limit_price': None,
+        'entry_short_limit_price': None,
+        'exit_sl_long_price': None,
+        'exit_sl_short_price': None,
+        'exit_tp_long_price': None,
+        'exit_tp_short_price': None,
         'be_pos_long': None,
         'be_pos_short': None,
         'be_neg_long': None,

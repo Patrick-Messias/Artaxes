@@ -6,12 +6,18 @@ struct Trade {
     std::string id;
     std::string asset;
     std::string status;          // "open" | "closed"
-    std::optional<double> entry_price;
     std::string entry_datetime;
+    std::optional<double> entry_price;
+    std::optional<double> position_value; // entry_price * lot_size 
     std::optional<double> lot_size;
     std::optional<double> stop_loss;
     std::optional<double> take_profit;
 
+    std::optional<double> max_fav_price;
+    std::optional<double> max_adv_price;
+
+    std::optional<double> mfe;
+    std::optional<double> mae;
     std::optional<double> exit_price;
     std::optional<std::string> exit_datetime;
     std::optional<std::string> exit_reason;

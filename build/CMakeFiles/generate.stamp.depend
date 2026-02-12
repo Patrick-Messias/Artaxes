@@ -14,6 +14,7 @@ C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineCompilerSupport.cma
 C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineRCCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeDetermineSystem.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindBinUtils.cmake
+C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeFindDependencyMacro.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeGenericSystem.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeInitializeConfigs.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeLanguageInformation.cmake
@@ -30,6 +31,8 @@ C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeTestCompilerCommon.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CMakeTestRCCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CheckCXXCompilerFlag.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/CheckCXXSourceCompiles.cmake
+C:/Program Files/CMake/share/cmake-4.2/Modules/CheckIncludeFileCXX.cmake
+C:/Program Files/CMake/share/cmake-4.2/Modules/CheckLibraryExists.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Compiler/ADSP-DetermineCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Compiler/ARMCC-DetermineCompiler.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Compiler/ARMClang-DetermineCompiler.cmake
@@ -79,6 +82,7 @@ C:/Program Files/CMake/share/cmake-4.2/Modules/FindPackageHandleStandardArgs.cma
 C:/Program Files/CMake/share/cmake-4.2/Modules/FindPackageMessage.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython/Support.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/FindPython3.cmake
+C:/Program Files/CMake/share/cmake-4.2/Modules/FindThreads.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Internal/CMakeCXXLinkerInformation.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Internal/CMakeCommonLinkerInformation.cmake
 C:/Program Files/CMake/share/cmake-4.2/Modules/Internal/CMakeDetermineLinkerId.cmake
@@ -110,4 +114,9 @@ C:/vcpkg/installed/x64-windows/share/pybind11/pybind11ConfigVersion.cmake
 C:/vcpkg/installed/x64-windows/share/pybind11/pybind11NewTools.cmake
 C:/vcpkg/installed/x64-windows/share/pybind11/pybind11Targets.cmake
 C:/vcpkg/installed/x64-windows/share/python3/vcpkg-cmake-wrapper.cmake
+C:/vcpkg/installed/x64-windows/share/tbb/TBBConfig.cmake
+C:/vcpkg/installed/x64-windows/share/tbb/TBBConfigVersion.cmake
+C:/vcpkg/installed/x64-windows/share/tbb/TBBTargets-debug.cmake
+C:/vcpkg/installed/x64-windows/share/tbb/TBBTargets-release.cmake
+C:/vcpkg/installed/x64-windows/share/tbb/TBBTargets.cmake
 C:/vcpkg/scripts/buildsystems/vcpkg.cmake

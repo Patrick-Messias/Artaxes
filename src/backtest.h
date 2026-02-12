@@ -1,12 +1,16 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <map>
 #include <nlohmann/json.hpp>
 #include "Trade.h"
 
 class Backtest {
 public:
-    static std::vector<Trade> run(const std::string& dataset_key,
-                                  const nlohmann::json& dataset,
-                                  const nlohmann::json& meta);
+    static nlohmann::json run_simulation(const std::string& header, 
+                                        const std::map<std::string, std::vector<double>>& data,
+                                        const std::vector<std::string>& datetime,
+                                        const nlohmann::json& sim,
+                                        const nlohmann::json& exec_settings,
+                                        const nlohmann::json& time_settings);
 };

@@ -19,6 +19,7 @@ from BaseClass import BaseClass
 from itertools import product
 from Trade import Trade
 from MA import MA # type: ignore
+from ATR_SL import ATR_SL # type: ignore
 
 # =========================================================================================================================================|| Global Mapping (REMOVE FROM TIHS FILE LATER)
 
@@ -102,14 +103,6 @@ class Operation(BaseClass):
         self._curr_tf_context: Optional[str] = None
         self._curr_datetime_references: Optional[str] = None
 
-
-
-    # 1. Test HTF->LTF, create excel with temporary datetime added so can test if ok
-    # 2. Test batch system
-    # 3. Develop backtest system in cpp, test all exits  
-
-
-
     # || ===================================================================== || I - Operation Validation || ===================================================================== ||
 
     def _validate_operation(self):
@@ -117,117 +110,83 @@ class Operation(BaseClass):
 
     # || ===================================================================== || II - Data Processing || ===================================================================== ||
 
+    def _translate_signals(self, signal_list):
+        """ Converte a lista de objetos gerados pela classe Col em JSON puro. """
+        if not signal_list: return []
+        # Garante que estamos lidando com uma lista de dicts (as regras)
+        return [rule if isinstance(rule, dict) else rule for rule in signal_list]
+
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
 
-        avg_param_set_size_mb = None
-        batch_payload = {}
-        batch_count = 0
-        optimal_batch_size = None
-
         for model_name, model_obj in models.items():
             strats = model_obj.strat
             assets = model_obj.assets
-            self._results_map[self.name]['models'][model_name] = {'strats': {}}
             model_tf = model_obj.execution_timeframe
-            self._curr_tf_context = model_tf
+            self._results_map[self.name]['models'][model_name] = {'strats': {}}
 
             for strat_name, strat_obj in strats.items():
-                params = strat_obj.params
-                strat_indicators = strat_obj.indicators
+                param_sets = self._calculate_param_combinations(strat_obj.params)
                 self._results_map[self.name]['models'][model_name]['strats'][strat_name] = {'assets': {}}
 
-                # 1 - Calculates Param Sets
-                param_sets = self._calculate_param_combinations(params)
-
-                # 2 - Calculates Signals and Indicators
-                for asset_name in assets: # dict[str]
-                    asset_class = self.assets.get(asset_name, None) # Asset Class
-                    if asset_class is None: raise ValueError(f"Asset '{asset_name}' not found in global assets.")
-                    self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
-                    self._curr_datetime_references = asset_class.datetime_candle_references
-
-                    if isinstance(strat_obj.operation, Walkforward):
-                        isos = strat_obj.operation.isos if strat_obj.operation.isos is not None else ['12_12']
-                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'] = {'walkforward': {}}
-                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets']['walkforward'] = {iso: None for iso in isos}
-
-                    # Calculates Indicators
-                    # Identifies if indicators are static or dynamic
-                    static_inds = {}
-                    dynamic_inds = {}
-                    for ind_name, ind_obj in strat_indicators.items():
-                        if ind_obj is None: continue
-                        is_dynamic = any(isinstance(v, str) and v.startswith('param') for v in ind_obj.params.values())
-                        if is_dynamic:
-                            dynamic_inds[ind_name] = ind_obj
-                        else:
-                            static_inds[ind_name] = ind_obj
-
-                    # Gets Asset Data
-                    base_asset_df = asset_class.data_get(model_tf)
-                    self._curr_asset = asset_name
+                for asset_name in assets:
+                    asset_class = self.assets.get(asset_name)
+                    if not asset_class: continue
                     
-                    # Calculates Static Indicators (unce per Asset)
-                    for ind_name, ind_obj in static_inds.items():
-                        base_asset_df = self._calculate_indicator(model_tf, ind_name, ind_obj, {}, base_asset_df, asset_name, asset_class.datetime_candle_references)
+                    self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
+                    
+                    # 1. Puxamos o Dataframe único do Ativo com indicadores estáticos
+                    base_asset_df = asset_class.data_get(model_tf)
+                    
+                    # 2. Criamos o Batch por Ativo
+                    asset_batch = {
+                        "asset_header": f"{model_name}_{strat_name}_{asset_name}",
+                        "data": base_asset_df.to_dict(as_series=False),
+                        "time_settings": asdict(strat_obj.time_settings),
+                        "execution_settings": asdict(strat_obj.execution_settings),
+                        "simulations": []
+                    }
 
-                    for param_set_name, param_set_dict in param_sets.items():
-                        curr_asset_obj = base_asset_df.clone()
-                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][param_set_name] = {'param_set_dict': param_set_dict, 'trades': None}
-                        self._curr_df_context = curr_asset_obj
-
-                        # Calculates Dynamic Indicators
-                        for ind_name, ind_obj in dynamic_inds.items():
-                            curr_asset_obj = self._calculate_indicator(model_tf, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, asset_class.datetime_candle_references)
-                        
-                        # Calculates Signals
-                        param_set_dict['execution_timeframe'] = model_tf
-                        signals = strat_obj.signal_rules # Gets signal functions
-                        for curr_signal_def_name, curr_signal_def_obj in signals.items():
-                            if curr_signal_def_obj is not None:
-                                #curr_asset_obj[curr_signal_def_name] = curr_signal_def_obj(self, curr_asset_obj, param_set_dict)
-                                signal_series = curr_signal_def_obj(self, curr_asset_obj, param_set_dict)
-                                curr_asset_obj = curr_asset_obj.with_columns([
-                                    pl.Series(curr_signal_def_name, signal_series)
-                                ])
-                                
-                                num_true_signals = curr_asset_obj.select(pl.col(curr_signal_def_name).sum()).item() #num_true_signals = curr_asset_obj[curr_signal_def_name].sum()
-                                print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating Signal: {curr_signal_def_name} - Model: {model_name} - Strat: {strat_name} - Asset: {asset_name} - True count: {num_true_signals}/{len(curr_asset_obj)}')
-
-                        #curr_asset_obj.write_excel(f'C:\\Users\\Patrick\\Desktop\\Model_{model_name}_Strat_{strat_name}_Asset_{asset_name}_ParamSet_{param_set_name}_Signals.xlsx')
-
-                        # Estimates average size for Batch and Payload
-                        if avg_param_set_size_mb is None:
-                            avg_param_set_size_mb = self._estimate_paramset_size_mb(curr_asset_obj)
-                            optimal_batch_size = self._calculate_optimal_batch_size(avg_param_set_size_mb)
-                            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Estimated average param set size: {avg_param_set_size_mb:.2f} MB - Optimal batch size: {optimal_batch_size}')
-
-                        # Payload creation for cpp
-                        key = f"{model_name}_{strat_name}_{asset_name}_{param_set_name}"
-                        batch_payload[key] = {
-                            "data": curr_asset_obj,
-                            "meta": {
-                                "params": param_set_dict,
-                                "time_settings": asdict(strat_obj.time_settings),
-                                "execution_settings": asdict(strat_obj.execution_settings)
-                            }
+                    # 3. Adicionamos as simulações (Parâmetros + Regras de Sinais)
+                    for ps_name, ps_dict in param_sets.items():
+                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][ps_name] = {
+                            'param_set_dict': ps_dict, 
+                            'trades': None
                         }
-                        batch_count += 1
 
-                        if batch_count >= optimal_batch_size:
-                            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Processing batch of size: {len(batch_payload)}')
-                            trades = self._run_cpp_operation(batch_payload)
-                            self._save_trades(trades)
-                            batch_payload.clear()
-                            batch_count = 0
+                        # Calculates indicator
+                        current_df = base_asset_df.clone()
+                        for ind_key, ind_obj in strat_obj.indicators.items():
+                            print(f"   > Calculating indicator: {ind_key}")
+                            res = ind_obj.calculate(current_df, ps_dict).fill_null(0)
+                            current_df = current_df.with_columns(
+                                res.cast(pl.Float64).alias(ind_key)
+                            )
 
-        if batch_payload:
-            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Processing final batch of size: {len(batch_payload)}')
-            trades = self._run_cpp_operation(batch_payload)
-            self._save_trades(trades)
-            batch_payload.clear()
+                        new_cols = [ind_key for ind_key, _ in strat_obj.indicators.items()]
+                        indicator_data = current_df.select(new_cols).to_dict(as_series=False)
+
+                        asset_batch["simulations"].append({
+                                "id": ps_name,
+                                "params": ps_dict,
+                                "indicator_data": indicator_data,
+                                "rules": {
+                                    "entry_long": self._translate_signals(strat_obj.signal_rules.get('entry_long')),
+                                    "entry_short": self._translate_signals(strat_obj.signal_rules.get('entry_short')),
+                                    "exit_sl_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_long_price')),
+                                    "exit_tp_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_long_price')),
+                                    "exit_sl_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_short_price')),
+                                    "exit_tp_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_short_price')),
+                                    "exit_tf_long": self._translate_signals(strat_obj.signal_rules.get('exit_tf_long')),
+                                    "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short'))
+                                }
+                            })
+
+                    # 4. Envio único para C++
+                    print(f"   > Processing {asset_name}: {len(param_sets)} simulations...")
+                    trades = self._run_cpp_operation(asset_batch)
+                    self._save_trades(trades)
 
         return True
     
@@ -260,113 +219,74 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Execution Functions || ===================================================================== ||
 
-    def _run_cpp_operation(self, batch_payload: dict):
+    def _run_cpp_operation(self, asset_batch: dict):
         try:
-            # 1. Garante o caminho da DLL
+            # Configuração do Caminho da DLL
             path_to_dll = r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release"
             if path_to_dll not in sys.path: 
                 sys.path.append(path_to_dll)
+            
             import engine_cpp # type: ignore
 
-            payload_to_send = {"datasets": {}, "meta": {}}
-            last_key = None
+            # 1. PREPARAÇÃO DO DATAFRAME (Convertemos aqui para garantir tipos corretos)
+            # Se o 'data' no asset_batch já for um dict vindo do to_dict(), transformamos em DF para tratar
+            if isinstance(asset_batch['data'], dict):
+                df = pl.DataFrame(asset_batch['data'])
+            else:
+                df = asset_batch['data'].clone()
 
-            for key, content in batch_payload.items():
-                last_key = key
-                df = content['data'].clone()
+            # Mantemos apenas datetime + colunas numéricas (Float ou Int)
+            # Isso remove 'ativo', 'date' e 'time' que causaram o erro 302
+            df = df.select([
+                pl.col("datetime"),
+                pl.col(pl.Float64),
+                pl.col(pl.Int64),
+                pl.col(pl.Float32)
+            ])
                 
-                # --- 1. TRATAMENTO DE DATETIME ---
-                if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
-                    df = df.with_columns(
-                        pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S')
-                    )
+            # --- TRATAMENTO DE DATETIME ---
+            if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
+                df = df.with_columns(pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S'))
 
-                # --- 2. TRATAMENTO DE SINAIS (BINÁRIOS VS PREÇO) ---
-                # Apenas sinais de entrada/saída lógica devem ser Int32 (0 ou 1)
-                signals_int = [
-                    'entry_long', 'entry_short', 
-                    'exit_tf_long', 'exit_tf_short'
-                ]
-                
-                # SL e TP são distâncias de preço, devem ser Float64 para não virarem 0
-                signals_float = [
-                    'exit_tp_long', 'exit_tp_short', 
-                    'exit_sl_long', 'exit_sl_short'
-                ]
+            # --- TRATAMENTO NUMÉRICO (Cast para Float64) ---
+            numeric_cols = [name for name, dtype in df.schema.items() if dtype.is_numeric()]
+            if numeric_cols:
+                df = df.with_columns([pl.col(c).cast(pl.Float64).fill_null(0.0) for c in numeric_cols])
+            # 2. MONTAGEM DO PAYLOAD FINAL (Nomes de chaves alinhados com Operation::run no C++)
+            final_payload = {
+                "asset_header": asset_batch.get('asset_header', 'Unknown'),
+                "data": df.to_dict(as_series=False), # Agora só tem números e a string datetime
+                "time_settings": asset_batch.get('time_settings', {}),
+                "execution_settings": asset_batch.get('execution_settings', {}),
+                "simulations": asset_batch.get('simulations', [])
+            }
 
-                # Aplicando Cast para Inteiro nos sinais lógicos
-                cols_to_int = [c for c in signals_int if c in df.columns]
-                if cols_to_int:
-                    df = df.with_columns([
-                        pl.col(c).cast(pl.Int32).fill_null(0) for c in cols_to_int
-                    ])
-                
-                # --- 3. TRATAMENTO NUMÉRICO (OHLC, Indicadores e SL/TP) ---
-                # Identifica colunas numéricas, garantindo que SL/TP entrem como Float
-                cols_to_float = [
-                    name for name, dtype in df.schema.items() 
-                    if (dtype.is_numeric() or name in signals_float) and name not in signals_int
-                ]
-                
-                if cols_to_float:
-                    df = df.with_columns([
-                        pl.col(c).cast(pl.Float64).fill_null(0.0) for c in cols_to_float
-                    ])
-
-                # Verificação de Debug para o console Python
-                for c in ['exit_sl_long', 'exit_sl_short']:
-                    if c in df.columns:
-                        val_check = df.select(pl.col(c).max()).item()
-                        if val_check == 0:
-                            print(f"AVISO: Coluna {c} está chegando zerada ao Bridge!")
-
-                # --- 4. PREPARAÇÃO DO PAYLOAD ---
-                def to_plain_dict(obj):
-                    if is_dataclass(obj): return asdict(obj)
-                    if isinstance(obj, dict): return obj
-                    return {}
-
-                # 1. Pegamos o dicionário 'meta' que veio do _operation (onde estão as configs)
-                # No seu batch_payload, as configs estão dentro da chave 'meta'
-                content_meta = content.get('meta', {})
-
-                # 2. Agora extraímos de DENTRO do content_meta
-                # Usamos to_plain_dict para garantir que se for dataclass, vire dict
-                clean_time_settings = to_plain_dict(content_meta.get('time_settings', {}))
-                clean_execution_settings = to_plain_dict(content_meta.get('execution_settings', {}))
-                
-                # 3. Tratamento dos parâmetros (params)
-                params = content_meta.get('params', {})
-                clean_params = {}
-                if isinstance(params, dict):
-                    for pk, pv in params.items():
-                        if pv is None: clean_params[pk] = 0.0
-                        elif isinstance(pv, (int, float, np.number)): clean_params[pk] = float(pv)
-                        else: clean_params[pk] = str(pv) if pv else ""
-
-                # 4. Montagem do payload final que o C++ vai receber
-                payload_to_send["datasets"][key] = {
-                    "data": df.to_dict(as_series=False),
-                    "time_settings": clean_time_settings,
-                    "execution_settings": clean_execution_settings,
-                    "meta": {"params": clean_params}
-                }
-
-            if last_key:
-                payload_to_send["meta"] = payload_to_send["datasets"][last_key]["meta"]
-
-            # --- 5. SERIALIZAÇÃO E CHAMADA C++ ---
+            # 3. SERIALIZAÇÃO SEGURA
             def json_serial(obj):
-                if isinstance(obj, (datetime.datetime, datetime.date, datetime.time)):
+                """Lida com objetos que o json standard não consegue serializar."""
+                if isinstance(obj, (datetime.datetime, datetime.date)):
                     return obj.isoformat()
+                # Se for um objeto de Regra (Col/Params), tenta pegar o dict dele
+                if hasattr(obj, 'to_dict'):
+                    return obj.to_dict()
                 return str(obj)
 
-            json_str = json.dumps(payload_to_send, default=json_serial)
+            # Transforma tudo em uma string JSON para o C++
+            json_str = json.dumps(final_payload, default=json_serial)
             
-            print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - JSON Ready, calling C++...')
+            # 4. CHAMADA DA ENGINE C++
+            # O engine_cpp.run() agora retorna uma STRING (json.dump do C++)
             raw_output = engine_cpp.run(json_str)
             
-            return json.loads(raw_output) if isinstance(raw_output, str) else (raw_output or [])
+            # 5. PARSE DO RESULTADO
+            if not raw_output or raw_output == "[]":
+                return []
+                
+            # Como o C++ retornou uma string, precisamos de json.loads para voltar a ser lista/dict
+            if isinstance(raw_output, str):
+                return json.loads(raw_output)
+            
+            return raw_output
 
         except Exception as e:
             print(f'< Error in Python-C++ Bridge: {e}')
@@ -374,91 +294,33 @@ class Operation(BaseClass):
             traceback.print_exc()
             return []
 
-    # def _serialize_batch_to_json(self, batch_payload):
-    #     data = {
-    #         "meta": {
-    #             "date_start": str(self.date_start) if self.date_start else None,
-    #             "date_end": str(self.date_end) if self.date_end else None
-    #         },
-    #         "datasets": {}
-    #     }
+    def _save_trades(self, raw_output):
+        if not raw_output: return
 
-    #     # Função de suporte para tipos NumPy e Datetimes do Polars
-    #     def _json_default(obj):
-    #         # Polars utiliza datetime nativo do Python ou objetos específicos que str() resolve
-    #         if isinstance(obj, (datetime.datetime, datetime.date)):
-    #             return obj.strftime('%Y-%m-%d %H:%M:%S')
-    #         if isinstance(obj, np.integer):
-    #             return int(obj)
-    #         if isinstance(obj, np.floating):
-    #             return float(obj)
-    #         if isinstance(obj, np.ndarray):
-    #             return obj.tolist()
-    #         return str(obj)
-
-    #     for key, payload in batch_payload.items():
-    #         # No Polars, to_dict(as_series=False) gera o formato {coluna: [lista_de_valores]}
-    #         # que é o equivalente ao orient='list' do Pandas.
-    #         df_dict = payload["data"].to_dict(as_series=False)
-
-    #         data["datasets"][key] = {
-    #             "data": df_dict,
-    #             "params": payload["params"],
-    #             "time_settings": asdict(payload["time_settings"]) if is_dataclass(payload["time_settings"]) else payload["time_settings"],
-    #             "execution_settings": asdict(payload["execution_settings"]) if is_dataclass(payload["execution_settings"]) else payload["execution_settings"],
-    #             "signal_rules": payload["signal_rules"]
-    #         }
-
-    #     # O Polars é muito rigoroso com tipos; a conversão para dict acima já prepara o terreno
-    #     return json.dumps(data, default=_json_default)
-
-    def _save_trades(self, trades):
-        # Verifica se 'trades' é de fato uma lista de dicionários
-        if not trades or not isinstance(trades, list):
-            print("< Erro: 'trades' não é uma lista válida.")
-            return
-
-        if len(trades) > 0 and not isinstance(trades[0], dict):
-            print(f"< Erro: O primeiro elemento é {type(trades[0])}, esperava-se dicionário.")
-            return
-            
-        print(f"> Gravando {len(trades)} trades no mapa de resultados...")
-        
-        for trade in trades:
-            # O motor C++ retorna o 'asset' contendo a chave composta que enviamos
-            full_key = trade.get("asset", "")
-            # Ex: 'MA Trend Following_AT15_EURUSD_param_set-2-20-2-sma-M15'
-            
-            if "param_set" in full_key:
-                # Localiza onde terminam as chaves fixas e começam os parâmetros
-                idx = full_key.find("param_set")
-                header = full_key[:idx-1] 
-                param_set_name = full_key[idx:]
+        for simulation_batch in raw_output:
+            for trade in simulation_batch:
+                full_key = trade.get("asset", "") # "MA Trend Following_AT15_EURUSD_param_set-21-..."
                 
-                parts = header.split('_')
-                if len(parts) >= 3:
-                    # parts[0] = 'MA Trend Following', parts[1] = 'AT15', parts[2] = 'EURUSD'
-                    model_name, strat_name, asset_name = parts[0], parts[1], parts[2]
+                # Identificamos onde começa o param_set
+                idx_param = full_key.find("_param_set")
+                if idx_param == -1: continue
+                
+                ps_name = full_key[idx_param+1:] # "param_set-21-..."
+                prefix = full_key[:idx_param]    # "MA Trend Following_AT15_EURUSD"
+                
+                parts = prefix.split('_')
+                # parts[0] = Model, parts[1] = Strat, parts[2] = Asset
+                
+                try:
+                    # Caminho exato no mapa de resultados
+                    target = self._results_map[self.name]["models"][parts[0]]["strats"][parts[1]]["assets"][parts[2]]["param_sets"][ps_name]
                     
-                    try:
-                        # Navega na estrutura do results_map (Dicionário padrão Python)
-                        target = self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["param_sets"][param_set_name]
-                        
-                        if target.get("trades") is None:
-                            target["trades"] = []
-                        
-                        target["trades"].append(trade)
-                    except KeyError:
-                        # Se a chave não existir (ex: filtro de data ou erro no payload), ignora
-                        continue
-        
-        print(f"> {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - Trades gravados com sucesso.")
-
-    def _deserialize_from_json(self, json_data):
-        # Se o engine_cpp.run já retornar um objeto Python (lista de dicts), não precisa de json.loads
-        if isinstance(json_data, str):
-            return json.loads(json_data)
-        return json_data # Pybind11 geralmente já converte std::vector<Trade> para list[dict]
+                    if target["trades"] is None:
+                        target["trades"] = []
+                    
+                    target["trades"].append(trade)
+                except KeyError as e:
+                    print(f"DEBUG: Chave não encontrada no results_map: {e} | PS tentado: {ps_name}")
 
     def _estimate_paramset_size_mb(self, df: pl.DataFrame):
         return df.estimated_size() / (1024 ** 2) # No Polars, estimated_size() retorna o tamanho em bytes
@@ -466,7 +328,7 @@ class Operation(BaseClass):
     def _get_available_memory_mb(self):
         return psutil.virtual_memory().available / (1024 ** 2)
     
-    def _calculate_optimal_batch_size(self, avg_paramset_size_mb, safety_margin=0.25, max_batch=1000, min_batch=1):
+    def _calculate_optimal_batch_size(self, avg_paramset_size_mb, safety_margin=0.97, max_batch=1000, min_batch=1):
         available_ram_mb = self._get_available_memory_mb()
         usable_ram_mb = available_ram_mb * (1 - safety_margin)
 
@@ -516,7 +378,8 @@ class Operation(BaseClass):
 
         # 4. CÁLCULO REAL
         print(f'> {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")} - Calculating indicator: {ind_name} - Asset: {target_asset} - TF: {target_tf} - Params: {params_str}')
-        indicator_result = ind_obj.calculate(df_source, param_set_dict=param_set_dict)
+        indicator_res = ind_obj.calculate(df_source, param_set_dict=param_set_dict)
+        indicator_result = indicator_res.fill_null(0)
 
         # Garantir que temos uma Series
         if isinstance(indicator_result, pl.DataFrame):
@@ -895,7 +758,77 @@ class Operation(BaseClass):
 
         return self._results_map
 
+# || ======================================================================================================================================================================= ||
 
+class Col:
+    def __init__(self, name, shift=0):
+        self.name = name
+        self.shift = shift
+
+    # Allows using Col("close")[1] for shift 1
+    def __getitem__(self, s):
+        return Col(self.name, s)
+    
+    # Comparison operators
+    def __gt__(self, other): return self._build_rule(other, ">")
+    def __lt__(self, other): return self._build_rule(other, "<")
+    def __ge__(self, other): return self._build_rule(other, ">=")
+    def __le__(self, other): return self._build_rule(other, "<=")
+    def __eq__(self, other): return self._build_rule(other, "==")
+
+    def _build_rule(self, other, op):
+        return {
+            "a": self.name, 
+            "shift_a": self.shift,
+            "op": op,
+            "b": other.name if isinstance(other, Col) else ("const" if not hasattr(other, 'to_dict') else "expr"),
+            "shift_b": other.shift if isinstance(other, Col) else 0,
+            "val": other if not (isinstance(other, Col) or hasattr(other, 'to_dict')) else None,
+            "expr": other.to_dict() if hasattr(other, 'to_dict') else None
+        }
+    
+    # Arithmetic operators
+    def __sub__(self, other):
+        return Expression(self, "=", other)
+    def __add__(self, other):
+        return Expression(self, "+", other)
+    def __mul__(self, other):
+        return Expression(self, "*", other)
+    def rolling_mean(self, window):
+        return Expression(self, "rolling_mean", window)
+    def to_dict(self):
+        return {"type": "col", "name": self.name, "shift": self.shift}
+    
+class Expression:
+    def __init__(self, left, op, right):
+        self.left = left
+        self.op = op
+        self.right = right
+
+    def __mul__(self, other):
+        return Expression(self, "*", other)
+    def rolling_mean(self, window):
+        return Expression(self, "rolling_mean", window)
+    def to_dict(self):
+        return {
+            "type": "operation",
+            "left": self.left.to_dict() if hasattr(self.left, 'to_dict') else self.left,
+            "op": self.op,
+            "right": self.right.to_dict() if hasattr(self.right, 'to_dict') else self.right
+        }
+
+class ParamRef:
+    def __init__(self, name):
+        self.name = name
+    
+    def __repr__(self):
+        return f"PARAM_{self.name}"
+    
+    def to_dict(self):
+        return {"type": "param", "name": self.name}
+    
+def Params(name):
+    return ParamRef(name)
 
 if __name__ == "__main__":
     eurusd = Asset(
@@ -919,15 +852,31 @@ if __name__ == "__main__":
 
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
+    close = Col("close")
+    open = Col("open")
+    high = Col("high")
+    low = Col("low")
+    atr = Col("atr")
+    ema = Col("ema")
+    ma = Col("ma")
+    tp_perc = Params("tp_perc")
+    sl_perc = Params("sl_perc")
+    htf_ma = Col("htf_ma")
+
+    # =======================================================================================================|| Global Above
 
     model_assets=['EURUSD'] # Only keys #, 'GBPUSD'
     model_execution_tf = 'M15'
 
-    Params = {
+    strat_param_sets = {
         'AT15': { 
             'execution_tf': model_execution_tf,
+            'exit_nb_only_if_pnl_is': 0, 
+            'exit_nb_long': range(0, 0+1, 3),
+            'exit_nb_short': range(0, 0+1, 3),
+
             'sl_perc': range(1, 1+1, 1), # 3
-            'tp_perc': range(2, 2+1, 1), 
+            'tp_perc': range(3, 3+1, 1), 
             'param1': range(20, 20+1, 30), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -936,88 +885,70 @@ if __name__ == "__main__":
 
     # User imput Indicators
     ind = { 
-        'sma': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
-        'ema_htf': MA(asset='GBPUSD', timeframe='D1', window=252, ma_type='ema') #, price_col='open'
+        'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param1'),
+        'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='ema', price_col='close'),
+        'ma': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
+        'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
     }
 
-    def entry_long(self, df: pl.DataFrame, curr_param_set: dict): 
-        df_D1 = self._assets(self._curr_asset, 'D1')
-        df_EURUSD_D1 = self._assets('EURUSD', 'D1')
+    entry_long = [
+        close < open,
+        close[1] < open[1],
+        close[2] < open[2],
+    ]
+    entry_short = [
+        close > open,
+        close[1] > open[1],
+        close[2] > open[2],
+    ]
 
-        sl_perc = curr_param_set['sl_perc']
-        diff = df['close']*(sl_perc/100)
-        ema_htf = df['ema_htf']
+    exit_tf_long = [
+        close > open,
+        close[1] > open[1],
+    ]
+    exit_tf_short = [
+        close < open,
+        close[1] < open[1],
+    ]
 
-        signal = (df['close'] < df['open']) & (df['close'].shift(1) < df['open'].shift(1)) & (df['close'].shift(2) < df['open'].shift(2)) 
-        #(df['close'] < df['sma']) & (df['sma'] != 0.0) # & (df['close'] > df['open']) #& df['close'].shift(1) < df['sma'].shift(1)) # (df['close'] > df['sma'] + diff) & (df['close'].shift(1) < df['sma'].shift(1) + diff) & (df_D1['close'] > df_D1['close'].shift(1))
-        return signal
-    
-    def entry_short(self, df: pl.DataFrame, curr_param_set: dict): 
-        df_D1 = self._assets(self._curr_asset, 'D1')
-        df_EURUSD_D1 = self._assets('EURUSD', 'D1')
+    exit_tp_long_price = [atr * tp_perc]
+    exit_tp_short_price = [atr * tp_perc]
 
-        sl_perc = curr_param_set['sl_perc']
-        diff = df['close']*(sl_perc/100)
-        ema_htf = df['ema_htf']
+    exit_sl_long_price = [atr * sl_perc]
+    exit_sl_short_price = [atr * sl_perc]
 
-        signal = (df['close'] > df['open']) & (df['close'].shift(1) > df['open'].shift(1)) & (df['close'].shift(2) > df['open'].shift(2)) 
-        #(df['close'] > df['sma']) & (df['sma'] != 0.0) # & (df['close'] < df['open']) #& df['close'].shift(1) > df['sma'].shift(1)) # (df['close'] < df['sma'] - diff) & (df['close'].shift(1) > df['sma'].shift(1) - diff) & (df_D1['close'] < df_D1['close'].shift(1))
-        return signal
+    entry_long_limit_price = [atr]
+    entry_short_limit_price = [atr]
 
-    def exit_tf_long(self, df: pl.DataFrame, curr_param_set: dict):
-        return (df['close'] > df['open']) & (df['close'].shift(1) > df['open'].shift(1))
-    
-    def exit_tf_short(self, df: pl.DataFrame, curr_param_set: dict):
-        return (df['close'] < df['open']) & (df['close'].shift(1) < df['open'].shift(1))
-
-    
-    def exit_sl_long(self, df: pl.DataFrame, curr_param_set: dict):
-        return df.select(
-            ((pl.col("high") - pl.col("low"))*curr_param_set['sl_perc'])
-            .rolling_mean(window_size=21)
-            .fill_null(0)
-        ).to_series()
-    def exit_sl_short(self, df: pl.DataFrame, curr_param_set: dict):
-        return df.select(
-            ((pl.col("high") - pl.col("low"))*curr_param_set['sl_perc'])
-            .rolling_mean(window_size=21)
-            .fill_null(0)
-        ).to_series()
-    
-    def exit_tp_long(self, df: pl.DataFrame, curr_param_set: dict):
-        return df.select(
-            ((pl.col("high") - pl.col("low"))*curr_param_set['tp_perc'])
-            .rolling_mean(window_size=21)
-            .fill_null(0)
-        ).to_series()
-    def exit_tp_short(self, df: pl.DataFrame, curr_param_set: dict):
-        return df.select(
-            ((pl.col("high") - pl.col("low"))*curr_param_set['tp_perc'])
-            .rolling_mean(window_size=21)
-            .fill_null(0)
-        ).to_series()
-
+    # --- 1. CORRIGIR strat_num_pos INDIFERENTE, ABRINDO APENAS 1 TRADE
+    # --- 2. REIMPLEMENTAR exit_nb_only_if_pnl_is=1/-1
+    # 3. CORRIGIR, HTF->LTF Não está funcionado, até porque não está usando a função de calcular indicadores
+    # 4. entry_long_limit_price VALE MAIS A PENA COMO POSIÇÃO OU VALOR A SER SOMADO AO OPEN[0] ou CLOSE[1]?
+    # 5. IMPLEMENTAR BREAK EVEN POS/NEG 
+    # 6. VERIFICAR CADA PARTE DO CÓDIGO E ENTENDER BEM
 
     AT15 = Strat(
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0, 
-                                                 exit_nb_only_if_pnl_is=1, exit_nb_long=5, exit_nb_short=5),
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0),
             data_settings=DataSettings(fill_method='ffill', fillna=0),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
-            params=Params['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
-            time_settings=TimeSettings(day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, friday_close=False, timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
+            params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
+            time_settings=TimeSettings(day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
             indicators=ind,
             signal_rules={
                 'entry_long': entry_long,
                 'entry_short': entry_short,
                 'exit_tf_long': exit_tf_long,
                 'exit_tf_short': exit_tf_short,
-                'exit_sl_long': exit_sl_long,
-                'exit_sl_short': exit_sl_short,
-                'exit_tp_long': exit_tp_long,
-                'exit_tp_short': exit_tp_short,
+                'entry_long_limit_price': None,
+                'entry_short_limit_price': None,
+
+                'exit_sl_long_price': exit_sl_long_price,
+                'exit_sl_short_price': exit_sl_short_price,
+                'exit_tp_long_price': exit_tp_long_price,
+                'exit_tp_short_price': exit_tp_short_price,
 
                 'be_pos_long': None,
                 'be_pos_short': None,
@@ -1053,8 +984,11 @@ if __name__ == "__main__":
 
     operation.run()
 
+
+
 """
 - Implement all remaining Strat and Operation config minor methods
+- Optimize performance, test new backtest method?
 
 - Pente fino em cada método e operação
 - Sistema de Simulação de Portfolio com suporte de Modelos para filtro/seleção de Asset, Strat e Backtest (param_set)
