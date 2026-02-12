@@ -6,7 +6,7 @@ from typing import Union, Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict, is_dataclass
 from Model import ModelParams, Model
 from Asset import Asset, AssetParams
-from Strat import Strat, StratParams, ExecutionSettings, DataSettings, TimeSettings
+from Strat import Strat, StratParams, ExecutionSettings
 from Portfolio import Portfolio, PortfolioParams
 from Backtest import Backtest, BacktestParams
 from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
@@ -69,7 +69,6 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
 class OperationParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     data: Union[Model, list[Model]]=None # Can make an operation with a single model or portfolio
-    #operation: Union[Backtest, Optimization, Walkforward]=None 
     assets: Optional[Dict[str, Any]] = field(default_factory=dict) # Global Assets
 
     # Metrics
@@ -143,7 +142,6 @@ class Operation(BaseClass):
                     asset_batch = {
                         "asset_header": f"{model_name}_{strat_name}_{asset_name}",
                         "data": base_asset_df.to_dict(as_series=False),
-                        "time_settings": asdict(strat_obj.time_settings),
                         "execution_settings": asdict(strat_obj.execution_settings),
                         "simulations": []
                     }
@@ -876,8 +874,8 @@ if __name__ == "__main__":
             'exit_nb_short': range(0, 0+1, 3),
 
             'sl_perc': range(1, 1+1, 1), # 3
-            'tp_perc': range(3, 3+1, 1), 
-            'param1': range(20, 20+1, 30), #50
+            'tp_perc': range(2, 2+1, 1), 
+            'param1': range(21, 21+1, 21), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
         }
@@ -931,11 +929,12 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0),
-            data_settings=DataSettings(fill_method='ffill', fillna=0),
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0, 
+                                                 day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
+                                                 day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
+                                                 fill_method='ffill', fillna=0),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
-            time_settings=TimeSettings(day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None),
             indicators=ind,
             signal_rules={
                 'entry_long': entry_long,

@@ -17,7 +17,6 @@ std::string Engine::run(const std::string& payload_json) {
         auto datetime = payload["data"]["datetime"].get<std::vector<std::string>>();
         auto sim_params = payload["simulations"];
         auto exec_settings = payload["execution_settings"];
-        auto time_settings = payload["time_settings"];
 
         std::map<std::string, std::vector<double>> data_map;
         
@@ -65,7 +64,7 @@ std::string Engine::run(const std::string& payload_json) {
 
         std::cout << "\n[C++ DEBUG] Payload processado. Chamando Operation::run...\n" << std::endl;
         
-        json results = Operation::run(header, data_map, datetime, sim_params, exec_settings, time_settings);
+        json results = Operation::run(header, data_map, datetime, sim_params, exec_settings);
         return results.dump();
 
     } catch (const std::exception& e) {

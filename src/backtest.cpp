@@ -162,8 +162,7 @@ json Backtest::run_simulation(const std::string& header,
                               const std::map<std::string, std::vector<double>>& data,
                               const std::vector<std::string>& datetime,
                               const nlohmann::json& sim,
-                              const nlohmann::json& exec_settings,
-                              const nlohmann::json& time_settings) {
+                              const nlohmann::json& exec_settings) {
     
     // LOG inicial de verificação de indicadores
     // --- DEBUG: Print das últimas 30 linhas de todos os indicadores/preços ---
@@ -245,8 +244,8 @@ json Backtest::run_simulation(const std::string& header,
         std::string order_type = exec_settings.value("order_type", "market");
         double offset = exec_settings.value("offset", 0.0);
 
-        bool is_daytrade = time_settings.value("day_trade", false);
-        std::vector<int> close_days = time_settings.value("day_of_week_close_and_stop_trade", std::vector<int>{});
+        bool is_daytrade = exec_settings.value("day_trade", false);
+        std::vector<int> close_days = exec_settings.value("day_of_week_close_and_stop_trade", std::vector<int>{});
         std::vector<int> bar_days(n_bars);
         for (size_t i=0; i<n_bars; ++i) {
             std::tm tm = {};

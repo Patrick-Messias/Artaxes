@@ -11,8 +11,7 @@ json Operation::run(const std::string& header,
                     const std::map<std::string, std::vector<double>>& data,
                     const std::vector<std::string>& datetime,
                     const nlohmann::json& sim_params,
-                    const nlohmann::json& exec_settings,
-                    const nlohmann::json& time_settings) {
+                    const nlohmann::json& exec_settings) {
 
     // Lista para armazenar os resultados de todas as simulações
     std::vector<json> all_somulations_results;
@@ -53,7 +52,7 @@ json Operation::run(const std::string& header,
         }
 
         // 3. Agora passamos o local_data (OHLC + INDICADORES)
-        json trades = Backtest::run_simulation(header, local_data, datetime, sim, exec_settings, time_settings);
+        json trades = Backtest::run_simulation(header, local_data, datetime, sim, exec_settings);
 
         std::lock_guard<std::mutex> lock(mtx);
         all_somulations_results.push_back(trades);

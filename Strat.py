@@ -24,8 +24,6 @@ class ExecutionSettings:
     order_type: str='market'
     offset: float=0.0
 
-@dataclass
-class TimeSettings:
     day_trade: bool = False
     timeTI: Optional[list[int]] = None
     timeEF: Optional[list[int]] = None
@@ -36,35 +34,19 @@ class TimeSettings:
     dateExcludeTradingDays: Optional[List[int]] = None
     dateExcludeMonths: Optional[List[int]] = None
 
-""" 
-@dataclass # # TradeManagementRules Eliminated, it must check in Strat's generate_signals() 
-class TradeManagementRules:
-    LONG: bool = True
-    SHORT: bool = True
-    TF: bool = True
-    SL: bool = True
-    TP: bool = False
-    BE_pos: bool = False
-    BE_neg: bool = False
-    NB: int = -1
-"""
-
-@dataclass
-class DataSettings: # Commenting dataframe to avoid repetition, additional_timeframes can be replaced by a func
+    # Commenting dataframe to avoid repetition, additional_timeframes can be replaced by a func
     fill_method: str='ffill'
     fillna: object=0
+
 
 @dataclass
 class StratParams():
     name: str = field(default_factory=lambda: f'strat_{uuid.uuid4()}')
     operation: Union[Backtest, Optimization, Walkforward]=None
-    #strat_support_assets: Optional[Dict[str, Asset]] = field(default_factory=None) #Dict[str, Dict[str, Union[str, List[str]]]] = field(default_factory=dict)
 
     params: Dict = field(default_factory=dict) 
     execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
-    data_settings: DataSettings = field(default_factory=DataSettings)
     mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
-    time_settings: TimeSettings = field(default_factory=TimeSettings)
     indicators: Dict[str, Indicator] = field(default_factory=dict) 
 
     signal_rules: Dict = field(default_factory=lambda: {
@@ -100,9 +82,7 @@ class Strat(BaseClass):
 
         self.params = strat_params.params
         self.execution_settings = strat_params.execution_settings
-        self.data_settings = strat_params.data_settings
         self.mma_settings = strat_params.mma_settings # If mma_rules=None then will use default or PMA or othe MMA define in Operation
-        self.time_settings = strat_params.time_settings
         self.indicators = strat_params.indicators
 
         self.signal_rules = strat_params.signal_rules
