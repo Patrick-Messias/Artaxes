@@ -255,7 +255,7 @@ json Backtest::run_simulation(const std::string& header,
             bar_days[i] = tm.tm_wday;
         }
 
-        //export_to_csv("debug_market_data.csv", datetime, data);
+        export_to_csv("debug_market_data.csv", datetime, data);
 
 
 
