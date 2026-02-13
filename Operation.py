@@ -179,7 +179,17 @@ class Operation(BaseClass):
                                 "exit_sl_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_short_price')),
                                 "exit_tp_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_short_price')),
                                 "exit_tf_long": self._translate_signals(strat_obj.signal_rules.get('exit_tf_long')),
-                                "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short'))
+                                "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short')),
+
+                                'be_pos_long_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_long_signal')),
+                                'be_pos_short_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_short_signal')),
+                                'be_neg_long_signal': self._translate_signals(strat_obj.signal_rules.get('be_neg_long_signal')),
+                                'be_neg_short_signal': self._translate_signals(strat_obj.signal_rules.get('be_neg_short_signal')),
+
+                                'be_pos_long_value': self._translate_signals(strat_obj.signal_rules.get('be_pos_long_value')),
+                                'be_pos_short_value': self._translate_signals(strat_obj.signal_rules.get('be_pos_short_value')),
+                                'be_neg_long_value': self._translate_signals(strat_obj.signal_rules.get('be_neg_long_value')),
+                                'be_neg_short_value': self._translate_signals(strat_obj.signal_rules.get('be_neg_short_value')),
                             }
                         })
 
@@ -387,8 +397,6 @@ class Operation(BaseClass):
         # 5. Salva no Cache e retorna
         self._results_map[asset_name][cache_key] = final_series
         return curr_asset_obj.with_columns([final_series.alias(ind_name)])    
-
-
 
     def _get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
@@ -819,8 +827,8 @@ if __name__ == "__main__":
             'exit_nb_long': range(0, 0+1, 3),
             'exit_nb_short': range(0, 0+1, 3),
 
-            'sl_perc': range(1, 1+1, 1), # 3
-            'tp_perc': range(2, 2+1, 1), 
+            'sl_perc': range(10, 10+1, 1), # 3
+            'tp_perc': range(10, 10+1, 1), 
             'param1': range(21, 21+1, 21), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -852,6 +860,8 @@ if __name__ == "__main__":
     htf_ma = Col("htf_ma")
     close_usdjpy = Col("close_usdjpy")
 
+    test = close*0.0001
+
     entry_long = [
         close < open,
         close[1] < open[1],
@@ -881,12 +891,24 @@ if __name__ == "__main__":
     entry_long_limit_price = [atr]
     entry_short_limit_price = [atr]
 
+    be_pos_long_signal = None #[close > close[1]]
+    be_pos_short_signal = None #[close < close[1]]
+
+    be_neg_long_signal = None #[close < close[1]]
+    be_neg_short_signal = None #[close > close[1]]
+
+    be_pos_long_value = None #[atr]
+    be_pos_short_value = None #[atr]
+
+    be_neg_long_value = None #[atr]
+    be_neg_short_value = None #[atr]
+
     # --- 1. CORRIGIR strat_num_pos INDIFERENTE, ABRINDO APENAS 1 TRADE
     # --- 2. REIMPLEMENTAR exit_nb_only_if_pnl_is=1/-1
     # --- 3. CORRIGIR, HTF->LTF Não está funcionado, até porque não está usando a função de calcular indicadores
-    # 4. entry_long_limit_price VALE MAIS A PENA COMO POSIÇÃO OU VALOR A SER SOMADO AO OPEN[0] ou CLOSE[1]?
-    # 5. IMPLEMENTAR BREAK EVEN POS/NEG 
-    # 6. VERIFICAR CADA PARTE DO CÓDIGO E ENTENDER BEM
+    # 4. IMPLEMENTAR BREAK EVEN POS/NEG 
+    # 5. Implementar sistema de batch de dados?
+    # 6. Order limit/stop/market
 
     AT15 = Strat(
         StratParams(
@@ -912,10 +934,15 @@ if __name__ == "__main__":
                 'exit_tp_long_price': exit_tp_long_price,
                 'exit_tp_short_price': exit_tp_short_price,
 
-                'be_pos_long': None,
-                'be_pos_short': None,
-                'be_neg_long': None,
-                'be_neg_short': None
+                'be_pos_long_signal': be_pos_long_signal,
+                'be_pos_short_signal': be_pos_short_signal,
+                'be_neg_long_signal': be_neg_long_signal,
+                'be_neg_short_signal': be_neg_short_signal,
+
+                'be_pos_long_value': be_pos_long_value,
+                'be_pos_short_value': be_pos_short_value,
+                'be_neg_long_value': be_neg_long_value,
+                'be_neg_short_value': be_neg_short_value,
             }
         )
     )

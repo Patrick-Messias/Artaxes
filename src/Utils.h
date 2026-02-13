@@ -80,3 +80,6 @@ int get_day_of_week(const std::string& dt_str) {
     return tm.tm_wday; // 0 = Domingo, 1 = Segunda, ..., 5 = Sexta, 6 = Sábado
 }
 
+
+
+

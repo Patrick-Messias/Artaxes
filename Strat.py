@@ -60,10 +60,16 @@ class StratParams():
         'exit_sl_short_price': None,
         'exit_tp_long_price': None,
         'exit_tp_short_price': None,
-        'be_pos_long': None,
-        'be_pos_short': None,
-        'be_neg_long': None,
-        'be_neg_short': None
+
+        'be_pos_long_signal': None,
+        'be_pos_short_signal': None,
+        'be_neg_long_signal': None,
+        'be_neg_short_signal': None,
+
+        'be_pos_long_value': None,
+        'be_pos_short_value': None,
+        'be_neg_long_value': None,
+        'be_neg_short_value': None,
     })
 
     strat_money_manager: Optional['StratMoneyManager'] = None

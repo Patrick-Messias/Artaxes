@@ -158,6 +158,7 @@ bool evaluate_signals(const json& rules, const std::map<std::string, std::vector
 }
 
 
+
 json Backtest::run_simulation(const std::string& header, 
                               const std::map<std::string, std::vector<double>>& data,
                               const std::vector<std::string>& datetime,
@@ -234,6 +235,22 @@ json Backtest::run_simulation(const std::string& header,
         json rules_sl_short = rules.value("exit_sl_short_price", json::array());
         json rules_tp_long = rules.value("exit_tp_long_price", json::array());
         json rules_tp_short = rules.value("exit_tp_short_price", json::array());
+        json be_pos_long_signal = rules.value("be_pos_long_signal", json::array());
+        json be_pos_short_signal = rules.value("be_pos_short_signal", json::array());
+        json be_neg_long_signal = rules.value("be_neg_long_signal", json::array());
+        json be_neg_short_signal = rules.value("be_neg_short_signal", json::array());
+        json be_pos_long_value = rules.value("be_pos_long_value", json::array());
+        json be_pos_short_value = rules.value("be_pos_short_value", json::array());
+        json be_neg_long_value = rules.value("be_neg_long_value", json::array());
+        json be_neg_short_value = rules.value("be_neg_short_value", json::array());
+        bool has_be_pos_l_sig = !be_pos_long_signal.empty();
+        bool has_be_pos_s_sig = !be_pos_short_signal.empty();
+        bool has_be_neg_l_sig = !be_neg_long_signal.empty();
+        bool has_be_neg_s_sig = !be_neg_short_signal.empty();
+        bool has_be_pos_l_val = !be_pos_long_value.empty();
+        bool has_be_pos_s_val = !be_pos_short_value.empty();
+        bool has_be_neg_l_val = !be_neg_long_value.empty();
+        bool has_be_neg_s_val = !be_neg_short_value.empty();
 
         auto strat_num_pos = exec_settings.value("strat_num_pos", json::array({1,1}));
         int max_long = strat_num_pos[0].get<int>();
@@ -313,6 +330,58 @@ json Backtest::run_simulation(const std::string& header,
                     reason = "EF"; closed = true;
                 }
 
+                // BE - SL/TP to Break Even
+                if (!closed) {
+                    double entry_p = *it->entry_price;
+                    double current_p = open[i];
+
+                    // BE Positive
+                    if (it->stop_loss != entry_p && (is_long ? (has_be_pos_l_sig || has_be_pos_l_val) : (has_be_pos_s_sig || has_be_pos_s_val))) {
+                        bool trig_be_pos = false;
+
+                        if (is_long ? has_be_pos_l_sig : has_be_pos_s_sig) {
+                            trig_be_pos = evaluate_signals(is_long ? be_pos_long_signal : be_pos_short_signal, data, params, i-1);
+                        }
+
+                        if (!trig_be_pos && (is_long ? has_be_pos_l_val : has_be_pos_s_val)) {
+                            double v = evaluate_value(is_long ? be_pos_long_value : be_pos_short_value, data, params, i-1);
+                            if (v > 0) {
+                                trig_be_pos = is_long ? (current_p >= entry_p + v) : (current_p <= entry_p - v);
+                            }
+                        }
+
+                        if (trig_be_pos) {
+                            if (is_long ? (current_p > entry_p) : (current_p < entry_p)) {
+                                it->stop_loss = entry_p;
+                            }
+                        }
+                    }
+
+                    // BE Negative
+                    if (it->take_profit != entry_p && (is_long ? (has_be_neg_l_sig || has_be_neg_l_val) : (has_be_neg_s_sig || has_be_neg_s_val))) {
+                        bool trig_be_neg = false;
+
+                        if (is_long ? has_be_neg_l_sig : has_be_neg_s_sig) {
+                            trig_be_neg = evaluate_signals(is_long ? be_neg_long_signal : be_neg_short_signal, data, params, i-1);
+                        }
+
+                        if (!trig_be_neg && (is_long ? has_be_neg_l_val : has_be_neg_s_val)) {
+                            double v = evaluate_value(is_long ? be_neg_long_value : be_neg_short_value, data, params, i-1);
+                            if (v > 0) {
+                                trig_be_neg = is_long ? (current_p <= entry_p - v) : (current_p >= entry_p + v);
+                            }
+                        }
+                        
+                        if (trig_be_neg) {
+                            if (is_long ? (current_p < entry_p) : (current_p > entry_p)) {
+                                it->take_profit = entry_p;
+                            }
+                        }
+                    }
+                }
+
+
+
                 if (closed) {
                     it->exit_price = open[i];
                     it->exit_datetime = datetime[i];
@@ -389,6 +458,9 @@ json Backtest::run_simulation(const std::string& header,
                         
                         if (sl_dist > 0) { t.stop_loss = is_long_trade ? (entry_price - sl_dist) : (entry_price + sl_dist); }
                         if (tp_dist > 0) { t.take_profit = is_long_trade ? (entry_price + tp_dist) : (entry_price - tp_dist); }
+
+                        sl_dist = is_long_trade ? (entry_price - sl_dist) : (entry_price + sl_dist);
+                        tp_dist = is_long_trade ? (entry_price + tp_dist) : (entry_price - tp_dist);
 
                         if (counter < counter_max) {
                             std::cout << "[ENTRY] " << (is_long_trade ? "L " : "S ") << " |    " << datetime[i] 
