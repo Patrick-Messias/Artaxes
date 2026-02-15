@@ -24,4 +24,7 @@ struct Trade {
     std::optional<double> profit;     // %
     std::optional<double> profit_r;   // money
     std::optional<int> bars_held=0;
+
+    std::vector<double> daily_pnl;
+    std::vector<std::string> daily_datetime;
 };

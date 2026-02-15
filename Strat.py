@@ -38,6 +38,8 @@ class ExecutionSettings:
     fill_method: str='ffill'
     fillna: object=0
 
+    trade_pnl_resolution: str='weekly'
+
 
 @dataclass
 class StratParams():

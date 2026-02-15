@@ -596,6 +596,8 @@ class Operation(BaseClass):
                             if not trade_list: 
                                 return {"pnl": 0.0, "wr": 0.0, "cnt": 0, "avg": 0.0}
                             
+                            #for t in trade_list: print(f"Entry: {t['entry_datetime']} | Exit: {t['exit_datetime']} | Bars_Held: {t['bars_held']} | PnL: {t['daily_pnl']} {t['profit']} ")
+                            
                             p_list = [get_val(t, 'profit') for t in trade_list]
                             cnt = len(p_list)
                             pnl_sum = sum(p_list)
@@ -908,8 +910,16 @@ if __name__ == "__main__":
     # --- 3. CORRIGIR, HTF->LTF Não está funcionado, até porque não está usando a função de calcular indicadores
     # --- 4. IMPLEMENTAR BREAK EVEN POS/NEG 
     # --- 5. Sistema de Hedge parece não estar funcionando >> Não era erro, apenas os sinais TF da Strat estavam fechando antes de poder ter hedge
-    # 6. Implementar sistema de batch de dados?
-    # 7. Order limit/stop/market
+    # - Corrigir nome de asset no trade
+    # - Implementar sistema de batch de dados?
+    # - Desenvolver indicador prior_cote e já oficilizar a padronização dos indicadores 
+    # - Order limit/stop/market
+    # - Develop Portfolio Management in CPP not Py, Money Management, Model Management, etc all in cpp in real time /
+    #    Portfolio (PSM, PMM) -> Model (MSM (Asset Selection, Strat Selection), MMM) -> Assets -> Strat (SSM (WF/WFM), SMM) -> Param_Set
+
+    # Setup DT -> Mercado abre entre a max e min da semana anterior, long se > max_high_w, short se < min_low_w, tp = sl_val*5 
+
+    # - Otimização: Da pra otimizar removendo profit e adicionar profit=daily_pnl[-1] ou vise versa
 
     AT15 = Strat(
         StratParams(
@@ -918,7 +928,7 @@ if __name__ == "__main__":
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[3,3], order_type='market', offset=0.0, 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
-                                                 fill_method='ffill', fillna=0),
+                                                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily'),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=ind,

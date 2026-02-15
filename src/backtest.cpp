@@ -275,8 +275,10 @@ json Backtest::run_simulation(const std::string& header,
         //export_to_csv("debug_market_data.csv", datetime, data);
 
 
-
         for (size_t i = 1; i < n_bars; ++i) {
+            bool is_last_bar = (i == n_bars - 1);
+            bool day_switched = (!is_last_bar && time_ints[i+1] < time_ints[i]);
+
             // --- 1. EXIT LOGIC (Baseado no Open do candle atual para evitar look-ahead) ---
             auto it = active_trades.begin();
             while (it != active_trades.end()) {
@@ -311,10 +313,8 @@ json Backtest::run_simulation(const std::string& header,
                 }
 
                 // DT - Day Trade
-                if (!closed && is_daytrade && i+1 < n_bars) {
-                    if (time_ints[i+1] < time_ints[i]) {
-                        reason = "DT"; closed = true;
-                    }
+                if (!closed && is_daytrade && (day_switched || is_last_bar)) {
+                    reason = "DT"; closed = true;
                 }
 
                 // WC - Weekday Close
@@ -387,20 +387,25 @@ json Backtest::run_simulation(const std::string& header,
                     it->exit_datetime = datetime[i];
                     it->exit_reason = reason;
                     it->status = "closed";
+                    it->mae = *it->max_adv_price;
+                    it->mfe = *it->max_fav_price;
                     
                     double entry = *it->entry_price;
                     double exit = *it->exit_price;
-                    it->profit = ((exit - entry) / entry) * 100 * (is_long ? 1 : -1);
+                    double pnl = ((exit - entry) / entry) * 100 * (is_long ? 1 : -1);
+                    it->profit = pnl;
                     temp_cumulative_pnl += it->profit.value_or(0.0);
 
                     if (counter < counter_max) {
                         std::cout << "[EXIT ] " << (is_long ? "L" : "S") << " | " << reason << " " << datetime[i] 
                                 << " | In: " << entry << " | Out: " << exit
-                                << " | PnL: " << *it->profit << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
+                                << " | PnL: " << pnl << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
                         counter+=1;
                     }
 
-                    trades.push_back(std::move(*it));
+                    it->daily_pnl.push_back(pnl);
+                    it->daily_datetime.push_back(datetime[i].substr(0,10));
+                    trades.push_back(*it);
                     it = active_trades.erase(it);
                 } else { ++it; }
             }
@@ -501,17 +506,21 @@ json Backtest::run_simulation(const std::string& header,
                     it->exit_datetime = datetime[i];
                     it->exit_reason = reason;
                     it->status = "closed";
-
-                    it->profit = ((*it->exit_price - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                    it->mae = *it->max_adv_price;
+                    it->mfe = *it->max_fav_price;
+                    double pnl = ((*it->exit_price - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                    it->profit = pnl;
                     temp_cumulative_pnl += *it->profit;
 
                     if (counter < counter_max) { 
-                        std::cout << "[EXIT ] " << (is_long ? "L" : "S") << " | " << reason << " " << datetime[i] << " | PnL: " << *it->profit 
+                        std::cout << "[EXIT ] " << (is_long ? "L" : "S") << " | " << reason << " " << datetime[i] << " | PnL: " << pnl 
                                 << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
                         counter+=1;
                     }
 
-                    trades.push_back(std::move(*it));
+                    it->daily_pnl.push_back(pnl);
+                    it->daily_datetime.push_back(datetime[i].substr(0,10));
+                    trades.push_back(*it);
                     it = active_trades.erase(it);
                 }
                 else {
@@ -531,12 +540,34 @@ json Backtest::run_simulation(const std::string& header,
                     ++it;
                 }
             }
+        
+            // --- 4. Daily PnL Update
+            if (day_switched || is_last_bar) {
+                for (auto& trade : active_trades) {
+                    double entry_p = *trade.entry_price;
+                    double current_p = close[i];
+                    bool is_long = (trade.lot_size.value_or(0.0) > 0);
+
+                    float pnl = (float)(((current_p - entry_p) / entry_p) * 100.0) * (is_long ? 1.0 : -1.0);
+
+                    trade.daily_pnl.push_back(pnl);
+                    trade.daily_datetime.push_back(datetime[i].substr(0, 10));
+                }
+            }
         }
 
     } catch (const std::exception& e) { std::cerr << "[C++ Backtest Error]: " << e.what() << std::endl; }
 
     std::cout << "[FINISH] Total Trades: " << trades.size() << " | PnL Validado: " << temp_cumulative_pnl << "%" << std::endl;
-    return trades_to_json(trades);
+
+    // Final do backtest.cpp
+    std::cout << "[C++ Debug] Total de trades completados: " << trades.size() << std::endl;
+    if (!trades.empty()) {
+        std::cout << "[C++ Debug] Daily PnL do primeiro trade: " << trades[0].daily_pnl.size() << " entradas." << std::endl;
+    }
+    
+    std::string trade_pnl_resolution = exec_settings.value("trade_pnl_resolution", "weekly");
+    return trades_to_json(trades, trade_pnl_resolution);
 }
 
 
