@@ -272,7 +272,7 @@ json Backtest::run_simulation(const std::string& header,
             bar_days[i] = tm.tm_wday;
         }
 
-        export_to_csv("debug_market_data.csv", datetime, data);
+        //export_to_csv("debug_market_data.csv", datetime, data);
 
 
 
@@ -280,7 +280,7 @@ json Backtest::run_simulation(const std::string& header,
             // --- 1. EXIT LOGIC (Baseado no Open do candle atual para evitar look-ahead) ---
             auto it = active_trades.begin();
             while (it != active_trades.end()) {
-                bool is_long = (it->lot_size.value_or(0) > 0);
+                bool is_long = (it->lot_size.value_or(0.0) > 0.0);
                 bool closed = false;
                 std::string reason = "";
                 
@@ -394,7 +394,7 @@ json Backtest::run_simulation(const std::string& header,
                     temp_cumulative_pnl += it->profit.value_or(0.0);
 
                     if (counter < counter_max) {
-                        std::cout << "[EXIT ] " << (is_long ? "L" : "S") << "  | " << reason << " " << datetime[i] 
+                        std::cout << "[EXIT ] " << (is_long ? "L" : "S") << " | " << reason << " " << datetime[i] 
                                 << " | In: " << entry << " | Out: " << exit
                                 << " | PnL: " << *it->profit << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
                         counter+=1;
@@ -404,7 +404,7 @@ json Backtest::run_simulation(const std::string& header,
                     it = active_trades.erase(it);
                 } else { ++it; }
             }
-
+            
             // --- 2. ENTRY LOGIC (Sinal no candle anterior i-1, entrada no Open de i) ---
             bool day_is_blocked = false;
             if (!close_days.empty()) {
@@ -414,61 +414,58 @@ json Backtest::run_simulation(const std::string& header,
 
             if (!day_is_blocked) {
                 bool signal_long = evaluate_signals(rules_entry_long, data, params, i - 1);
-                bool signal_short = !signal_long && evaluate_signals(rules_entry_short, data, params, i - 1);
+                bool signal_short = evaluate_signals(rules_entry_short, data, params, i - 1);
 
                 if (signal_long || signal_short) {
                     int current_longs = 0;
                     int current_shorts = 0;
-                    for (const auto& at : active_trades) {
-                        if (at.lot_size.value_or(0) > 0) current_longs++;
-                        else if (at.lot_size.value_or(0) < 0) current_shorts++;
-                    }
-                    bool can_enter = false;
-                    bool is_long_trade = false;
 
-                    if (signal_long) {
-                        bool hedge_ok = hedge_enabled || (current_shorts == 0);
-                        if (current_longs < max_long && hedge_ok) { can_enter=true; is_long_trade=true; }
-                    }
-                    else if (signal_short) {
-                        bool hedge_ok = hedge_enabled || (current_longs == 0);
-                        if (current_shorts < max_short && hedge_ok) { can_enter=true; is_long_trade=false; }
+                    for (const auto& t : active_trades) {
+                        double lot = t.lot_size.value_or(0.0);
+                        if (lot > 0) current_longs++;
+                        else if (lot < -0) current_shorts++;
                     }
 
-                    if (can_enter) {
+                    auto execute_entry_internal = [&](bool is_long) {
                         Trade t;
                         t.id = generate_id();
                         t.asset = asset_base_name;
                         t.entry_datetime = datetime[i];
                         t.status = "open";
-
                         double entry_price = open[i];
                         t.entry_price = entry_price;
                         t.max_fav_price = entry_price;
                         t.max_adv_price = entry_price;
                         t.bars_held = 0;
+                        t.lot_size = calculate_lot_size(entry_price, is_long);
 
-                        t.lot_size = calculate_lot_size(entry_price, is_long_trade);
-
-                        // Configuração de SL/TP
-                        const json& sl_rules = is_long_trade ? rules_sl_long : rules_sl_short;
-                        const json& tp_rules = is_long_trade ? rules_tp_long : rules_tp_short;
+                        const json& sl_rules = is_long ? rules_sl_long : rules_sl_short;
+                        const json& tp_rules = is_long ? rules_tp_long : rules_tp_short;
                         double sl_dist = evaluate_value(sl_rules, data, params, i);
                         double tp_dist = evaluate_value(tp_rules, data, params, i);
                         
-                        if (sl_dist > 0) { t.stop_loss = is_long_trade ? (entry_price - sl_dist) : (entry_price + sl_dist); }
-                        if (tp_dist > 0) { t.take_profit = is_long_trade ? (entry_price + tp_dist) : (entry_price - tp_dist); }
+                        double sl = is_long ? (entry_price - sl_dist) : (entry_price + sl_dist);
+                        double tp = is_long ? (entry_price + tp_dist) : (entry_price - tp_dist);
 
-                        sl_dist = is_long_trade ? (entry_price - sl_dist) : (entry_price + sl_dist);
-                        tp_dist = is_long_trade ? (entry_price + tp_dist) : (entry_price - tp_dist);
+                        if (sl_dist > 0) t.stop_loss = sl;
+                        if (tp_dist > 0) t.take_profit = tp;
 
                         if (counter < counter_max) {
-                            std::cout << "[ENTRY] " << (is_long_trade ? "L " : "S ") << " |    " << datetime[i] 
-                                    << " | Price: " << open[i] << " | SL: " << sl_dist << " | TP: " << tp_dist << std::endl;
-                            counter+=1;
+                            std::cout << "[ENTRY] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
+                                    << " | Price: " << entry_price << " | TP: " << tp << " | SL: " << sl << std::endl;
+                            counter++;
                         }
-
                         active_trades.push_back(std::move(t));
+                    };
+
+                    if (signal_long) {
+                        bool hedge_ok = hedge_enabled || (current_shorts == 0);
+                        if (current_longs < max_long && hedge_ok) execute_entry_internal(true);
+                    }
+
+                    if (signal_short) {
+                        bool hedge_ok = hedge_enabled || (current_longs == 0);
+                        if (current_shorts < max_short && hedge_ok) execute_entry_internal(false);
                     }
                 }
             }
@@ -478,7 +475,7 @@ json Backtest::run_simulation(const std::string& header,
             while (it != active_trades.end()){
                 double sl = it->stop_loss.value_or(0.0);
                 double tp = it->take_profit.value_or(0.0);
-                bool is_long = (it->lot_size > 0.0);
+                bool is_long = (it->lot_size.value_or(0.0) > 0.0);
                 bool closed = false;
                 std::string reason = "";
 
@@ -509,7 +506,7 @@ json Backtest::run_simulation(const std::string& header,
                     temp_cumulative_pnl += *it->profit;
 
                     if (counter < counter_max) { 
-                        std::cout << "[EXIT ] " << (is_long ? "L" : "S") << "  | " << reason << " " << datetime[i] << " | PnL: " << *it->profit 
+                        std::cout << "[EXIT ] " << (is_long ? "L" : "S") << " | " << reason << " " << datetime[i] << " | PnL: " << *it->profit 
                                 << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
                         counter+=1;
                     }

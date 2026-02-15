@@ -827,8 +827,8 @@ if __name__ == "__main__":
             'exit_nb_long': range(0, 0+1, 3),
             'exit_nb_short': range(0, 0+1, 3),
 
-            'sl_perc': range(10, 10+1, 1), # 3
-            'tp_perc': range(10, 10+1, 1), 
+            'sl_perc': range(2, 2+1, 1), # 3
+            'tp_perc': range(4, 4+1, 1), 
             'param1': range(21, 21+1, 21), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -845,7 +845,7 @@ if __name__ == "__main__":
         'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='ema', price_col='close'),
         'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
-        'close_usdjpy': RawData(asset='USDJPY', timeframe='M15', price_col='close'),
+        'close_usdjpy': RawData(asset='USDJPY', timeframe='D1', price_col='close'),
     }
 
     close = Col("close")
@@ -860,26 +860,26 @@ if __name__ == "__main__":
     htf_ma = Col("htf_ma")
     close_usdjpy = Col("close_usdjpy")
 
-    test = close*0.0001
-
     entry_long = [
         close < open,
         close[1] < open[1],
         close[2] < open[2],
+        close < ema
     ]
     entry_short = [
         close > open,
         close[1] > open[1],
         close[2] > open[2],
+        close > ema
     ]
 
     exit_tf_long = [
         close > open,
-        close[1] > open[1],
+        close > ema,
     ]
     exit_tf_short = [
         close < open,
-        close[1] < open[1],
+        close < ema,
     ]
 
     exit_tp_long_price = [atr * tp_perc]
@@ -906,15 +906,16 @@ if __name__ == "__main__":
     # --- 1. CORRIGIR strat_num_pos INDIFERENTE, ABRINDO APENAS 1 TRADE
     # --- 2. REIMPLEMENTAR exit_nb_only_if_pnl_is=1/-1
     # --- 3. CORRIGIR, HTF->LTF Não está funcionado, até porque não está usando a função de calcular indicadores
-    # 4. IMPLEMENTAR BREAK EVEN POS/NEG 
-    # 5. Implementar sistema de batch de dados?
-    # 6. Order limit/stop/market
+    # --- 4. IMPLEMENTAR BREAK EVEN POS/NEG 
+    # --- 5. Sistema de Hedge parece não estar funcionando >> Não era erro, apenas os sinais TF da Strat estavam fechando antes de poder ter hedge
+    # 6. Implementar sistema de batch de dados?
+    # 7. Order limit/stop/market
 
     AT15 = Strat(
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0, 
+            execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[3,3], order_type='market', offset=0.0, 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0),
