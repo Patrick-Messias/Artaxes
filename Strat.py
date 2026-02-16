@@ -54,10 +54,12 @@ class StratParams():
     signal_rules: Dict = field(default_factory=lambda: {
         'entry_long': None,
         'entry_short': None,
-        'exit_tf_long': None,
-        'exit_tf_short': None,
         'entry_long_limit_price': None,
         'entry_short_limit_price': None,
+
+        'exit_tf_long': None,
+        'exit_tf_short': None,
+
         'exit_sl_long_price': None,
         'exit_sl_short_price': None,
         'exit_tp_long_price': None,

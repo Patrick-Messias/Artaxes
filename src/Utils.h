@@ -54,6 +54,7 @@ inline nlohmann::json trades_to_json(const std::vector<Trade>& trades, const std
         nlohmann::json trade_json = {
             {"id", t.id},
             {"asset", t.asset},
+            {"path", t.path},
             {"status", t.status},
             {"entry_price", t.entry_price},
             {"entry_datetime", t.entry_datetime},

@@ -5,6 +5,7 @@
 struct Trade {
     std::string id;
     std::string asset;
+    std::string path;
     std::string status;          // "open" | "closed"
     std::string entry_datetime;
     std::optional<double> entry_price;

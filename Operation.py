@@ -174,12 +174,16 @@ class Operation(BaseClass):
                             "rules": {
                                 "entry_long": self._translate_signals(strat_obj.signal_rules.get('entry_long')),
                                 "entry_short": self._translate_signals(strat_obj.signal_rules.get('entry_short')),
+                                "entry_long_limit_price": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_price')),
+                                "entry_short_limit_price": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_price')),
+
+                                "exit_tf_long": self._translate_signals(strat_obj.signal_rules.get('exit_tf_long')),
+                                "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short')),
+
                                 "exit_sl_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_long_price')),
                                 "exit_tp_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_long_price')),
                                 "exit_sl_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_short_price')),
                                 "exit_tp_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_short_price')),
-                                "exit_tf_long": self._translate_signals(strat_obj.signal_rules.get('exit_tf_long')),
-                                "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short')),
 
                                 'be_pos_long_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_long_signal')),
                                 'be_pos_short_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_short_signal')),
@@ -309,28 +313,39 @@ class Operation(BaseClass):
 
         for simulation_batch in raw_output:
             for trade in simulation_batch:
-                full_key = trade.get("asset", "") # "MA Trend Following_AT15_EURUSD_param_set-21-..."
+                full_key = trade.get("path", "") # "MA Trend Following_AT15_EURUSD_param_set-21-..."
                 
                 # Identificamos onde começa o param_set
-                idx_param = full_key.find("_param_set")
-                if idx_param == -1: continue
+                split_point = "_param_set"
+                idx_param = full_key.find(split_point)
+                
+                if idx_param == -1:
+                    print(f"DEBUG: Formato de path inesperado: {full_key}")
+                    continue
                 
                 ps_name = full_key[idx_param+1:] # "param_set-21-..."
                 prefix = full_key[:idx_param]    # "MA Trend Following_AT15_EURUSD"
-                
                 parts = prefix.split('_')
-                # parts[0] = Model, parts[1] = Strat, parts[2] = Asset
                 
-                try:
-                    # Caminho exato no mapa de resultados
-                    target = self._results_map[self.name]["models"][parts[0]]["strats"][parts[1]]["assets"][parts[2]]["param_sets"][ps_name]
+                # Verificação de segurança para evitar IndexError
+                if len(parts) < 3:
+                    print(f"DEBUG: Prefixo incompleto: {prefix}")
+                    continue
+
+                m_name, s_name, a_name = parts[0], parts[1], parts[2] 
+                try: # Navegação segura no dicionário
+                    target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
                     
                     if target["trades"] is None:
                         target["trades"] = []
                     
+                    # Opcional: Limpar o nome do asset dentro do trade para o relatório
+                    trade["asset"] = a_name 
+                    
                     target["trades"].append(trade)
+                    
                 except KeyError as e:
-                    print(f"DEBUG: Chave não encontrada no results_map: {e} | PS tentado: {ps_name}")
+                    print(f"DEBUG: Chave não encontrada: {e} | Caminho tentado: {m_name}->{s_name}->{a_name}->{ps_name}")
 
     def _estimate_paramset_size_mb(self, df: pl.DataFrame):
         return df.estimated_size() / (1024 ** 2) # No Polars, estimated_size() retorna o tamanho em bytes
@@ -574,8 +589,12 @@ class Operation(BaseClass):
             for strat_name, strat_data in model_data.get("strats", {}).items():
                 print(f"  └── Strat: {strat_name}")
                 
-                for asset_name, asset_data in strat_data.get("assets", {}).items():
-                    print(f"      └── Asset: {asset_name}")
+                for asset_path, asset_data in strat_data.get("assets", {}).items():
+                    # EXTRAÇÃO: Pegamos apenas o final do path para exibição
+                    # Se asset_path for "MA Trend Following_AT15_EURUSD", display_name será "EURUSD"
+                    display_name = asset_path.split('_')[-1]
+                    
+                    print(f"      └── Asset: {display_name}")
                     
                     for param_key, param_data in asset_data.get("param_sets", {}).items():
                         trades = param_data.get("trades", [])
@@ -596,8 +615,8 @@ class Operation(BaseClass):
                             if not trade_list: 
                                 return {"pnl": 0.0, "wr": 0.0, "cnt": 0, "avg": 0.0}
                             
-                            #for t in trade_list: print(f"Entry: {t['entry_datetime']} | Exit: {t['exit_datetime']} | Bars_Held: {t['bars_held']} | PnL: {t['daily_pnl']} {t['profit']} ")
-                            
+                            #for t in trade_list: print(t)
+
                             p_list = [get_val(t, 'profit') for t in trade_list]
                             cnt = len(p_list)
                             pnl_sum = sum(p_list)
@@ -825,6 +844,9 @@ if __name__ == "__main__":
     strat_param_sets = {
         'AT15': { 
             'execution_tf': model_execution_tf,
+            'backtest_start_idx': 21,
+            'limit_order_exclusion_after_period': 4,
+            'opposite_order_closes_pending': True,
             'exit_nb_only_if_pnl_is': 0, 
             'exit_nb_long': range(0, 0+1, 3),
             'exit_nb_short': range(0, 0+1, 3),
@@ -847,7 +869,8 @@ if __name__ == "__main__":
         'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='ema', price_col='close'),
         'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
-        'close_usdjpy': RawData(asset='USDJPY', timeframe='D1', price_col='close'),
+        'D1_high': RawData(asset=None, timeframe='D1', price_col='high'),
+        'D1_low': RawData(asset=None, timeframe='D1', price_col='low'),
     }
 
     close = Col("close")
@@ -866,13 +889,11 @@ if __name__ == "__main__":
         close < open,
         close[1] < open[1],
         close[2] < open[2],
-        close < ema
     ]
     entry_short = [
         close > open,
         close[1] > open[1],
         close[2] > open[2],
-        close > ema
     ]
 
     exit_tf_long = [
@@ -883,6 +904,8 @@ if __name__ == "__main__":
         close < open,
         close < ema,
     ]
+    exit_tf_long=None
+    exit_tf_short=None
 
     exit_tp_long_price = [atr * tp_perc]
     exit_tp_short_price = [atr * tp_perc]
@@ -890,8 +913,8 @@ if __name__ == "__main__":
     exit_sl_long_price = [atr * sl_perc]
     exit_sl_short_price = [atr * sl_perc]
 
-    entry_long_limit_price = [atr]
-    entry_short_limit_price = [atr]
+    entry_long_limit_price = [atr*-0.25]
+    entry_short_limit_price = [atr*-0.25]
 
     be_pos_long_signal = None #[close > close[1]]
     be_pos_short_signal = None #[close < close[1]]
@@ -913,7 +936,7 @@ if __name__ == "__main__":
     # - Corrigir nome de asset no trade
     # - Implementar sistema de batch de dados?
     # - Desenvolver indicador prior_cote e já oficilizar a padronização dos indicadores 
-    # - Order limit/stop/market
+    # --- Order limit/stop/market
     # - Develop Portfolio Management in CPP not Py, Money Management, Model Management, etc all in cpp in real time /
     #    Portfolio (PSM, PMM) -> Model (MSM (Asset Selection, Strat Selection), MMM) -> Assets -> Strat (SSM (WF/WFM), SMM) -> Param_Set
 
@@ -925,7 +948,7 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[3,3], order_type='market', offset=0.0, 
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0, 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily'),
@@ -935,10 +958,11 @@ if __name__ == "__main__":
             signal_rules={
                 'entry_long': entry_long,
                 'entry_short': entry_short,
+                'entry_long_limit_price': entry_long_limit_price,
+                'entry_short_limit_price': entry_short_limit_price,
+
                 'exit_tf_long': exit_tf_long,
                 'exit_tf_short': exit_tf_short,
-                'entry_long_limit_price': None,
-                'entry_short_limit_price': None,
 
                 'exit_sl_long_price': exit_sl_long_price,
                 'exit_sl_short_price': exit_sl_short_price,
