@@ -208,89 +208,73 @@ json Backtest::run_simulation(const std::string& header,
     int counter = 50000;
     int counter_max = counter + 30;
 
-    try {
-        const auto& open = data.at("open");
-        const auto& high = data.at("high");
-        const auto& low = data.at("low");
-        const auto& close = data.at("close");
-        size_t n_bars = datetime.size();
+    // Lambda auxiliar para evitar repetição de código e tratar erros
+    auto get_vec_from_json = [&](json& field, std::string label) -> const double* {
+        if (field.is_null()) return nullptr;
 
-        std::vector<int> time_ints(n_bars);
-        for (size_t i = 0; i < n_bars; ++i) {
-            time_ints[i] = std::stoi(datetime[i].substr(11, 2)) * 10000 + 
-                std::stoi(datetime[i].substr(14, 2)) * 100 + 
-                std::stoi(datetime[i].substr(17, 2));
+        std::string col_name = "";
+        if (field.is_string()) {
+            col_name = field.get<std::string>();
+        } else if (field.is_array() && !field.empty() && field[0].is_string()) {
+            col_name = field[0].get<std::string>();
         }
 
+        if (!col_name.empty()) {
+            if (data.count(col_name)) {
+                return data.at(col_name).data();
+            } else {
+                std::cout << "[WARNING] Column " << label << " not found: " << col_name << std::endl;
+            }
+        }
+        return nullptr;
+    };
+
+    auto get_vec_ptr = [&](const std::string& key) -> const double* {
+        auto it = data.find(key);
+        if (it != data.end() && !it->second.empty()) {
+            return it->second.data();
+        }
+        return nullptr;
+    };
+
+    try {
         json params = sim.value("params", json::object());
         json rules = sim.value("rules", json::object());
 
-        json rules_entry_long = rules.value("entry_long", json::array());
-        json rules_entry_short = rules.value("entry_short", json::array());
+        const auto& open = get_vec_ptr("open");
+        const auto& high = get_vec_ptr("high");
+        const auto& low = get_vec_ptr("low");
+        const auto& close = get_vec_ptr("close");
+        const size_t n_bars = datetime.size();
 
+        // Param Values
         int backtest_start_idx = params.value("backtest_start_idx", 1);
-
-
-
-        // Limit Orders
         int limit_order_expiry = params.value("limit_order_exclusion_after_period", 1);
         double limit_order_perc_treshold_for_order_diff = 1.0;
-        if (params.contains("limit_order_perc_treshold_for_order_diff")) {
-            limit_order_perc_treshold_for_order_diff = params["limit_order_perc_treshold_for_order_diff"].get<double>();
-        }
+        if (params.contains("limit_order_perc_treshold_for_order_diff")) limit_order_perc_treshold_for_order_diff = params["limit_order_perc_treshold_for_order_diff"].get<double>();
         bool limit_can_enter_at_market_if_gap = params.value("limit_can_enter_at_market_if_gap", false);
         bool limit_opposite_order_closes_pending = params.value("limit_opposite_order_closes_pending", true);
 
-        // 1. Defina o fallback como nulo (ou string vazia) para facilitar a checagem
-        json entry_long_limit_position = rules.value("entry_long_limit_position", json(nullptr));
-        json entry_short_limit_position = rules.value("entry_short_limit_position", json(nullptr));
-
-        // As regras de "value" (offsets) geralmente são listas de operações, então podem manter json::array()
-        json entry_long_limit_value = rules.value("entry_long_limit_value", json::array());
-        json entry_short_limit_value = rules.value("entry_short_limit_value", json::array());
-
-
-
-
-        // 1. Extração segura do JSON
-        json entry_long_raw = rules.value("entry_long_limit_position", json(nullptr));
-        json entry_short_raw = rules.value("entry_short_limit_position", json(nullptr));
-
-        const double* long_pos_vec = nullptr;
-        const double* short_pos_vec = nullptr;
-
-        // Lambda auxiliar para evitar repetição de código e tratar erros
-        auto get_vec_from_json = [&](json& field, std::string label) -> const double* {
-            if (field.is_null()) return nullptr;
-
-            std::string col_name = "";
-            if (field.is_string()) {
-                col_name = field.get<std::string>();
-            } else if (field.is_array() && !field.empty() && field[0].is_string()) {
-                col_name = field[0].get<std::string>();
-            }
-
-            if (!col_name.empty()) {
-                if (data.count(col_name)) {
-                    return data.at(col_name).data();
-                } else {
-                    std::cout << "[WARNING] Column " << label << " not found: " << col_name << std::endl;
-                }
-            }
-            return nullptr;
-        };
-
-        // 2. Atribuição dos ponteiros
-        long_pos_vec = get_vec_from_json(entry_long_raw, "Long Pos");
-        short_pos_vec = get_vec_from_json(entry_short_raw, "Short Pos");
-
-
-
-
-        // Exit and Trade Management Rules
         int nb_long = params.value("exit_nb_long", 0);
         int nb_short = params.value("exit_nb_short", 0);
         int exit_nb_only_if_pnl_is = params.value("exit_nb_only_if_pnl_is", 0);
+
+
+        // Entry Rules
+        json rules_entry_long = rules.value("entry_long", json::array());
+        json rules_entry_short = rules.value("entry_short", json::array());
+    
+        // Limit Orders - As regras de "value" (offsets) geralmente são listas de operações, então podem manter json::array()
+        json entry_long_limit_value = rules.value("entry_long_limit_value", json::array());
+        json entry_short_limit_value = rules.value("entry_short_limit_value", json::array());
+
+        json entry_long_raw = rules.value("entry_long_limit_position", json(nullptr));
+        json entry_short_raw = rules.value("entry_short_limit_position", json(nullptr));
+        const double* long_pos_vec = get_vec_from_json(entry_long_raw, "Long Pos");
+        const double* short_pos_vec = get_vec_from_json(entry_short_raw, "Short Pos");
+
+
+        // Exit and Trade Management Rules
         json rules_tf_long = rules.value("exit_tf_long", json::array());
         json rules_tf_short = rules.value("exit_tf_short", json::array());
         json rules_sl_long = rules.value("exit_sl_long_price", json::array());
@@ -318,34 +302,65 @@ json Backtest::run_simulation(const std::string& header,
         int max_long = strat_num_pos[0].get<int>();
         int max_short = strat_num_pos[1].get<int>();
 
+        auto strat_max_num_pos_per_day = exec_settings.value("strat_max_num_pos_per_day", json::array({1,1}));
+        int max_long_trades_per_day = strat_max_num_pos_per_day[0].get<int>();
+        int max_short_trades_per_day = strat_max_num_pos_per_day[1].get<int>();
+        if (max_long_trades_per_day == -1) max_long_trades_per_day=999999;
+        if (max_short_trades_per_day == -1) max_short_trades_per_day=999999;
+        int day_trades_long=0; int day_trades_short=0;
+
         bool hedge_enabled = exec_settings.value("hedge", false);
         double offset = exec_settings.value("offset", 0.0);
         bool is_daytrade = exec_settings.value("day_trade", false);
 
         std::string order_type = exec_settings.at("order_type").get<std::string>();
         std::string limit_order_base_calc_ref_price = exec_settings.at("limit_order_base_calc_ref_price").get<std::string>();
-        std::cout << "order_type | limit_order_base_calc_ref_price >>> " << order_type << " | " << limit_order_base_calc_ref_price << std::endl;
-
         size_t last_underscore = header.find_last_of('_');
         std::string asset_base_name = (last_underscore != std::string::npos) ? header.substr(last_underscore + 1) : header;
         std::string trade_path = header + "_" + sim["id"].get<std::string>();
-
         std::vector<int> close_days = exec_settings.value("day_of_week_close_and_stop_trade", std::vector<int>{});
+
+
+        // Datetime pre processing
+        // bar_dates YYYYMMDD | bar_times HHMMSS
+        std::vector<int> bar_dates(n_bars);
+        std::vector<int> bar_times(n_bars);
         std::vector<int> bar_days(n_bars);
+
         for (size_t i=0; i<n_bars; ++i) {
+            const std::string& dt=datetime[i];
+
+            // Direct numeral extraction (ASCII '0' é 48)
+            // Date: YYYYMMDD
+            bar_dates[i] = (dt[0]-'0')*10000000 + (dt[1]-'0')*1000000 + (dt[2]-'0')*100000 + (dt[3]-'0')*10000 +
+                        (dt[5]-'0')*1000 + (dt[6]-'0')*100 + 
+                        (dt[8]-'0')*10 + (dt[9]-'0');
+
+            // Time: HHMMSS
+            bar_times[i] = ((dt[11]-'0')*10 + (dt[12]-'0')) * 10000 + 
+                        ((dt[14]-'0')*10 + (dt[15]-'0')) * 100 + 
+                        ((dt[17]-'0')*10 + (dt[18]-'0'));
+
+            // for day of week keep the same
             std::tm tm = {};
-            std::istringstream ss(datetime[i]);
+            std::istringstream ss(dt.substr(0,10));
             ss >> std::get_time(&tm, "%Y-%m-%d");
+            tm.tm_isdst = -1;
             std::mktime(&tm);
             bar_days[i] = tm.tm_wday;
         }
 
+
+
         //export_to_csv("debug_market_data.csv", datetime, data);
 
 
+        // -------------------------------------------------------------------------------------------------------------------------||
+
         for (size_t i = backtest_start_idx; i < n_bars; ++i) {
             bool is_last_bar = (i == n_bars - 1);
-            bool day_switched = (!is_last_bar && time_ints[i+1] < time_ints[i]);
+            bool day_switched = (!is_last_bar && bar_dates[i+1] != bar_dates[i]);
+            if (day_switched) { day_trades_long = 0; day_trades_short = 0;}
 
             // --- 1. EXIT LOGIC (Baseado no Open do candle atual para evitar look-ahead) ---
             auto it = active_trades.begin();
@@ -529,8 +544,8 @@ json Backtest::run_simulation(const std::string& header,
                     // Recalculates SL/TP based on execution price
                     const json& sl_rules = is_long ? rules_sl_long : rules_sl_short;
                     const json& tp_rules = is_long ? rules_tp_long : rules_tp_short;
-                    double sl_dist = evaluate_value(sl_rules, data, params, i);
-                    double tp_dist = evaluate_value(tp_rules, data, params, i);
+                    double sl_dist = evaluate_value(sl_rules, data, params, i-1);
+                    double tp_dist = evaluate_value(tp_rules, data, params, i-1);
 
                     if (sl_dist > 0) p_it->stop_loss = is_long ? (entry - sl_dist) : (entry + sl_dist);
                     if (tp_dist > 0) p_it->take_profit = is_long ? (entry + tp_dist) : (entry - tp_dist);
@@ -546,6 +561,7 @@ json Backtest::run_simulation(const std::string& header,
 
                     active_trades.push_back(std::move(*p_it));
                     p_it = pending_orders.erase(p_it);
+                    is_long ? ++day_trades_long : ++day_trades_short;
                 } else {
                     p_it->bars_held = p_it->bars_held.value_or(0) + 1;
                     ++p_it;
@@ -678,6 +694,7 @@ json Backtest::run_simulation(const std::string& header,
 
                         if (execute_now) {
                             active_trades.push_back(std::move(t));
+                            is_long ? ++day_trades_long : ++day_trades_short;
                             if (counter < counter_max) {
                                 std::cout << "[EN-MKT] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
                                         << " | Price: " << std::fixed << std::setprecision(5) << final_entry 
@@ -718,7 +735,7 @@ json Backtest::run_simulation(const std::string& header,
                         }
 
                         bool hedge_ok = hedge_enabled || (current_shorts == 0);
-                        if (current_longs < max_long && hedge_ok) execute_entry_internal(true);
+                        if (current_longs < max_long && day_trades_long < max_long_trades_per_day && hedge_ok) execute_entry_internal(true);
                     }
 
                     if (signal_short) {
@@ -738,7 +755,7 @@ json Backtest::run_simulation(const std::string& header,
                         }
 
                         bool hedge_ok = hedge_enabled || (current_longs == 0);
-                        if (current_shorts < max_short && hedge_ok) execute_entry_internal(false);
+                        if (current_shorts < max_short && day_trades_short < max_short_trades_per_day && hedge_ok) execute_entry_internal(false);
                     }
                 }
             }

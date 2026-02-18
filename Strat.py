@@ -21,6 +21,7 @@ from Walkforward import Walkforward
 class ExecutionSettings:
     hedge: bool=False
     strat_num_pos: list[int]=field(default_factory=lambda: [1,1])
+    strat_max_num_pos_per_day: list[int]=field(default_factory=lambda: [-1,-1])
     order_type: str='limit'
     limit_order_base_calc_ref_price: str='open'
     offset: float=0.0

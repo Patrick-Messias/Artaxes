@@ -870,7 +870,7 @@ if __name__ == "__main__":
             'exit_nb_long': range(0, 0+1, 3),
             'exit_nb_short': range(0, 0+1, 3),
             
-            'sl_perc': range(1, 1+1, 1), # 3
+            'sl_perc': range(2, 2+1, 1), # 3
             'tp_perc': range(5, 5+1, 1), 
             'param1': range(21, 21+1, 21), #50
             'param2': range(2, 2+1, 1), # 3
@@ -968,7 +968,7 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], 
+            execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[-1,-1],
                                                  order_type='limit', limit_order_base_calc_ref_price='open', offset=0.0, 
                                                  day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
