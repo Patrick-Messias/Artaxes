@@ -55,35 +55,58 @@ def load_data(data_path, min_limit=0.0, max_limit=1.0, index_col_setting=False, 
 
     def process_file(file_path):
         try:
+            # 1. Leitura inicial
             if file_path.endswith(('.xlsx', '.xls')):
-                # Nota: Polars usa fsspec/xlsx2csv para Excel, requer 'pip install xlsx2csv'
-                df = pl.read_excel(file_path).with_columns(
-                    pl.col("datetime").str.to_datetime("%Y.%m.%d %H:%M:%S") # Ajuste o formato conforme seu CSV
-                )
+                df = pl.read_excel(file_path)
             elif file_path.endswith('.csv'):
-                df = pl.read_csv(file_path).with_columns(
-                    pl.col("datetime").str.to_datetime(strict=False) # Ajuste o formato conforme seu CSV
-                )
+                df = pl.read_csv(file_path)
             else:
                 return None
-                
+
             df = normalize_columns(df)
-            
-            # Adiciona o nome do ativo baseado no nome do arquivo
+
+            # 2. NOVO COMPONENTE: TRATAMENTO ROBUSTO DE DATETIME
+            if "datetime" not in df.columns:
+                if "date" in df.columns and "time" in df.columns:
+                    # Convertemos tudo para String primeiro para evitar o erro de tipos diferentes
+                    df = df.with_columns([
+                        pl.col("date").cast(pl.Utf8),
+                        pl.col("time").cast(pl.Utf8)
+                    ])
+                    
+                    # Agora concatenamos com segurança
+                    df = df.with_columns(
+                        (pl.col("date") + pl.lit(" ") + pl.col("time")).alias("datetime")
+                    )
+                else:
+                    raise ValueError(f"Colunas temporais não encontradas em {file_path}")
+
+            # 3. CONVERSÃO PARA DATETIME (Tratando formatos de Excel vs CSV)
+            # O Excel costuma usar 'YYYY-MM-DD', o CSV do MT5 costuma usar 'YYYY.MM.DD'
+            df = df.with_columns(
+                pl.col("datetime").str.replace_all(r"\.", "-").str.to_datetime(strict=False)
+            )
+
+            # 4. GARANTIA DE SUCESSO
+            if df["datetime"].null_count() == len(df):
+                raise ValueError("Falha crítica: a conversão de datetime resultou apenas em valores nulos.")
+
+            # Restante do código (ativo name, slice, etc)
             ativo_name = os.path.splitext(os.path.basename(file_path))[0]
             df = df.with_columns(pl.lit(ativo_name).alias('ativo'))
             
-            df = create_datetime_columns(df)
+            # Chamada da sua função de colunas extras (se existir)
+            # df = create_datetime_columns(df)
 
-            # Slice de dados (equivalente ao iloc percentual)
             total_rows = len(df)
             start_idx = int(total_rows * min_limit)
             end_idx = int(total_rows * max_limit)
             
             return df.slice(start_idx, end_idx - start_idx)
-            
+
         except Exception as e:
             print(f"Erro ao processar {file_path}: {str(e)}")
+            # Retornamos None para que o load_data filtre e não envie um DF vazio
             return None
 
     # Lógica de diretório

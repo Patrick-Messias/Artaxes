@@ -174,8 +174,11 @@ class Operation(BaseClass):
                             "rules": {
                                 "entry_long": self._translate_signals(strat_obj.signal_rules.get('entry_long')),
                                 "entry_short": self._translate_signals(strat_obj.signal_rules.get('entry_short')),
-                                "entry_long_limit_price": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_price')),
-                                "entry_short_limit_price": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_price')),
+
+                                "entry_long_limit_position": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_position')),
+                                "entry_short_limit_position": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_position')),
+                                "entry_long_limit_value": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_value')),
+                                "entry_short_limit_value": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_value')),
 
                                 "exit_tf_long": self._translate_signals(strat_obj.signal_rules.get('exit_tf_long')),
                                 "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short')),
@@ -572,6 +575,8 @@ class Operation(BaseClass):
     # || ===================================================================== || Metrics Functions || ===================================================================== ||
 
     def _report_pnl_summary(self):
+        import builtins
+
         print("\n" + "="*95)
         print(f"{'Performance Summary - Operation: ' + self.name:^95}")
         print("="*95)
@@ -643,8 +648,11 @@ class Operation(BaseClass):
                         print(f"              {'Avg Trade':<15} | {m_all['avg']:>14.4f}% | {m_long['avg']:>14.4f}% | {m_short['avg']:>14.4f}%")
                         
                         all_pnls = [get_val(t, 'profit') for t in trades]
+                        if all_pnls:
+                            best = builtins.max(all_pnls)
+                            worst = builtins.min(all_pnls)
                         print(f"              {'-'*80}")
-                        print(f"              Best Trade: {max(all_pnls):.2f}%  |  Worst Trade: {min(all_pnls):.2f}%\n")
+                        print(f"              Best Trade: {best:.2f}%  |  Worst Trade: {worst:.2f}%\n")
 
         print("\n" + "="*95)
 
@@ -834,25 +842,36 @@ if __name__ == "__main__":
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex'
     )
 
-    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
+    winfut = Asset(
+        name='WIN$',
+        type='futures',
+        market='b3',
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados'
+    )
+
+
+    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
     # =======================================================================================================|| Global Above
 
-    model_assets=['EURUSD'] # Only keys #, 'GBPUSD'
-    model_execution_tf = 'M15'
+    model_assets=['WIN$'] # Only keys #, 'GBPUSD'
+    model_execution_tf = 'M10'
 
     strat_param_sets = {
         'AT15': { 
             'execution_tf': model_execution_tf,
             'backtest_start_idx': 21,
-            'limit_order_exclusion_after_period': 4,
-            'opposite_order_closes_pending': True,
+            'limit_order_exclusion_after_period': 6,
+            'limit_order_perc_treshold_for_order_diff': 0.03,
+            'limit_can_enter_at_market_if_gap': False,
+            'limit_opposite_order_closes_pending': False,
+
             'exit_nb_only_if_pnl_is': 0, 
             'exit_nb_long': range(0, 0+1, 3),
             'exit_nb_short': range(0, 0+1, 3),
-
-            'sl_perc': range(2, 2+1, 1), # 3
-            'tp_perc': range(4, 4+1, 1), 
+            
+            'sl_perc': range(1, 1+1, 1), # 3
+            'tp_perc': range(5, 5+1, 1), 
             'param1': range(21, 21+1, 21), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -862,15 +881,16 @@ if __name__ == "__main__":
     from MA import MA # type: ignore
     from ATR_SL import ATR_SL # type: ignore
     from RawData import RawData # type: ignore
+    from PriorCote import PriorCote # type: ignore
 
     # User imput Indicators
     ind = { 
         'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param1'),
         'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='ema', price_col='close'),
-        'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
-        'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
-        'D1_high': RawData(asset=None, timeframe='D1', price_col='high'),
-        'D1_low': RawData(asset=None, timeframe='D1', price_col='low'),
+        #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
+        #'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
+        #'max': PriorCote(asset=None, timeframe='D1', col_tf='W', price_col='high'),
+        #'min': PriorCote(asset=None, timeframe='D1', col_tf='W', price_col='low'),
     }
 
     close = Col("close")
@@ -879,33 +899,33 @@ if __name__ == "__main__":
     low = Col("low")
     atr = Col("atr")
     ema = Col("ema")
-    ma = Col("ma")
+    #ma = Col("ma")
     tp_perc = Params("tp_perc")
     sl_perc = Params("sl_perc")
-    htf_ma = Col("htf_ma")
-    close_usdjpy = Col("close_usdjpy")
+    #htf_ma = Col("htf_ma")
+
+    #max = Col('max')
+    #min = Col('min')
 
     entry_long = [
-        close < open,
-        close[1] < open[1],
-        close[2] < open[2],
-    ]
-    entry_short = [
         close > open,
         close[1] > open[1],
         close[2] > open[2],
     ]
+    entry_short = [
+        close < open,
+        close[1] < open[1],
+        close[2] < open[2],
+    ]
 
     exit_tf_long = [
-        close > open,
-        close > ema,
+        close < open,
+        close[1] < open[1],
     ]
     exit_tf_short = [
-        close < open,
-        close < ema,
+        close > open,
+        close[1] > open[1],
     ]
-    exit_tf_long=None
-    exit_tf_short=None
 
     exit_tp_long_price = [atr * tp_perc]
     exit_tp_short_price = [atr * tp_perc]
@@ -913,18 +933,18 @@ if __name__ == "__main__":
     exit_sl_long_price = [atr * sl_perc]
     exit_sl_short_price = [atr * sl_perc]
 
-    entry_long_limit_price = [atr*-0.25]
-    entry_short_limit_price = [atr*-0.25]
+    entry_long_limit_position = ["high"]
+    entry_short_limit_position = ["low"]
+    entry_long_limit_value = None #[100.0]
+    entry_short_limit_value = None #[100.0]
 
     be_pos_long_signal = None #[close > close[1]]
     be_pos_short_signal = None #[close < close[1]]
-
     be_neg_long_signal = None #[close < close[1]]
     be_neg_short_signal = None #[close > close[1]]
 
     be_pos_long_value = None #[atr]
     be_pos_short_value = None #[atr]
-
     be_neg_long_value = None #[atr]
     be_neg_short_value = None #[atr]
 
@@ -948,8 +968,9 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], order_type='market', offset=0.0, 
-                                                 day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
+            execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], 
+                                                 order_type='limit', limit_order_base_calc_ref_price='open', offset=0.0, 
+                                                 day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily'),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
@@ -958,8 +979,11 @@ if __name__ == "__main__":
             signal_rules={
                 'entry_long': entry_long,
                 'entry_short': entry_short,
-                'entry_long_limit_price': entry_long_limit_price,
-                'entry_short_limit_price': entry_short_limit_price,
+
+                'entry_long_limit_position': entry_long_limit_position,
+                'entry_short_limit_position': entry_short_limit_position,
+                'entry_long_limit_value': entry_long_limit_value,
+                'entry_short_limit_value': entry_short_limit_value,
 
                 'exit_tf_long': exit_tf_long,
                 'exit_tf_short': exit_tf_short,

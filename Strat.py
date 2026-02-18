@@ -21,7 +21,8 @@ from Walkforward import Walkforward
 class ExecutionSettings:
     hedge: bool=False
     strat_num_pos: list[int]=field(default_factory=lambda: [1,1])
-    order_type: str='market'
+    order_type: str='limit'
+    limit_order_base_calc_ref_price: str='open'
     offset: float=0.0
 
     day_trade: bool = False
@@ -54,8 +55,11 @@ class StratParams():
     signal_rules: Dict = field(default_factory=lambda: {
         'entry_long': None,
         'entry_short': None,
-        'entry_long_limit_price': None,
-        'entry_short_limit_price': None,
+
+        'entry_long_limit_position': None,
+        'entry_short_limit_position': None,
+        'entry_long_limit_value': None,
+        'entry_short_limit_value': None,
 
         'exit_tf_long': None,
         'exit_tf_short': None,
