@@ -55,9 +55,14 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
                 }
             }
         }
-    },
+    }
+}
+
+indic_cache = {
     '{asset_name}': { # Indicators
-        '{cache_key}': pl.Series # self._results_map[asset_name][cache_key]
+        '{ind_name}': {
+            '{cache_key}': pl.Series # self._results_map[asset_name][ind_name][cache_key]
+        }
     }
 }
 
@@ -93,6 +98,7 @@ class Operation(BaseClass):
         self.save = op_params.save
 
         self._results_map = {}  
+        self._indicators_cache = {}
         self.unique_datetime_df = pl.DataFrame
 
         self._curr_asset: Optional[str] = None
@@ -116,6 +122,7 @@ class Operation(BaseClass):
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
+        unique_indicators_lists = {}
 
         for model_name, model_obj in models.items():
             strats = model_obj.strat
@@ -130,13 +137,10 @@ class Operation(BaseClass):
                 for asset_name in assets:
                     asset_class = self.assets.get(asset_name)
                     if not asset_class: continue
-                    
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
-                    
-                    # 1. Puxamos o Dataframe único do Ativo com indicadores estáticos
                     base_asset_df = asset_class.data_get(model_tf)
-                    
-                    # 2. Criamos o Batch por Ativo
+        
+                    # Creates batch preset
                     asset_batch = {
                         "asset_header": f"{model_name}_{strat_name}_{asset_name}",
                         "data": base_asset_df.to_dict(as_series=False),
@@ -144,28 +148,55 @@ class Operation(BaseClass):
                         "simulations": []
                     }
 
-                    # 3. Adicionamos as simulações (Parâmetros + Regras de Sinais)
                     for ps_name, ps_dict in param_sets.items():
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][ps_name] = {
                             'param_set_dict': ps_dict,
                             'trades': []
                         }
-                        sim_indicators_df = base_asset_df.select(['datetime'])
+                        indicator_data = {}
+
                         for ind_key, ind_obj in strat_obj.indicators.items():
-                            print(f"   > Calculating indicator: {ind_key}")
+                            eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
+                            ind_p_hash = self.param_suffix(eff_params)
+                            unique_key = f"{ind_key}_{ind_p_hash}"
 
-                            sim_indicators_df = self._calculate_indicator(
-                                model_timeframe=model_tf,
-                                ind_name=ind_key,
-                                ind_obj=ind_obj,
-                                param_set_dict=ps_dict,
-                                curr_asset_obj=sim_indicators_df,
-                                asset_name=asset_name,
-                                datetime_candle_references=asset_class.datetime_candle_references
-                            )
+ 
 
-                        new_cols = [k for k in strat_obj.indicators.keys()]
-                        indicator_data = sim_indicators_df.select(new_cols).to_dict(as_series=False)
+                           # 1. OK? Estava com nome do ind errado, agora como estou passando para o obj ele deveria funcionar
+                           # 2. Não está calculando ou traduzindo HTF->LTF ind ou calculate?, NÃO CONFUNDIR HTF-LTF COM PRIORCOTE
+
+
+
+
+
+                            if unique_key not in unique_indicators_lists:
+                                print(f"   > Calculating indicator >>> name: {ind_key} >>> unique_key: {unique_key}")
+
+                                temp_ind_df = self._calculate_indicator(
+                                    model_timeframe=model_tf,
+                                    ind_name=ind_key,
+                                    ind_obj=ind_obj,
+                                    param_set_dict=ps_dict,
+                                    curr_asset_obj=base_asset_df, 
+                                    asset_name=asset_name,
+                                    datetime_candle_references=asset_class.datetime_candle_references
+                                )
+
+                                col_data_map = {}
+                                extra_safety_protected_cols = {'open', 'high', 'low', 'close', 'real_volume', 'tick_volume', 'spread', 'datetime', 'date', 'ativo'}
+                                for col in temp_ind_df.columns:
+                                    if col.lower() not in extra_safety_protected_cols:
+                                        col_data_map[col] = temp_ind_df[col].to_list()
+                                unique_indicators_lists[unique_key] = col_data_map
+                            else:
+                                print(f"   > Using cache indicator >>> name: {ind_key} >>> unique_key: {unique_key}")
+
+                            indicator_data.update(unique_indicators_lists[unique_key])
+
+                        debug_df = base_asset_df.clone()
+                        for col_name, values_list in indicator_data.items(): debug_df = debug_df.with_columns(pl.Series(name=col_name, values=values_list))
+                        output_filename = f"debug_{asset_name}_{ps_name}.xlsx"
+                        debug_df.tail(-500).write_excel(output_filename)
 
                         asset_batch["simulations"].append({
                             "id": ps_name,
@@ -368,6 +399,8 @@ class Operation(BaseClass):
     # || ===================================================================== || Signals Functions || ===================================================================== ||
 
     def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):        
+        final_output = None
+
         # 1. Resolução de Alvos
         target_asset = ind_obj.asset if ind_obj.asset else asset_name
         target_tf = ind_obj.timeframe if ind_obj.timeframe else model_timeframe
@@ -378,12 +411,16 @@ class Operation(BaseClass):
 
         # 2. Cache (Sua lógica existente)
         effective_params = self.effective_params_from_global(ind_obj.params, param_set_dict)
-        params_str = self.param_suffix(effective_params)
-        cache_key = f"{ind_name}_{target_asset}_{target_tf}_{params_str}"
+        params_suffix = self.param_suffix(effective_params)
 
-        if asset_name not in self._results_map: self._results_map[asset_name] = {}
-        if cache_key in self._results_map[asset_name]:
-            return curr_asset_obj.with_columns([self._results_map[asset_name][cache_key].alias(ind_name)])
+        if not hasattr(self, '_indicators_cache'): self._indicators_cache = {}
+        asset_cache = self._indicators_cache.setdefault(target_asset, {})
+        name_cache = asset_cache.setdefault(ind_name, {})
+        tf_cache = name_cache.setdefault(target_tf, {})
+
+        if params_suffix in tf_cache:
+            cached_result = tf_cache[params_suffix]
+            return pl.DataFrame({ind_name: cached_result}) if isinstance(cached_result, pl.Series) else cached_result
 
         # 3. Cálculo Real
         source_asset_class = self.assets.get(target_asset)
@@ -391,7 +428,13 @@ class Operation(BaseClass):
             raise ValueError(f"Ativo {target_asset} não encontrado nos ativos globais.")
             
         df_source = source_asset_class.data_get(target_tf)
-        indicator_res = ind_obj.calculate(df_source, param_set_dict=param_set_dict).fill_null(0)
+        raw_result = ind_obj.calculate(df_source, param_set_dict=param_set_dict, ind_name=ind_name)
+
+        # Result normalization
+        if isinstance(raw_result, pl.Series):
+            raw_result = raw_result.fill_null(0.0).alias(ind_name)
+        elif isinstance(raw_result, pl.DataFrame):
+            raw_result = raw_result.fill_null(0.0)
 
         # 4. Lógica de Cruzamento de Ativos/Timeframes
         is_same_asset = (target_asset == asset_name)
@@ -400,21 +443,38 @@ class Operation(BaseClass):
         if not (is_same_asset and is_same_tf):
             print(f'      > Synchronizing: {ind_name} ({target_asset} {target_tf}) -> {asset_name} ({model_timeframe})')
             
-            # Prepara DF temporário para o join
-            htf_temp = pl.DataFrame({
-                "datetime": df_source["datetime"],
-                ind_name: indicator_res
-            })
-            
-            # Alinha e extrai a série resultante
-            aligned_df = self.transfer_htf_columns(curr_asset_obj.select("datetime"), htf_temp, ind_name)
-            final_series = aligned_df[ind_name]
+            # 1. Case of multicolumns dataframe
+            if isinstance(raw_result, pl.DataFrame):
+                if "datetime" not in raw_result.columns:
+                    raw_result = raw_result.with_columns(df_source["datetime"])
+                
+                # transfers column by column
+                temp_align_df = curr_asset_obj.select("datetime")
+                for col in raw_result.columns:
+                    if col == "datetime": continue
+                    htf_temp = raw_result.select(["datetime", col])
+                    temp_align_df = self.transfer_htf_columns(temp_align_df, htf_temp, col)
+                final_output = temp_align_df.drop("datetime")
+
+            else:
+                htf_temp = pl.DataFrame({"datetime": df_source["datetime"], ind_name: raw_result})
+                aligned_df = self.transfer_htf_columns(curr_asset_obj.select("datetime"), htf_temp, ind_name)
+                final_output = aligned_df.select(ind_name)
+
+        # 2. Case only one column
         else:
-            final_series = indicator_res
+            if isinstance(raw_result, pl.Series):
+                final_output = pl.DataFrame({ind_name: raw_result})
+            else:
+                # Remove colunas de tempo se o indicador as incluiu no retorno
+                cols_to_drop = [c for c in raw_result.columns if c in ['datetime', 'date', 'ativo', 'literal']]
+                final_output = raw_result.drop(cols_to_drop)
 
         # 5. Salva no Cache e retorna
-        self._results_map[asset_name][cache_key] = final_series
-        return curr_asset_obj.with_columns([final_series.alias(ind_name)])    
+        final_output = final_output.fill_nan(0.0).fill_null(0.0)
+        tf_cache[params_suffix] = final_output
+
+        return final_output    
 
     def _get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
@@ -493,12 +553,13 @@ class Operation(BaseClass):
 
         return result
 
+   
     def transfer_htf_columns(self, ltf_df, htf_df, ind_name):
-        """
-        Alinha dados de ativos diferentes ou timeframes diferentes.
-        ltf_df: O DataFrame de destino (EURUSD M15).
-        htf_df: O DataFrame de origem (US30 H1).
-        """
+        
+        # Alinha dados de ativos diferentes ou timeframes diferentes.
+        # ltf_df: O DataFrame de destino (EURUSD M15).
+        # htf_df: O DataFrame de origem (US30 H1).
+        
         # 1. Limpeza e Ordenação (Essencial para join_asof)
         ltf_df = ltf_df.sort("datetime")
         htf_df = htf_df.select(["datetime", ind_name]).sort("datetime")
@@ -531,11 +592,65 @@ class Operation(BaseClass):
             print(f"   ⚠️ WARNING: Only {success_rate:.2f}% of success aligning data.")
 
         return aligned
+    
 
+    """
+    def transfer_htf_columns(self, ltf_df, htf_df, ind_name):
+        
+        # Alinha dados de ativos diferentes ou timeframes diferentes (HTF -> LTF).
+        # Regra de Leakage:
+        # - Se for 'open': Usa o valor do próprio candle (Safe: o Open não muda após a abertura).
+        # - Se for outro (close, max, min): Garante o uso do dado do período anterior para 
+        # evitar que o LTF conheça o fechamento/máxima/mínima antes do tempo.
+        
+        # 1. Limpeza e Ordenação (Essencial para o join_asof)
+        ltf_df = ltf_df.sort("datetime")
+        htf_df = htf_df.select(["datetime", ind_name]).sort("datetime")
+
+        # 2. Tratamento de Leakage para dados que não são 'Open'
+        # Se estamos alinhando o 'close' do D1 no M15, o M15 às 10:00 não pode ver 
+        # o 'close' do dia que só existirá às 18:00.
+        if ind_name.lower() != "open":
+            # Deslocamos os dados HTF em 1 posição. Assim, o 'backward' join 
+            # pegará o valor que estava disponível no fechamento do candle anterior.
+            htf_df = htf_df.with_columns(
+                pl.col(ind_name).shift(1)
+            )
+
+        # 3. Join Asof (Sincronização de Relógio)
+        # 'backward' busca o último valor HTF onde HTF_datetime <= LTF_datetime
+        aligned = ltf_df.join_asof(
+            htf_df,
+            on="datetime",
+            strategy="backward"
+        )
+
+        # 4. Cálculo de Integridade
+        total = len(aligned)
+        nulos = aligned[ind_name].null_count()
+        success_rate = ((total - nulos) / total) * 100 if total > 0 else 0
+        
+        # 5. Tratamento de Gaps e Início de Histórico
+        # forward: preenche feriados/gaps com o último valor conhecido
+        # backward: preenche o início do histórico (antes do HTF começar) com o primeiro valor disponível
+        aligned = aligned.with_columns(
+            pl.col(ind_name)
+            .fill_null(strategy="forward")
+            .fill_null(strategy="backward")
+            .fill_null(0.0)
+        )
+
+        # Logging para monitoramento
+        status = "OK" if success_rate > 85 else "⚠️ LOW COVERAGE"
+        print(f"      > Aligned {ind_name}: {success_rate:.2f}% [{status}]")
+
+        return aligned
+    """
+    
     def _tf_to_seconds(self, tf: str) -> int:
-        """
-        Converte strings de timeframe (ex: 'M15', '15m', 'H1', '1h') para segundos.
-        """
+        
+        #Converte strings de timeframe (ex: 'M15', '15m', 'H1', '1h') para segundos.
+        
         tf_clean = tf.lower().strip()
         
         # Dicionário de multiplicadores
@@ -861,8 +976,8 @@ if __name__ == "__main__":
         'AT15': { 
             'execution_tf': model_execution_tf,
             'backtest_start_idx': 21,
-            'limit_order_exclusion_after_period': 6,
-            'limit_order_perc_treshold_for_order_diff': 0.03,
+            'limit_order_exclusion_after_period': 9999,
+            'limit_order_perc_treshold_for_order_diff': 1000.0,
             'limit_can_enter_at_market_if_gap': False,
             'limit_opposite_order_closes_pending': False,
 
@@ -871,7 +986,7 @@ if __name__ == "__main__":
             'exit_nb_short': range(0, 0+1, 3),
             
             'sl_perc': range(2, 2+1, 1), # 3
-            'tp_perc': range(5, 5+1, 1), 
+            'tp_perc': range(5, 5+1, 8), 
             'param1': range(21, 21+1, 21), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -882,15 +997,17 @@ if __name__ == "__main__":
     from ATR_SL import ATR_SL # type: ignore
     from RawData import RawData # type: ignore
     from PriorCote import PriorCote # type: ignore
+    from DayOpen import DayOpen # type: ignore
 
     # User imput Indicators
     ind = { 
         'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param1'),
-        'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='ema', price_col='close'),
+        'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         #'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
-        #'max': PriorCote(asset=None, timeframe='D1', col_tf='W', price_col='high'),
-        #'min': PriorCote(asset=None, timeframe='D1', col_tf='W', price_col='low'),
+        'max': PriorCote(asset=None, timeframe=model_execution_tf, price_col='high'),
+        'min': PriorCote(asset=None, timeframe=model_execution_tf, price_col='low'),
+        'open_day': DayOpen(assertsset=None, timeframe=model_execution_tf),
     }
 
     close = Col("close")
@@ -904,8 +1021,10 @@ if __name__ == "__main__":
     sl_perc = Params("sl_perc")
     #htf_ma = Col("htf_ma")
 
-    #max = Col('max')
-    #min = Col('min')
+    max = Col('max')
+    min = Col('min')
+
+    open_day = Col('open_day')
 
     entry_long = [
         close > open,
@@ -927,14 +1046,25 @@ if __name__ == "__main__":
         close[1] > open[1],
     ]
 
-    exit_tp_long_price = [atr * tp_perc]
-    exit_tp_short_price = [atr * tp_perc]
 
-    exit_sl_long_price = [atr * sl_perc]
-    exit_sl_short_price = [atr * sl_perc]
+    # Parece que está tudo certo, dados D1 do WIN$ parece estar desalinhado com M10 (o dado salvo xlsx mesmo)
+    # sistema parece estar dando resutlado ruim por ser ruim msm, já que está tudo calculado em M10
+    # Criar novo arquivo para fazer backtest do zero para ter certeza do resultado e validar essa engine
 
-    entry_long_limit_position = ["high"]
-    entry_short_limit_position = ["low"]
+
+    entry_long = [open_day < max, open_day > min]
+    entry_short = [open_day < max, open_day > min]
+    exit_tf_long = None 
+    exit_tf_short = None
+
+    exit_tp_long_price = [2000] #[atr * tp_perc]
+    exit_tp_short_price = [2000] #[atr * tp_perc]
+
+    exit_sl_long_price = [400] #[atr * sl_perc]
+    exit_sl_short_price = [400] #[atr * sl_perc]
+
+    entry_long_limit_position = ["max"]
+    entry_short_limit_position = ["min"]
     entry_long_limit_value = None #[100.0]
     entry_short_limit_value = None #[100.0]
 
@@ -953,7 +1083,7 @@ if __name__ == "__main__":
     # --- 3. CORRIGIR, HTF->LTF Não está funcionado, até porque não está usando a função de calcular indicadores
     # --- 4. IMPLEMENTAR BREAK EVEN POS/NEG 
     # --- 5. Sistema de Hedge parece não estar funcionando >> Não era erro, apenas os sinais TF da Strat estavam fechando antes de poder ter hedge
-    # - Corrigir nome de asset no trade
+    # --- Corrigir nome de asset no trade
     # - Implementar sistema de batch de dados?
     # - Desenvolver indicador prior_cote e já oficilizar a padronização dos indicadores 
     # --- Order limit/stop/market
@@ -968,7 +1098,7 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
-            execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[-1,-1],
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[1,1],
                                                  order_type='limit', limit_order_base_calc_ref_price='open', offset=0.0, 
                                                  day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 

@@ -7,9 +7,9 @@ class Indicator:
         self.asset = asset
         self.timeframe = timeframe
         self.params = params
-        self.name = self.__class__.__name__.lower()
+        #self.name = self.__class__.__name__.lower()
 
-    def calculate(self, df: pl.DataFrame, param_set_dict: dict = None): 
+    def calculate(self, df: pl.DataFrame, param_set_dict: dict = None, ind_name: str = None): 
         """
         Resolve as variáveis do indicador (otimização) antes de chamar a lógica real.
         Recebe e deve retornar objetos do Polars.
@@ -21,14 +21,12 @@ class Indicator:
                 if isinstance(v, str) and v in param_set_dict:
                     effective_params[k] = param_set_dict[v]
         
-        # 2. EXECUÇÃO DA LÓGICA
-        # Passamos kwargs desempacotados para a lógica interna
+        effective_params['ind_name'] = ind_name if ind_name else self.name
         result = self._calculate_logic(df, **effective_params)
 
-        # 3. GARANTIA DE TIPO (Sempre retorna pl.Series ou pl.DataFrame)
-        # Se por acaso a lógica retornar uma lista ou numpy, convertemos para Series
         if not isinstance(result, (pl.Series, pl.DataFrame)) and result is not None:
-            return pl.Series(self.name, result)
+            # Usa o nome injetado para nomear a Series caso venha "pura"
+            return pl.Series(effective_params['ind_name'], result)
             
         return result
 

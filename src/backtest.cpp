@@ -273,6 +273,8 @@ json Backtest::run_simulation(const std::string& header,
         const double* long_pos_vec = get_vec_from_json(entry_long_raw, "Long Pos");
         const double* short_pos_vec = get_vec_from_json(entry_short_raw, "Short Pos");
 
+        std::cout << "L/S Entries: " << long_pos_vec << " | " << short_pos_vec << std::endl;
+
 
         // Exit and Trade Management Rules
         json rules_tf_long = rules.value("exit_tf_long", json::array());
@@ -504,7 +506,7 @@ json Backtest::run_simulation(const std::string& header,
 
                 // Order Expiration
                 if (p_it->bars_held.value_or(0) >= limit_order_expiry) expired = true;
-                else if (is_daytrade && (day_switched || is_last_bar)) expired = true;
+                else if ((day_switched && is_daytrade) || is_last_bar) expired = true;
 
                 if (expired) {
                     if (counter < counter_max) {
@@ -573,10 +575,13 @@ json Backtest::run_simulation(const std::string& header,
                 int today = bar_days[i];
                 day_is_blocked = std::find(close_days.begin(), close_days.end(), today) != close_days.end();
             }
+            if (!day_is_blocked && is_daytrade && day_switched) day_is_blocked=true;
+
+
 
             if (!day_is_blocked) {
-                bool signal_long = evaluate_signals(rules_entry_long, data, params, i - 1);
-                bool signal_short = evaluate_signals(rules_entry_short, data, params, i - 1);
+                bool signal_long = evaluate_signals(rules_entry_long, data, params, i-1);
+                bool signal_short = evaluate_signals(rules_entry_short, data, params, i-1);
 
                 if (signal_long || signal_short) {
                     int current_longs = 0; int current_shorts = 0;
