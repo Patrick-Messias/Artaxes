@@ -139,12 +139,18 @@ class Operation(BaseClass):
                     if not asset_class: continue
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
                     base_asset_df = asset_class.data_get(model_tf)
+
+                    # Converts to dict
+                    exec_set_raw = asdict(strat_obj.execution_settings)
+                    
+                    # Normalize for cpp
+                    exec_set_mod = self.prepare_time_params(exec_set_raw)
         
                     # Creates batch preset
                     asset_batch = {
                         "asset_header": f"{model_name}_{strat_name}_{asset_name}",
                         "data": base_asset_df.to_dict(as_series=False),
-                        "execution_settings": asdict(strat_obj.execution_settings),
+                        "execution_settings": exec_set_mod,
                         "simulations": []
                     }
 
@@ -395,6 +401,33 @@ class Operation(BaseClass):
 
         z = int(usable_ram_mb // avg_paramset_size_mb)
         return max(min_batch, min(z, max_batch))
+
+    def prepare_time_params(self, settings: dict) -> dict:
+        """
+        Converte strings 'HH:MM' para minutos totais desde a meia-noite.
+        Garante valores sentinela para o C++ caso os campos sejam None.
+        """
+        def to_min(t):
+            if t is None or t == "" or t is False:
+                return None
+            try:
+                # Lida com formatos HH:MM ou HH:MM:SS
+                parts = str(t).split(':')
+                h, m = int(parts[0]), int(parts[1])
+                return h * 60 + m
+            except Exception:
+                return None
+
+        # EI (Entry Initial): Default 0 (00:00)
+        # EF (Entry Final): Default 1440 (24:00) - Não bloqueia novas entradas
+        # TF (Time Finish): Default 1440 (24:00) - Não força fechamento
+        
+        return {
+            **settings, # Mantém as outras configurações (is_daytrade, etc)
+            "timeEI": to_min(settings.get("timeEI")) if settings.get("timeEI") is not None else 0,
+            "timeEF": to_min(settings.get("timeEF")) if settings.get("timeEF") is not None else 1440,
+            "timeTF": to_min(settings.get("timeTF")) if settings.get("timeTF") is not None else 1440
+    }
 
     # || ===================================================================== || Signals Functions || ===================================================================== ||
 
@@ -1027,29 +1060,33 @@ if __name__ == "__main__":
     open_day = Col('open_day')
 
     entry_long = [
-        close > open,
         close[1] > open[1],
         close[2] > open[2],
+        close[3] > open[3],
     ]
     entry_short = [
-        close < open,
         close[1] < open[1],
         close[2] < open[2],
+        close[3] < open[3],
     ]
 
     exit_tf_long = [
-        close < open,
         close[1] < open[1],
+        close[2] < open[2],
     ]
     exit_tf_short = [
-        close > open,
         close[1] > open[1],
+        close[2] > open[2],
     ]
 
 
-    # Parece que está tudo certo, dados D1 do WIN$ parece estar desalinhado com M10 (o dado salvo xlsx mesmo)
-    # sistema parece estar dando resutlado ruim por ser ruim msm, já que está tudo calculado em M10
-    # Criar novo arquivo para fazer backtest do zero para ter certeza do resultado e validar essa engine
+
+
+    #1. Criar sistema de verificação de heuristica de candle para TP/SL em relação ao preço de entrada e se limit > ou < open
+    #2. Na execução da ordem limit, assim que aberta deve chamara a função e verificar se tem TP e/ou SL no candle de execução
+    #Padronizar e desenvolver sistema de regras no python para backtest
+
+
 
 
     entry_long = [open_day < max, open_day > min]
@@ -1094,13 +1131,14 @@ if __name__ == "__main__":
 
     # - Otimização: Da pra otimizar removendo profit e adicionar profit=daily_pnl[-1] ou vise versa
 
+
     AT15 = Strat(
         StratParams(
             name="AT15",
             operation=Backtest(BacktestParams(name='backtest_test')),
             execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[1,1],
                                                  order_type='limit', limit_order_base_calc_ref_price='open', offset=0.0, 
-                                                 day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, 
+                                                 day_trade=True, timeTI="10:00", timeEF="15:00", timeTF="17:30", next_index_day_close=False, 
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily'),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings

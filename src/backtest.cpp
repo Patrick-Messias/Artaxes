@@ -157,6 +157,42 @@ bool evaluate_signals(const json& rules, const std::map<std::string, std::vector
     return true;
 }
 
+std::string check_limit_instant_exit(bool is_long, double limit, double sl, double tp, double open, double high, double low, double close) {
+    bool bullish = (close > open);
+    // Verifica se os níveis estão no range da barra
+    bool hit_tp = (is_long ? (tp > 0 && high >= tp) : (tp > 0 && low <= tp));
+    bool hit_sl = (is_long ? (sl > 0 && low <= sl) : (sl > 0 && high >= sl));
+
+    if (bullish) {
+        if (limit > open) { // --- REGRA 1: limit > open e close > open ---
+            if (is_long) return hit_tp ? "TP" : ""; // sl=n/a
+            else         return hit_sl ? "SL" : ""; // tp=n/a
+        } else {            // --- REGRA 2: limit < open e close > open ---
+            if (is_long) {
+                if (hit_tp && hit_sl) return "SL"; // sl ganha (caminho O->L->H)
+                return hit_sl ? "SL" : (hit_tp ? "TP" : "");
+            } else {
+                if (hit_tp && hit_sl) return "TP"; // tp ganha (caminho O->L->H)
+                return hit_tp ? "TP" : (hit_sl ? "SL" : "");
+            }
+        }
+    } else { // Bearish (close < open)
+        if (limit < open) { // --- REGRA 3: limit < open e close < open ---
+            if (is_long) return hit_sl ? "SL" : ""; // tp=n/a
+            else         return hit_tp ? "TP" : ""; // sl=n/a
+        } else {            // --- REGRA 4: limit > open e close < open ---
+            if (is_long) {
+                if (hit_tp && hit_sl) return "TP"; // tp ganha (caminho O->H->L)
+                return hit_tp ? "TP" : (hit_sl ? "SL" : "");
+            } else {
+                if (hit_tp && hit_sl) return "SL"; // sl ganha (caminho O->H->L)
+                return hit_sl ? "SL" : (hit_tp ? "TP" : "");
+            }
+        }
+    }
+    return "";
+}
+
 
 
 json Backtest::run_simulation(const std::string& header, 
@@ -206,7 +242,7 @@ json Backtest::run_simulation(const std::string& header,
     // PnL Temporário para validação cruzada (Aritmético simples)
     double temp_cumulative_pnl = 0.0;
     int counter = 50000;
-    int counter_max = counter + 30;
+    int counter_max = counter + 90;
 
     // Lambda auxiliar para evitar repetição de código e tratar erros
     auto get_vec_from_json = [&](json& field, std::string label) -> const double* {
@@ -273,8 +309,6 @@ json Backtest::run_simulation(const std::string& header,
         const double* long_pos_vec = get_vec_from_json(entry_long_raw, "Long Pos");
         const double* short_pos_vec = get_vec_from_json(entry_short_raw, "Short Pos");
 
-        std::cout << "L/S Entries: " << long_pos_vec << " | " << short_pos_vec << std::endl;
-
 
         // Exit and Trade Management Rules
         json rules_tf_long = rules.value("exit_tf_long", json::array());
@@ -322,8 +356,19 @@ json Backtest::run_simulation(const std::string& header,
         std::string trade_path = header + "_" + sim["id"].get<std::string>();
         std::vector<int> close_days = exec_settings.value("day_of_week_close_and_stop_trade", std::vector<int>{});
 
+        // Datetime
+        int timeEI = exec_settings.contains("timeEI") && !exec_settings["timeEI"].is_null() 
+            ? (int)get_value_safe(exec_settings["timeEI"], params) 
+            : 0;
 
-        // Datetime pre processing
+        int timeEF = exec_settings.contains("timeEF") && !exec_settings["timeEF"].is_null() 
+            ? (int)get_value_safe(exec_settings["timeEF"], params) 
+            : 1440;
+
+        int timeTF = exec_settings.contains("timeTF") && !exec_settings["timeTF"].is_null() 
+            ? (int)get_value_safe(exec_settings["timeTF"], params) 
+            : 1440;
+
         // bar_dates YYYYMMDD | bar_times HHMMSS
         std::vector<int> bar_dates(n_bars);
         std::vector<int> bar_times(n_bars);
@@ -357,12 +402,19 @@ json Backtest::run_simulation(const std::string& header,
         //export_to_csv("debug_market_data.csv", datetime, data);
 
 
+
         // -------------------------------------------------------------------------------------------------------------------------||
 
         for (size_t i = backtest_start_idx; i < n_bars; ++i) {
+            // --- Config
+            int currentTime = extract_minutes(datetime[i]);
             bool is_last_bar = (i == n_bars - 1);
-            bool day_switched = (!is_last_bar && bar_dates[i+1] != bar_dates[i]);
+            bool day_switched = (!is_last_bar && bar_dates[i+1] != bar_dates[i]); //
+            bool daytrade_time_final = (currentTime >= timeTF);
             if (day_switched) { day_trades_long = 0; day_trades_short = 0;}
+
+            
+
 
             // --- 1. EXIT LOGIC (Baseado no Open do candle atual para evitar look-ahead) ---
             auto it = active_trades.begin();
@@ -372,7 +424,7 @@ json Backtest::run_simulation(const std::string& header,
                 std::string reason = "";
                 
                 // TF - Trend Following
-                if (evaluate_signals(is_long ? rules_tf_long : rules_tf_short, data, params, i-1)) {
+                if (evaluate_signals(is_long ? rules_tf_long : rules_tf_short, data, params, i)) {
                     reason = "TF"; closed = true;
                 }
                 
@@ -398,7 +450,7 @@ json Backtest::run_simulation(const std::string& header,
                 }
 
                 // DT - Day Trade
-                if (!closed && is_daytrade && (day_switched || is_last_bar)) {
+                if (!closed && is_daytrade && (daytrade_time_final || day_switched || is_last_bar)) {
                     reason = "DT"; closed = true;
                 }
 
@@ -425,11 +477,11 @@ json Backtest::run_simulation(const std::string& header,
                         bool trig_be_pos = false;
 
                         if (is_long ? has_be_pos_l_sig : has_be_pos_s_sig) {
-                            trig_be_pos = evaluate_signals(is_long ? be_pos_long_signal : be_pos_short_signal, data, params, i-1);
+                            trig_be_pos = evaluate_signals(is_long ? be_pos_long_signal : be_pos_short_signal, data, params, i);
                         }
 
                         if (!trig_be_pos && (is_long ? has_be_pos_l_val : has_be_pos_s_val)) {
-                            double v = evaluate_value(is_long ? be_pos_long_value : be_pos_short_value, data, params, i-1);
+                            double v = evaluate_value(is_long ? be_pos_long_value : be_pos_short_value, data, params, i);
                             if (v > 0) {
                                 trig_be_pos = is_long ? (current_p >= entry_p + v) : (current_p <= entry_p - v);
                             }
@@ -447,11 +499,11 @@ json Backtest::run_simulation(const std::string& header,
                         bool trig_be_neg = false;
 
                         if (is_long ? has_be_neg_l_sig : has_be_neg_s_sig) {
-                            trig_be_neg = evaluate_signals(is_long ? be_neg_long_signal : be_neg_short_signal, data, params, i-1);
+                            trig_be_neg = evaluate_signals(is_long ? be_neg_long_signal : be_neg_short_signal, data, params, i);
                         }
 
                         if (!trig_be_neg && (is_long ? has_be_neg_l_val : has_be_neg_s_val)) {
-                            double v = evaluate_value(is_long ? be_neg_long_value : be_neg_short_value, data, params, i-1);
+                            double v = evaluate_value(is_long ? be_neg_long_value : be_neg_short_value, data, params, i);
                             if (v > 0) {
                                 trig_be_neg = is_long ? (current_p <= entry_p - v) : (current_p >= entry_p + v);
                             }
@@ -495,6 +547,8 @@ json Backtest::run_simulation(const std::string& header,
                 } else { ++it; }
             }
             
+
+
             // --- 2. ENTRY LOGIC (Sinal no candle anterior i-1, entrada no Open de i) ---
             // Pending Orders Management
             auto p_it = pending_orders.begin();
@@ -506,7 +560,7 @@ json Backtest::run_simulation(const std::string& header,
 
                 // Order Expiration
                 if (p_it->bars_held.value_or(0) >= limit_order_expiry) expired = true;
-                else if ((day_switched && is_daytrade) || is_last_bar) expired = true;
+                else if (((daytrade_time_final || day_switched) && is_daytrade) || is_last_bar) expired = true;
 
                 if (expired) {
                     if (counter < counter_max) {
@@ -546,23 +600,51 @@ json Backtest::run_simulation(const std::string& header,
                     // Recalculates SL/TP based on execution price
                     const json& sl_rules = is_long ? rules_sl_long : rules_sl_short;
                     const json& tp_rules = is_long ? rules_tp_long : rules_tp_short;
-                    double sl_dist = evaluate_value(sl_rules, data, params, i-1);
-                    double tp_dist = evaluate_value(tp_rules, data, params, i-1);
+                    double sl_dist = evaluate_value(sl_rules, data, params, i);
+                    double tp_dist = evaluate_value(tp_rules, data, params, i);
 
                     if (sl_dist > 0) p_it->stop_loss = is_long ? (entry - sl_dist) : (entry + sl_dist);
                     if (tp_dist > 0) p_it->take_profit = is_long ? (entry + tp_dist) : (entry - tp_dist);
 
-                    if (counter < counter_max) {
-                        std::cout << "[EN-LIM EXECUTED] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
-                                << " | Price: " << std::fixed << std::setprecision(5) << entry 
-                                << " | TP: " << *p_it->take_profit << " | SL: " << *p_it->stop_loss 
-                                << " | OHL[i]: " << (open[i]) << "/" << (high[i]) << "/" << (low[i]) 
-                                << std::endl;
-                        counter++;
-                    }
+                    // Verificação se SL ou TP foram atingidos instantaneamente no candle de entrada
+                    double curr_sl = p_it->stop_loss.value_or(0.0);
+                    double curr_tp = p_it->take_profit.value_or(0.0);
+                    std::string instant_exit = check_limit_instant_exit(is_long, entry, curr_sl, curr_tp, open[i], high[i], low[i], close[i]);
 
-                    active_trades.push_back(std::move(*p_it));
-                    p_it = pending_orders.erase(p_it);
+                    if (instant_exit != "") {
+                        p_it->exit_price = (instant_exit == "TP" ? curr_tp : curr_sl);
+                        p_it->exit_reason = instant_exit;
+                        p_it->exit_datetime = datetime[i];
+                        p_it->status = "closed";
+                        
+                        double pnl = ((p_it->exit_price.value() - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                        p_it->profit = pnl;
+                        temp_cumulative_pnl += pnl;
+
+                        if (counter < counter_max) {
+                            std::cout << "[INSTANT EXIT] " << (is_long ? "L" : "S") << " | " << instant_exit 
+                                    << " " << datetime[i] << " | PnL: " << pnl << "%" << std::endl;
+                            counter++;
+                        }
+
+                        // Move para o histórico de trades finalizadas
+                        it->daily_pnl.push_back(pnl);
+                        it->daily_datetime.push_back(datetime[i].substr(0,10));
+                        trades.push_back(std::move(*p_it));
+                        p_it = pending_orders.erase(p_it);
+                    } else {
+                        if (counter < counter_max) {
+                            std::cout << "[EN-LIM EXECUTED] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
+                                    << " | Price: " << std::fixed << std::setprecision(5) << entry 
+                                    << " | TP: " << *p_it->take_profit << " | SL: " << *p_it->stop_loss 
+                                    << " | OHL[i]: " << (open[i]) << "/" << (high[i]) << "/" << (low[i]) 
+                                    << std::endl;
+                            counter++;
+                        }
+
+                        active_trades.push_back(std::move(*p_it));
+                        p_it = pending_orders.erase(p_it);
+                    }
                     is_long ? ++day_trades_long : ++day_trades_short;
                 } else {
                     p_it->bars_held = p_it->bars_held.value_or(0) + 1;
@@ -570,18 +652,19 @@ json Backtest::run_simulation(const std::string& header,
                 }
             }
 
+
+
             bool day_is_blocked = false;
             if (!close_days.empty()) {
                 int today = bar_days[i];
                 day_is_blocked = std::find(close_days.begin(), close_days.end(), today) != close_days.end();
             }
-            if (!day_is_blocked && is_daytrade && day_switched) day_is_blocked=true;
-
-
-
+            if (!day_is_blocked && is_daytrade) {
+                if (currentTime < timeEI || currentTime > timeEF) day_is_blocked=true;
+            }
             if (!day_is_blocked) {
-                bool signal_long = evaluate_signals(rules_entry_long, data, params, i-1);
-                bool signal_short = evaluate_signals(rules_entry_short, data, params, i-1);
+                bool signal_long = evaluate_signals(rules_entry_long, data, params, i);
+                bool signal_short = evaluate_signals(rules_entry_short, data, params, i);
 
                 if (signal_long || signal_short) {
                     int current_longs = 0; int current_shorts = 0;
@@ -614,20 +697,20 @@ json Backtest::run_simulation(const std::string& header,
                             target_price = open[i];
                         } else {
                             if (is_long) {
-                                if (long_pos_vec && !std::isnan(long_pos_vec[i-1])) {
-                                    target_price = long_pos_vec[i-1];
+                                if (long_pos_vec && !std::isnan(long_pos_vec[i])) {
+                                    target_price = long_pos_vec[i];
                                 }
                                 else {
                                     double base = (limit_order_base_calc_ref_price == "open") ? open[i] : close[i-1];
-                                    target_price = base + (evaluate_value(entry_long_limit_value, data, params, i-1));
+                                    target_price = base + (evaluate_value(entry_long_limit_value, data, params, i));
                                 }
                             } else {
-                                if (short_pos_vec && !std::isnan(short_pos_vec[i-1])) {
-                                    target_price = short_pos_vec[i-1];
+                                if (short_pos_vec && !std::isnan(short_pos_vec[i])) {
+                                    target_price = short_pos_vec[i];
                                 }
                                 else {
                                     double base = (limit_order_base_calc_ref_price == "open") ? open[i] : close[i-1];
-                                    target_price = base - (evaluate_value(entry_short_limit_value, data, params, i-1));
+                                    target_price = base - (evaluate_value(entry_short_limit_value, data, params, i));
                                 }
                             }
 
@@ -637,7 +720,7 @@ json Backtest::run_simulation(const std::string& header,
                                 std::string side = (target_price > open[i]) ? "L_ABOVE" : "L_BELOW"; //Temp using exit_reason for gap handling
                                 t.exit_reason = side;
                                 double diff = 0.0;
-
+                                
                                 if (side == "L_ABOVE") {
                                     diff = (target_price - open[i]) / open[i];
                                     if (limit_order_base_calc_ref_price != "open" && open[i] >= target_price) already_hit=true;
@@ -663,7 +746,7 @@ json Backtest::run_simulation(const std::string& header,
                                 }
                                 if (diff > limit_order_perc_treshold_for_order_diff) gap_too_big=true;
                             }
-
+                            
                             // Doesn't create order
                             if (gap_too_big) { 
                                 if (counter < counter_max) {
@@ -684,8 +767,8 @@ json Backtest::run_simulation(const std::string& header,
                         t.max_fav_price = final_entry;
                         t.max_adv_price = final_entry;
 
-                        double sl_dist = evaluate_value(is_long ? rules_sl_long : rules_sl_short, data, params, i-1);
-                        double tp_dist = evaluate_value(is_long ? rules_tp_long : rules_tp_short, data, params, i-1);
+                        double sl_dist = evaluate_value(is_long ? rules_sl_long : rules_sl_short, data, params, i);
+                        double tp_dist = evaluate_value(is_long ? rules_tp_long : rules_tp_short, data, params, i);
 
                         double sl=0.0; double tp=0.0;
                         if (sl_dist > 0) {
@@ -765,6 +848,8 @@ json Backtest::run_simulation(const std::string& header,
                 }
             }
 
+
+            
             // --- 3. INTRA-CANDLE EXIT (SL/TP) ---
             it = active_trades.begin();
             while (it != active_trades.end()){
@@ -831,8 +916,10 @@ json Backtest::run_simulation(const std::string& header,
                 }
             }
         
+
+
             // --- 4. Daily PnL Update
-            if (day_switched || is_last_bar) {
+            if (day_switched || daytrade_time_final || is_last_bar) {
                 for (auto& trade : active_trades) {
                     double entry_p = *trade.entry_price;
                     double current_p = close[i];

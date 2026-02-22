@@ -129,4 +129,24 @@ int get_day_of_week(const std::string& dt_str) {
 
 
 
+inline int extract_minutes(const std::string& dt) {
+    // Espera formato: "2019-04-11 12:50:00"
+    // Posição das horas: 11 e 12
+    // Posição dos minutos: 14 e 15
+    
+    if (dt.length() < 16) return -1; // String inválida ou sem horário
+
+    try {
+        // Converte os caracteres diretamente para inteiros (ASCII '0' é 48)
+        int hh = (dt[11] - '0') * 10 + (dt[12] - '0');
+        int mm = (dt[14] - '0') * 10 + (dt[15] - '0');
+        
+        return (hh * 60) + mm;
+    } catch (...) {
+        return -1;
+    }
+}
+
+
+
 
