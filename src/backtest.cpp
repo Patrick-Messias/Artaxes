@@ -662,6 +662,7 @@ json Backtest::run_simulation(const std::string& header,
             if (!day_is_blocked && is_daytrade) {
                 if (currentTime < timeEI || currentTime > timeEF) day_is_blocked=true;
             }
+            
             if (!day_is_blocked) {
                 bool signal_long = evaluate_signals(rules_entry_long, data, params, i);
                 bool signal_short = evaluate_signals(rules_entry_short, data, params, i);
@@ -715,7 +716,7 @@ json Backtest::run_simulation(const std::string& header,
                             }
 
                             
-                            
+                            // Gap Handling: Checks if the target price is realistically reachable from the open price. If the gap is too big, it can skip placing the order or execute at market price based on settings.
                             if (is_long) {
                                 std::string side = (target_price > open[i]) ? "L_ABOVE" : "L_BELOW"; //Temp using exit_reason for gap handling
                                 t.exit_reason = side;
@@ -799,7 +800,8 @@ json Backtest::run_simulation(const std::string& header,
                                         << " | Price: " << std::fixed << std::setprecision(5) << final_entry 
                                         << " | TP: " << tp << " | SL: " << sl 
                                         << " | Active+Pending: " << (is_long ? current_longs + 1 : current_shorts + 1)
-                                        << " | O[i] Setup: " << open[i] << "/" << target_price 
+                                        << " | OHLSetup[i] | HL[i-1]: " << open[i] << " / " << high[i] << " / " << low[i] << "/" << target_price 
+                                        << "/" << high[i-1] << "/" << low[i-1] << " | Entry pos: " << *t.exit_reason
                                         << std::endl;
                                 counter++;
                             }
