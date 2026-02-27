@@ -410,7 +410,7 @@ class Operation(BaseClass):
 
         return matrix
 
-
+    # Batch System Defs
     def _estimate_paramset_size_mb(self, df: pl.DataFrame):
         return df.estimated_size() / (1024 ** 2) # No Polars, estimated_size() retorna o tamanho em bytes
     
@@ -534,7 +534,6 @@ class Operation(BaseClass):
         # 3. Limpeza Final e Retorno
         # fill_nan(0) é importante pois joins HTF podem gerar NaNs no início do histórico
         return final_output.fill_nan(0.0).fill_null(0.0)
-
 
     def _get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
