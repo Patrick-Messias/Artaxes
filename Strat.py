@@ -40,7 +40,7 @@ class ExecutionSettings:
     fill_method: str='ffill'
     fillna: object=0
 
-    trade_pnl_resolution: str='weekly'
+    trade_pnl_resolution: str='daily'
 
 
 @dataclass

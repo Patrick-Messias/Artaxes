@@ -16,7 +16,8 @@ public:
                     const std::map<std::string, std::vector<double>>& data,
                     const std::vector<std::string>& datetime,
                     const nlohmann::json& sim_params,
-                    const nlohmann::json& exec_settings);
+                    const nlohmann::json& exec_settings
+                    );
 };
 
 #endif

@@ -1,4 +1,6 @@
-import polars as pl, numpy as np, json, sys, uuid, copy, datetime, psutil, re
+from webbrowser import get
+
+import polars as pl, numpy as np, json, sys, uuid, copy, datetime, psutil, re, itertools
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
@@ -41,6 +43,7 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
                                             list[Trade] # ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['preliminary_backtest']: np.array['preliminary_pnl']
                                         }
                                     },
+                                    'wfm_matrix_data': list[list[Trade]], # Raw daily returns matrix from all param_sets
                                     'walkforward': {
                                         'wf_param_set':{ # ex: '12_12'
                                             '{wf_param}': {
@@ -240,8 +243,8 @@ class Operation(BaseClass):
 
                     # 4. Envio único para C++
                     print(f"   > Processing {asset_name}: {len(param_sets)} simulations...")
-                    trades = self._run_cpp_operation(asset_batch)
-                    self._save_trades(trades)
+                    full_output = self._run_cpp_operation(asset_batch)
+                    self._save_trades(full_output, model_name, strat_name, asset_name)
 
         return True
     
@@ -258,14 +261,6 @@ class Operation(BaseClass):
 
         if portfolio_backtests_dict == 'All': # Uses all backtests from _results_map, else if dict with paths, uses only those backtests 
             pass
-
-        pass
-
-    def _walkforward(self):
-        # 1. Iterates over all models -> strats -> assets -> param_sets
-        # 2. For each param_set, splits data in multiple isos (in-sample and out-of-sample periods)
-        # 3. For each iso, selects results from already calculated trade results from backtest operation
-        # 4. Analyzes each iso results and aggregates to final walkforward results
 
         pass
 
@@ -303,10 +298,17 @@ class Operation(BaseClass):
             if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
                 df = df.with_columns(pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S'))
 
+                # if numeric_cols:
+                #     df = df.with_columns([
+                #         pl.col(c).cast(pl.Float64).fill_nan(0.0).fill_null(0.0) 
+                #         for c in numeric_cols
+                #     ])
+
             # --- TRATAMENTO NUMÉRICO (Cast para Float64) ---
             numeric_cols = [name for name, dtype in df.schema.items() if dtype.is_numeric()]
             if numeric_cols:
                 df = df.with_columns([pl.col(c).cast(pl.Float64).fill_null(0.0) for c in numeric_cols])
+
             # 2. MONTAGEM DO PAYLOAD FINAL (Nomes de chaves alinhados com Operation::run no C++)
             final_payload = {
                 "asset_header": asset_batch.get('asset_header', 'Unknown'),
@@ -334,59 +336,80 @@ class Operation(BaseClass):
             raw_output = engine_cpp.run(json_str)
             
             # 5. PARSE DO RESULTADO
-            if not raw_output or raw_output == "[]":
-                return []
+            if not raw_output or raw_output == "[]" or raw_output == "{}":
+                return {"simulations": [], "wfm_data": []}
                 
             # Como o C++ retornou uma string, precisamos de json.loads para voltar a ser lista/dict
             if isinstance(raw_output, str):
-                return json.loads(raw_output)
+                parsed = json.loads(raw_output)
+                return {
+                    "simulations": parsed.get("simulations", []),
+                    "wfm_data": parsed.get("wfm_data", [])
+                }
             
             return raw_output
 
         except Exception as e:
             print(f'< Error in Python-C++ Bridge: {e}')
-            import traceback
-            traceback.print_exc()
-            return []
+            return {"simulations": [], "wfm_data": []}
 
-    def _save_trades(self, raw_output):
-        if not raw_output: return
+    def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
+        if not full_output: return
 
-        for simulation_batch in raw_output:
+        simulations = full_output.get("simulations", [])
+        wfm_raw = full_output.get("wfm_data", [])
+
+        # Process Trades
+        for simulation_batch in simulations:
             for trade in simulation_batch:
-                full_key = trade.get("path", "") # "MA Trend Following_AT15_EURUSD_param_set-21-..."
-                
-                # Identificamos onde começa o param_set
-                split_point = "_param_set"
-                idx_param = full_key.find(split_point)
+                full_key = trade.get("path", "")
+                idx_param = full_key.find("_param_set")
                 
                 if idx_param == -1:
                     print(f"DEBUG: Formato de path inesperado: {full_key}")
                     continue
-                
                 ps_name = full_key[idx_param+1:] # "param_set-21-..."
-                prefix = full_key[:idx_param]    # "MA Trend Following_AT15_EURUSD"
-                parts = prefix.split('_')
-                
-                # Verificação de segurança para evitar IndexError
-                if len(parts) < 3:
-                    print(f"DEBUG: Prefixo incompleto: {prefix}")
-                    continue
 
-                m_name, s_name, a_name = parts[0], parts[1], parts[2] 
-                try: # Navegação segura no dicionário
+                try: 
                     target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
-                    
-                    if target["trades"] is None:
-                        target["trades"] = []
-                    
-                    # Opcional: Limpar o nome do asset dentro do trade para o relatório
+                    if target["trades"] is None: target["trades"] = []
                     trade["asset"] = a_name 
-                    
                     target["trades"].append(trade)
                     
                 except KeyError as e:
                     print(f"DEBUG: Chave não encontrada: {e} | Caminho tentado: {m_name}->{s_name}->{a_name}->{ps_name}")
+
+        # Process WFM Daily Results
+        if wfm_raw:
+            try:
+                # Transforms cpp dict lists to Polars DataFrame pivots
+                df_matrix = self._process_wfm_to_polars(wfm_raw) 
+                map_asset_nome = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
+                map_asset_nome["wfm_matrix_data"] = df_matrix
+                print(f"   > WFM Matrix generated for {a_name}: {df_matrix.shape}")
+            except Exception as e:
+                print(f"   > Error generating WFM Matrix for {a_name}: {e}")
+
+    def _process_wfm_to_polars(self, wfm_raw):
+        df = pl.DataFrame(wfm_raw)
+
+        # Converts saved timestamp YYYYMMDDHHMMSS to Datetime
+        df = df.with_columns(
+            pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S")
+        ).sort("ts")
+
+        matrix = df.pivot(
+            values="pnl",
+            index="ts",
+            columns="id"
+        ).sort("ts").fill_null(0.0)
+        
+        matrix = matrix.rename({
+            col: f"ps_{col}" if col != "ts" else col for col in matrix.columns
+        })
+
+        return matrix
+
 
     def _estimate_paramset_size_mb(self, df: pl.DataFrame):
         return df.estimated_size() / (1024 ** 2) # No Polars, estimated_size() retorna o tamanho em bytes
@@ -783,6 +806,7 @@ class Operation(BaseClass):
 
 
 
+
                         # SEPARAÇÃO POR LADO (Baseado no sinal do lot_size)
                         longs = [t for t in trades if get_val(t, 'lot_size') > 0]
                         shorts = [t for t in trades if get_val(t, 'lot_size') < 0]
@@ -898,6 +922,75 @@ class Operation(BaseClass):
         plt.tight_layout()
         plt.show()
 
+    # || ===================================================================== || Walkforward || ===================================================================== ||
+
+    def _extract_returns_for_wf(self, model_name, strat_name, asset_name): # Extracts all param_sets daily historical returns for wf
+        wf_input_data = []
+
+        asset_data = self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]
+        param_sets = asset_data.get("param_sets", {})
+
+        for ps_name, ps_data in param_sets.items():
+            trades = ps_data.get("trades", [])
+            if not trades: continue
+
+            # Converts trades list into a dict
+            ts_map = {}
+            for t in trades:
+                dts = t.get('daily_datetime', [])
+                pnls = t.get('daily_pnl', [])
+
+                for dt, pnl in zip(dts, pnls):
+                    ts_map[dt] = ts_map.get(dt, 0.0) + pnl
+
+            if not ts_map: continue
+
+            # Cronological order to garantee walkforard integrity
+            sorted_dts = sorted(ts_map.keys())
+            sorted_pnls = [ts_map[dt] for dt in sorted_dts]
+            wf_input_data.append([sorted_dts, sorted_pnls, ps_name])
+        return wf_input_data
+
+    def _run_walkforward(self): # Executes WFM for all results
+        models_dict = self._get_all_models()
+
+        for m_name, m_obj in models_dict.items():
+            strats = m_obj.strat
+            assets = m_obj.assets
+
+            for s_name, s_obj in strats.items():
+
+                # Checks strat configuration for if walkforward parameters
+                if not hasattr(s_obj, 'operation') or not isinstance(s_obj.operation, Walkforward): continue
+
+                # Iterates over assets to extract returns and run walkforward for each asset in model
+                for a_name in assets:
+                    print(f"\n>>> Running Walkforward for Model: {m_name} | Strat: {s_name} | Asset: {a_name} <<<")
+                    
+                    wf_raw_data = self._extract_returns_for_wf(m_name, s_name, a_name)
+
+                    if not wf_raw_data:
+                        print(f"< No data extracted for Walkforward in {m_name} | {s_name} | {a_name}. Skipping.")
+                        continue
+
+                    engine_input = [[d[0], d[1]] for d in wf_raw_data]
+                    wf_engine = s_obj.operation
+
+                    # Updates internal engine dataframe with the extracted data, now in the wide format expected by the C++ engine
+                    wf_engine.df = wf_engine._consolidate_to_wide_df(engine_input)
+
+                    # Executes Walkforward Matrix and returns combined OOS curve from all param sets
+                    wf_final_results = wf_engine.analyze()
+
+                    # Saves consolidated results on asset level (model->strat->asset)
+                    self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["walkforward"] = {
+                        "trades": wf_final_results,
+                        "matrix": wf_engine.all_wf_results,
+                        "config": wf_engine.wfm_configs
+                    }
+
+                    wf_engine.plot_advanced_heatmap(metric='total_pnl')
+
     # || ======================================================================================================================================================================= ||
                         
     def run(self):
@@ -910,6 +1003,8 @@ class Operation(BaseClass):
         self._operation()
         self._report_pnl_summary()
         self._plot_pnl_curves()
+        
+        #self._run_walkforward()
 
         # III - Operation Portfolio Simulation, Operation Analysis and Metrics
         print(f"\n>>> III - Operation Portfolio Simulation, Operation Analysis and Metrics <<<")
@@ -1012,14 +1107,12 @@ if __name__ == "__main__":
         market='forex',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex'
     )
-
     winfut = Asset(
         name='WIN$',
         type='futures',
         market='b3',
         data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados'
     )
-
 
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
@@ -1043,7 +1136,7 @@ if __name__ == "__main__":
             
             'sl_perc': range(2, 2+1, 1), # 3
             'tp_perc': range(5, 5+1, 8), 
-            'param1': range(21, 21+1, 21), #50
+            'param1': range(21, 147+1, 21), #50
             'param2': range(2, 2+1, 1), # 3
             'param3': ['sma'] #, 'ema', 'ema'
         }
@@ -1059,7 +1152,7 @@ if __name__ == "__main__":
     ind = { 
         'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param1'),
         'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
-        # 'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
+        #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         # 'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
         # 'max': PriorCote(asset=None, timeframe=model_execution_tf, price_col='high'),
         # 'min': PriorCote(asset=None, timeframe=model_execution_tf, price_col='low'),
@@ -1100,11 +1193,15 @@ if __name__ == "__main__":
         close[1] < open[1],
         close[2] < open[2],
         close[3] < open[3],
+        close[1] < ema[1],
+        ema[1] < ema[2],
     ]
     entry_short = [
         close[1] > open[1],
         close[2] > open[2],
         close[3] > open[3],
+        close[1] > ema[1],
+        ema[1] > ema[2],
     ]
 
     exit_tf_long = [
@@ -1140,7 +1237,11 @@ if __name__ == "__main__":
     AT15 = Strat(
         StratParams(
             name="AT15",
-            operation=Backtest(BacktestParams(name='backtest_test')),
+            operation=Walkforward(
+                wfm=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([63, 126, 252], [21, 63])],
+                wf_metric=[1, 'highest', 'sharpe'], # Exemplo: buscar melhor Sharpe no In-Sample
+                returns='best_wf_comb' 
+            ),
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                                                  order_type='market', limit_order_base_calc_ref_price='open', offset=0.0, 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"

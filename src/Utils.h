@@ -18,38 +18,6 @@ inline nlohmann::json trades_to_json(const std::vector<Trade>& trades, const std
         std::vector<double> final_pnl;
         std::vector<std::string> final_dates;
 
-        if (resolution == "daily" || t.daily_datetime.empty()) { 
-            final_pnl = t.daily_pnl;
-            final_dates = t.daily_datetime;
-        } else {
-            // Lógica de Downsampling (Redução de Resolução)
-            for (size_t k = 0; k < t.daily_datetime.size(); ++k) {
-                bool is_last = (k == t.daily_datetime.size() - 1);
-                bool include = false;
-
-                if (is_last) {
-                    include = true; // Sempre inclui o último registro do trade (fechamento)
-                } else if (resolution == "monthly") {
-                    // Inclui se o mês da data atual for diferente do próximo (YYYY-MM-DD)
-                    // Substr(5,2) extrai o "MM"
-                    if (t.daily_datetime[k].substr(5, 2) != t.daily_datetime[k+1].substr(5, 2)) {
-                        include = true;
-                    }
-                } else if (resolution == "weekly") {
-                    // Abordagem simples para Weekly: Se o mês mudou ou se é um salto de 5 registros (dias úteis)
-                    // Como não temos um calendário complexo aqui, a virada de mês serve como checkpoint
-                    if (t.daily_datetime[k].substr(5, 2) != t.daily_datetime[k+1].substr(5, 2) || k % 5 == 0) {
-                        include = true;
-                    }
-                }
-
-                if (include) {
-                    final_pnl.push_back(t.daily_pnl[k]);
-                    final_dates.push_back(t.daily_datetime[k]);
-                }
-            }
-        }
-
         // Montagem do objeto JSON para cada trade
         nlohmann::json trade_json = {
             {"id", t.id},
@@ -69,10 +37,6 @@ inline nlohmann::json trades_to_json(const std::vector<Trade>& trades, const std
             {"mfe", t.mfe ? nlohmann::json(*t.mfe) : nlohmann::json(nullptr)},
             {"mae", t.mae ? nlohmann::json(*t.mae) : nlohmann::json(nullptr)},
             {"bars_held", t.bars_held ? nlohmann::json(*t.bars_held) : nlohmann::json(nullptr)},
-            
-            // Campos obrigatórios para evitar KeyError no Python
-            {"daily_pnl", final_pnl}, 
-            {"daily_datetime", final_dates}
         };
 
         j.push_back(trade_json);
@@ -82,7 +46,7 @@ inline nlohmann::json trades_to_json(const std::vector<Trade>& trades, const std
 
 
 
-void export_to_csv(const std::string& filename, 
+inline void export_to_csv(const std::string& filename, 
                    const std::vector<std::string>& datetime, 
                    const std::map<std::string, std::vector<double>>& data) {
     std::ofstream file(filename);
@@ -117,7 +81,7 @@ void export_to_csv(const std::string& filename,
 #include <iomanip>
 #include <sstream>
 
-int get_day_of_week(const std::string& dt_str) {
+inline int get_day_of_week(const std::string& dt_str) {
     std::tm tm = {};
     std::istringstream ss(dt_str);
     ss >> std::get_time(&tm, "%Y-%m-%d"); // Ajuste o formato se necessário
@@ -148,5 +112,38 @@ inline int extract_minutes(const std::string& dt) {
 }
 
 
+
+struct DailyResult {
+    long long timestamp; // Format int 'YYYYMMDDHHMMSS', ex "2023-10-25 14:30:00" -> 20231025143000
+    double pnl;
+    int ps_id; // Instead of full str with params just use ids to reduce size and translate later in py
+};
+
+inline void to_json(nlohmann::json& j, const DailyResult& res) {
+    j = nlohmann::json{{"ts", res.timestamp}, {"pnl", res.pnl}, {"id", res.ps_id}};
+}
+
+inline void from_json(const nlohmann::json& j, DailyResult& res) {
+    j.at("ts").get_to(res.timestamp);
+    j.at("pnl").get_to(res.pnl);
+    j.at("id").get_to(res.ps_id);
+}
+
+#include <string>
+#include <algorithm>
+
+inline long long format_datetime_to_int(std::string dt_str) {
+    // Remove '-', ':', e ' ' da string "2023-10-25 14:30:00"
+    // Resultará em "20231025143000"
+    dt_str.erase(std::remove(dt_str.begin(), dt_str.end(), '-'), dt_str.end());
+    dt_str.erase(std::remove(dt_str.begin(), dt_str.end(), ':'), dt_str.end());
+    dt_str.erase(std::remove(dt_str.begin(), dt_str.end(), ' '), dt_str.end());
+    
+    try {
+        return std::stoll(dt_str);
+    } catch (...) {
+        return 0; // Fallback para data inválida
+    }
+}
 
 

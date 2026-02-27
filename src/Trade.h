@@ -2,6 +2,8 @@
 #include <string>
 #include <optional>
 
+// Depois remover entry_datetime, exit_datetime, já que esses são redundantes, talvez até max_fav/adv se performance ficar ruim
+
 struct Trade {
     std::string id;
     std::string asset;
@@ -25,7 +27,4 @@ struct Trade {
     std::optional<double> profit;     // %
     std::optional<double> profit_r;   // money
     std::optional<int> bars_held=0;
-
-    std::vector<double> daily_pnl;
-    std::vector<std::string> daily_datetime;
 };

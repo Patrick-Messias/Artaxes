@@ -12,7 +12,7 @@ from MA import MA # type: ignore
 from HURST import HURST # type: ignore
 from KALMAN import KALMAN # type: ignore
 from VIXFIX import VIXFIX # type: ignore
-from VolModelManager import VolPredictor # type: ignore
+#from VolModelManager import VolPredictor # type: ignore
 
 """
 EdgeFinder is responsible for identifying trading edges based on indicators/strategies and assets
@@ -602,7 +602,7 @@ def main() -> None:
     hurst = HURST(asset='CURR_ASSET', timeframe=op_timeframe, window=list(range(63, 63+1, 100)))
     kalman = KALMAN(asset='CURR_ASSET', timeframe=op_timeframe, R=[0.01, 0.1+0.01, 0.01], Q=[0.001, 0.01+0.001, 0.001])
     vixfix = VIXFIX(asset='CURR_ASSET', timeframe=op_timeframe, window=list(range(22, 22+1, 2)))
-    volpredictor = VolPredictor(asset='CURR_ASSET', timeframe=op_timeframe)
+    #volpredictor = VolPredictor(asset='CURR_ASSET', timeframe=op_timeframe)
     indicators={'ma': ma, 'mmm': mmm, 'hurst': hurst} # 'volpredictor': volpredictor,  #{#, 'kalman': kalman} #, 'hurst': hurst
 
     # Entry Rules L and S  

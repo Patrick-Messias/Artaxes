@@ -195,11 +195,13 @@ std::string check_limit_instant_exit(bool is_long, double limit, double sl, doub
 
 
 
-json Backtest::run_simulation(const std::string& header, 
+SimulationOutput Backtest::run_simulation(const std::string& header, 
                               const std::map<std::string, std::vector<double>>& data,
                               const std::vector<std::string>& datetime,
                               const nlohmann::json& sim,
-                              const nlohmann::json& exec_settings) {
+                              const nlohmann::json& exec_settings,
+                              int ps_id
+                              ){
     
     // LOG inicial de verificação de indicadores
     // --- DEBUG: Print das últimas 30 linhas de todos os indicadores/preços ---
@@ -238,6 +240,7 @@ json Backtest::run_simulation(const std::string& header,
     std::vector<Trade> trades;
     std::vector<Trade> active_trades;
     std::vector<Trade> pending_orders;
+    std::vector<DailyResult> daily_results_matrix;
     
     // PnL Temporário para validação cruzada (Aritmético simples)
     double temp_cumulative_pnl = 0.0;
@@ -540,8 +543,12 @@ json Backtest::run_simulation(const std::string& header,
                         counter+=1;
                     }
 
-                    it->daily_pnl.push_back(pnl);
-                    it->daily_datetime.push_back(datetime[i].substr(0,10));
+                    DailyResult res;
+                    res.timestamp = format_datetime_to_int(datetime[i]);
+                    res.pnl = pnl;
+                    res.ps_id = ps_id;
+                    daily_results_matrix.push_back(res);
+
                     trades.push_back(*it);
                     it = active_trades.erase(it);
                 } else { ++it; }
@@ -611,7 +618,7 @@ json Backtest::run_simulation(const std::string& header,
                     double curr_tp = p_it->take_profit.value_or(0.0);
                     std::string instant_exit = check_limit_instant_exit(is_long, entry, curr_sl, curr_tp, open[i], high[i], low[i], close[i]);
 
-                    if (instant_exit != "") {
+                    if (instant_exit != "") { // If SL/TP hit instantaneously, we close the trade immediately at the respective level
                         p_it->exit_price = (instant_exit == "TP" ? curr_tp : curr_sl);
                         p_it->exit_reason = instant_exit;
                         p_it->exit_datetime = datetime[i];
@@ -628,11 +635,15 @@ json Backtest::run_simulation(const std::string& header,
                         }
 
                         // Move para o histórico de trades finalizadas
-                        it->daily_pnl.push_back(pnl);
-                        it->daily_datetime.push_back(datetime[i].substr(0,10));
+                        DailyResult res;
+                        res.timestamp = format_datetime_to_int(datetime[i]);
+                        res.pnl = pnl;
+                        res.ps_id = ps_id;
+                        daily_results_matrix.push_back(res);
+
                         trades.push_back(std::move(*p_it));
                         p_it = pending_orders.erase(p_it);
-                    } else {
+                    } else { // If limit order is instantly executed but no SL/TP hit, it becomes an active trade
                         if (counter < counter_max) {
                             std::cout << "[EN-LIM EXECUTED] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
                                     << " | Price: " << std::fixed << std::setprecision(5) << entry 
@@ -641,6 +652,12 @@ json Backtest::run_simulation(const std::string& header,
                                     << std::endl;
                             counter++;
                         }
+
+                        DailyResult res;
+                        res.timestamp = format_datetime_to_int(datetime[i]);
+                        res.pnl = 0.0;
+                        res.ps_id = ps_id;
+                        daily_results_matrix.push_back(res);
 
                         active_trades.push_back(std::move(*p_it));
                         p_it = pending_orders.erase(p_it);
@@ -782,6 +799,12 @@ json Backtest::run_simulation(const std::string& header,
                         }
 
                         if (execute_now) {
+                            DailyResult res;
+                            res.timestamp = format_datetime_to_int(datetime[i]);
+                            res.pnl = 0.0;
+                            res.ps_id = ps_id;
+                            daily_results_matrix.push_back(res);
+
                             active_trades.push_back(std::move(t));
                             is_long ? ++day_trades_long : ++day_trades_short;
                             if (counter < counter_max) {
@@ -895,8 +918,12 @@ json Backtest::run_simulation(const std::string& header,
                         counter+=1;
                     }
 
-                    it->daily_pnl.push_back(pnl);
-                    it->daily_datetime.push_back(datetime[i].substr(0,10));
+                    DailyResult res;
+                    res.timestamp = format_datetime_to_int(datetime[i]);
+                    res.pnl = pnl;
+                    res.ps_id = ps_id;
+                    daily_results_matrix.push_back(res);
+
                     trades.push_back(*it);
                     it = active_trades.erase(it);
                 }
@@ -929,8 +956,11 @@ json Backtest::run_simulation(const std::string& header,
 
                     float pnl = (float)(((current_p - entry_p) / entry_p) * 100.0) * (is_long ? 1.0 : -1.0);
 
-                    trade.daily_pnl.push_back(pnl);
-                    trade.daily_datetime.push_back(datetime[i].substr(0, 10));
+                    DailyResult res;
+                    res.timestamp = format_datetime_to_int(datetime[i]);
+                    res.pnl = pnl;
+                    res.ps_id = ps_id;
+                    daily_results_matrix.push_back(res);
                 }
             }
         }
@@ -941,12 +971,13 @@ json Backtest::run_simulation(const std::string& header,
 
     // Final do backtest.cpp
     std::cout << "[C++ Debug] Total de trades completados: " << trades.size() << std::endl;
-    if (!trades.empty()) {
-        std::cout << "[C++ Debug] Daily PnL do primeiro trade: " << trades[0].daily_pnl.size() << " entradas." << std::endl;
-    }
     
     std::string trade_pnl_resolution = exec_settings.value("trade_pnl_resolution", "weekly");
-    return trades_to_json(trades, trade_pnl_resolution);
+
+    SimulationOutput output;
+    output.trades_json = trades_to_json(trades, trade_pnl_resolution);
+    output.daily_vec = daily_results_matrix;
+    return output;
 }
 
 

@@ -14,7 +14,8 @@ json Operation::run(const std::string& header,
                     const nlohmann::json& exec_settings) {
 
     // Lista para armazenar os resultados de todas as simulações
-    std::vector<json> all_somulations_results;
+    std::vector<json> all_trades_results;
+    std::vector<DailyResult> wfm_matrix;
     std::mutex mtx;
 
     // 1. Convertemos o nlohmann::json (sim_params) em um std::vector<json>
@@ -22,42 +23,43 @@ json Operation::run(const std::string& header,
     //pois garante iteradores compatíveis com std::execution::par
     std::vector<json> simulations;
     if (sim_params.is_array()) {
-        for (const auto& s : sim_params) {
-            simulations.push_back(s);
-        }
+        for (const auto& s : sim_params) simulations.push_back(s);
     }
 
     // 2. Processamento paralelo por simulação (Cada Param Set em uma Thread)
-    // Usamos o cabeçalho <execution> para rodar em múltiplos núcleos do processador
-    std::for_each(std::execution::par, simulations.begin(), simulations.end(), [&](const json& sim) {
-        // 1. Criamos uma CÓPIA local dos dados OHLC para esta thread
+    std::vector<int> indexes(simulations.size());
+    std::iota(indexes.begin(), indexes.end(), 0); // 0, 1, 2, ...
+
+    std::for_each(std::execution::par, indexes.begin(), indexes.end(), [&](int ps_id) {
+        // Recovers the simulation corresponding to this index
+        const json& sim = simulations[ps_id];
+
+        // Creates local copy of OHLC for this thread
         std::map<std::string, std::vector<double>> local_data = data; 
 
-        // 2. FUNDAMENTAL: Injetar os indicadores específicos desta simulação
+        // Injects indicadots into local_data (if any)
         if (sim.contains("indicator_data") && sim["indicator_data"].is_object()) {
             for (auto& [key, val] : sim["indicator_data"].items()) {
-                try {
-                    local_data[key] = val.get<std::vector<double>>();
-                    
-                    // --- PRINT DE VALIDAÇÃO DE INJEÇÃO ---
-                    std::cout << "[C++ Sim ID: " << sim["id"].get<std::string>().substr(0,8) 
-                            << "] Indicador '" << key << "' injetado. "
-                            << "Primeiro valor: " << local_data[key][0] 
-                            << " | Ultimo: " << local_data[key].back() << std::endl;
-
-                } catch (const std::exception& e) {
-                    std::cerr << "[C++ Error] Falha ao injetar " << key << ": " << e.what() << std::endl;
-                }
+                local_data[key] = val.get<std::vector<double>>();
             }
         }
 
-        // 3. Agora passamos o local_data (OHLC + INDICADORES)
-        json trades = Backtest::run_simulation(header, local_data, datetime, sim, exec_settings);
+        // Passes OHLC + Indicators to backtest engine
+        SimulationOutput sim_output = Backtest::run_simulation(header, local_data, datetime, sim, exec_settings, ps_id);
 
+        // Thread-Safe Consolidation
         std::lock_guard<std::mutex> lock(mtx);
-        all_somulations_results.push_back(trades);
+
+        // Adds trades to JSON
+        all_trades_results.push_back(sim_output.trades_json);
+
+        wfm_matrix.insert(wfm_matrix.end(), sim_output.daily_vec.begin(), sim_output.daily_vec.end());
     });
 
-    // 3. Retorna o array de resultados (que o engine.cpp irá converter em string JSON)
-    return all_somulations_results;
+    // Returns one big object
+    json final_response = {
+        {"simulations", all_trades_results},
+        {"wfm_data", wfm_matrix}
+    };
+    return final_response;
 }
