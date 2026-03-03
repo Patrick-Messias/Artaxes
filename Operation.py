@@ -1230,8 +1230,6 @@ if __name__ == "__main__":
     be_neg_long_value = None #[atr]
     be_neg_short_value = None #[atr]
 
-    1. Testar adicionar e remover wfm_configs, está mudando os resultados da mesma combinação, por quê?
-
     AT15 = Strat(
         StratParams(
             name="AT15",
