@@ -951,9 +951,9 @@ class Operation(BaseClass):
                     wfm_engine = s_obj.operation
                     wfm_engine.matrix = wfm_matrix
 
-                    # Executes and returns returns_mode='top' result combination
+                    # Executes and returns returns_mode='selected' result combination
                     wf_final_results = wfm_engine.analyze()
-                    wf_parset_metric = str(wfm_engine.wf_parset_selection_metric[0])
+                    wf_parset_metric = str(wfm_engine.wf_selection_metric)
                     res_key = 'total_pnl' if wf_parset_metric == 'pnl' else wf_parset_metric
 
                     if not wf_final_results:
@@ -961,11 +961,11 @@ class Operation(BaseClass):
                         continue
 
                     # Visualization
-                    if wfm_engine.returns_mode == 'top':
+                    if wfm_engine.wf_returns_mode == 'selected':
                         display_val = wf_final_results.get(res_key, 0.0) # Mode TOP wf_final_results is already already best 
                         asset_node['walkforward'] = {
                             "best_result": wf_final_results,
-                            "mode": "top",
+                            "mode": "selected",
                             "metric_wf_parset": wf_parset_metric
                         }
                     else: # Mode ALL, wf_final_results is a dict with dicts
@@ -1234,11 +1234,11 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Walkforward(
-                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([12, 24, 48], [4, 12])],
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([4, 12, 24, 48], [1, 4, 12])],
                 matrix_resolution='weekly',
-                wf_parset_selection_metric=['pnl', 1, 'des', 'highest'],
-                wfm_wf_selection=['pnl', 1, 'highest'], # Exemplo: buscar melhor Sharpe no In-Sample
-                returns_mode='best_wf_comb' 
+                is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
+                wf_selection_metric='pnl', wf_selection_analysis_radius_n=2,
+                wf_selection_logic='highest', wf_returns_mode='selected'
             ),
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                                                  order_type='market', limit_order_base_calc_ref_price='open', offset=0.0, 
