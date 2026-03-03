@@ -383,12 +383,12 @@ class Operation(BaseClass):
         if wfm_raw:
             try:
                 # Transforms cpp dict lists to Polars DataFrame pivots
-                df_matrix = self._process_wfm_to_polars(wfm_raw) 
+                df_matrix = self._process_wfm_to_polars(wfm_raw)
                 map_asset_nome = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
                 map_asset_nome["wfm_matrix_data"] = df_matrix
-                print(f"   > WFM Matrix generated for {a_name}: {df_matrix.shape}")
+                print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
             except Exception as e:
-                print(f"   > Error generating WFM Matrix for {a_name}: {e}")
+                print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
 
     def _process_wfm_to_polars(self, wfm_raw):
         df = pl.DataFrame(wfm_raw)
@@ -396,16 +396,19 @@ class Operation(BaseClass):
         # Converts saved timestamp YYYYMMDDHHMMSS to Datetime
         df = df.with_columns(
             pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S")
-        ).sort("ts")
+        )
 
+        # Pivot with SUM agg to avoid duplicate error
         matrix = df.pivot(
-            values="pnl",
+            on="id",
             index="ts",
-            columns="id"
+            values="pnl",
+            aggregate_function="sum"
         ).sort("ts").fill_null(0.0)
         
+        # Rename columns to ps_0, ps_1, ..., ps_{col}.
         matrix = matrix.rename({
-            col: f"ps_{col}" if col != "ts" else col for col in matrix.columns
+            col: f"ps_{col}" for col in matrix.columns if col != "ts"
         })
 
         return matrix
@@ -923,72 +926,66 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Walkforward || ===================================================================== ||
 
-    def _extract_returns_for_wf(self, model_name, strat_name, asset_name): # Extracts all param_sets daily historical returns for wf
-        wf_input_data = []
-
-        asset_data = self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]
-        param_sets = asset_data.get("param_sets", {})
-
-        for ps_name, ps_data in param_sets.items():
-            trades = ps_data.get("trades", [])
-            if not trades: continue
-
-            # Converts trades list into a dict
-            ts_map = {}
-            for t in trades:
-                dts = t.get('daily_datetime', [])
-                pnls = t.get('daily_pnl', [])
-
-                for dt, pnl in zip(dts, pnls):
-                    ts_map[dt] = ts_map.get(dt, 0.0) + pnl
-
-            if not ts_map: continue
-
-            # Cronological order to garantee walkforard integrity
-            sorted_dts = sorted(ts_map.keys())
-            sorted_pnls = [ts_map[dt] for dt in sorted_dts]
-            wf_input_data.append([sorted_dts, sorted_pnls, ps_name])
-        return wf_input_data
-
-    def _run_walkforward(self): # Executes WFM for all results
+    def _run_walkforward(self): # Executes WFM for all Models -> Strats -> Assets
+        import builtins
         models_dict = self._get_all_models()
 
         for m_name, m_obj in models_dict.items():
-            strats = m_obj.strat
-            assets = m_obj.assets
-
-            for s_name, s_obj in strats.items():
-
-                # Checks strat configuration for if walkforward parameters
-                if not hasattr(s_obj, 'operation') or not isinstance(s_obj.operation, Walkforward): continue
-
-                # Iterates over assets to extract returns and run walkforward for each asset in model
-                for a_name in assets:
-                    print(f"\n>>> Running Walkforward for Model: {m_name} | Strat: {s_name} | Asset: {a_name} <<<")
+            for s_name, s_obj in m_obj.strat.items():
+                # Verifies if Strat has WFM Config
+                if not hasattr(s_obj, 'operation') or not isinstance(s_obj.operation, Walkforward):
+                    continue
                     
-                    wf_raw_data = self._extract_returns_for_wf(m_name, s_name, a_name)
+                for a_name in m_obj.assets:
+                    print(f"      \n>>> Running Walkforward Analisys: {m_name} | {s_name} | {a_name}")
 
-                    if not wf_raw_data:
-                        print(f"< No data extracted for Walkforward in {m_name} | {s_name} | {a_name}. Skipping.")
+                    # Recovers param_set matrix from cache
+                    asset_node = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
+                    wfm_matrix = asset_node.get("wfm_matrix_data")
+
+                    if wfm_matrix is None or wfm_matrix.is_empty():
+                        print(f"      > [Skip] No WFM found for {a_name}")
                         continue
 
-                    engine_input = [[d[0], d[1]] for d in wf_raw_data]
-                    wf_engine = s_obj.operation
+                    # Configues Engine with current matrix
+                    wfm_engine = s_obj.operation
+                    wfm_engine.matrix = wfm_matrix
 
-                    # Updates internal engine dataframe with the extracted data, now in the wide format expected by the C++ engine
-                    wf_engine.df = wf_engine._consolidate_to_wide_df(engine_input)
+                    # Executes and returns returns_mode='top' result combination
+                    wf_final_results = wfm_engine.analyze()
+                    wf_parset_metric = str(wfm_engine.wf_parset_selection_metric[0])
+                    res_key = 'total_pnl' if wf_parset_metric == 'pnl' else wf_parset_metric
 
-                    # Executes Walkforward Matrix and returns combined OOS curve from all param sets
-                    wf_final_results = wf_engine.analyze()
+                    if not wf_final_results:
+                        print(f"      > [Error] Walkforward failed to generate results for {a_name}")
+                        continue
 
-                    # Saves consolidated results on asset level (model->strat->asset)
-                    self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["walkforward"] = {
-                        "trades": wf_final_results,
-                        "matrix": wf_engine.all_wf_results,
-                        "config": wf_engine.wfm_configs
-                    }
+                    # Visualization
+                    if wfm_engine.returns_mode == 'top':
+                        display_val = wf_final_results.get(res_key, 0.0) # Mode TOP wf_final_results is already already best 
+                        asset_node['walkforward'] = {
+                            "best_result": wf_final_results,
+                            "mode": "top",
+                            "metric_wf_parset": wf_parset_metric
+                        }
+                    else: # Mode ALL, wf_final_results is a dict with dicts
+                        def get_val(val):
+                            val = wf_final_results.get(res_key, 0.0)
+                            if hasattr(val, "item"): return float(val.item())
+                            try: return float(val)
+                            except: return 0.0
+                            
+                        best_key = builtins.max(wf_final_results.keys(), key=get_val)
+                        display_val = get_val(best_key)
+                        asset_node["walkforward"] = {
+                            "all_results": wf_final_results,
+                            "mode": "all"
+                        }
+                    
+                    print(f"   > Walkforward Complete. Best {wf_parset_metric.upper()}: {display_val:.8f}")
+                    wfm_engine.plot_advanced_heatmap(metric=res_key)
+        return True
 
-                    wf_engine.plot_advanced_heatmap(metric='total_pnl')
 
     # || ======================================================================================================================================================================= ||
                         
@@ -1000,10 +997,10 @@ class Operation(BaseClass):
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
         self._operation()
-        self._report_pnl_summary()
-        self._plot_pnl_curves()
+        #self._report_pnl_summary()
+        #self._plot_pnl_curves()
         
-        #self._run_walkforward()
+        self._run_walkforward()
 
         # III - Operation Portfolio Simulation, Operation Analysis and Metrics
         print(f"\n>>> III - Operation Portfolio Simulation, Operation Analysis and Metrics <<<")
@@ -1233,13 +1230,17 @@ if __name__ == "__main__":
     be_neg_long_value = None #[atr]
     be_neg_short_value = None #[atr]
 
+    1. Testar adicionar e remover wfm_configs, está mudando os resultados da mesma combinação, por quê?
+
     AT15 = Strat(
         StratParams(
             name="AT15",
             operation=Walkforward(
-                wfm=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([63, 126, 252], [21, 63])],
-                wf_metric=[1, 'highest', 'sharpe'], # Exemplo: buscar melhor Sharpe no In-Sample
-                returns='best_wf_comb' 
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([12, 24, 48], [4, 12])],
+                matrix_resolution='weekly',
+                wf_parset_selection_metric=['pnl', 1, 'des', 'highest'],
+                wfm_wf_selection=['pnl', 1, 'highest'], # Exemplo: buscar melhor Sharpe no In-Sample
+                returns_mode='best_wf_comb' 
             ),
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                                                  order_type='market', limit_order_base_calc_ref_price='open', offset=0.0, 
@@ -1320,8 +1321,75 @@ if __name__ == "__main__":
 
 
 """
-
 """
+def _extract_returns_for_wf(self, model_name, strat_name, asset_name): # Extracts all param_sets daily historical returns for wf
+    wf_input_data = []
+
+    asset_data = self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]
+    param_sets = asset_data.get("param_sets", {})
+
+    for ps_name, ps_data in param_sets.items():
+        trades = ps_data.get("trades", [])
+        if not trades: continue
+
+        # Converts trades list into a dict
+        ts_map = {}
+        for t in trades:
+            dts = t.get('daily_datetime', [])
+            pnls = t.get('daily_pnl', [])
+
+            for dt, pnl in zip(dts, pnls):
+                ts_map[dt] = ts_map.get(dt, 0.0) + pnl
+
+        if not ts_map: continue
+
+        # Cronological order to garantee walkforard integrity
+        sorted_dts = sorted(ts_map.keys())
+        sorted_pnls = [ts_map[dt] for dt in sorted_dts]
+        wf_input_data.append([sorted_dts, sorted_pnls, ps_name])
+    return wf_input_data
+
+def _run_walkforward(self): # Executes WFM for all results
+    models_dict = self._get_all_models()
+
+    for m_name, m_obj in models_dict.items():
+        strats = m_obj.strat
+        assets = m_obj.assets
+
+        for s_name, s_obj in strats.items():
+
+            # Checks strat configuration for if walkforward parameters
+            if not hasattr(s_obj, 'operation') or not isinstance(s_obj.operation, Walkforward): continue
+
+            # Iterates over assets to extract returns and run walkforward for each asset in model
+            for a_name in assets:
+                print(f"\n>>> Running Walkforward for Model: {m_name} | Strat: {s_name} | Asset: {a_name} <<<")
+                
+                wf_raw_data = self._extract_returns_for_wf(m_name, s_name, a_name)
+
+                if not wf_raw_data:
+                    print(f"< No data extracted for Walkforward in {m_name} | {s_name} | {a_name}. Skipping.")
+                    continue
+
+                engine_input = [[d[0], d[1]] for d in wf_raw_data]
+                wf_engine = s_obj.operation
+
+                # Updates internal engine dataframe with the extracted data, now in the wide format expected by the C++ engine
+                wf_engine.df = wf_engine._consolidate_to_wide_df(engine_input)
+
+                # Executes Walkforward Matrix and returns combined OOS curve from all param sets
+                wf_final_results = wf_engine.analyze()
+
+                # Saves consolidated results on asset level (model->strat->asset)
+                self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["walkforward"] = {
+                    "trades": wf_final_results,
+                    "matrix": wf_engine.all_wf_results,
+                    "config": wf_engine.wfm_configs
+                }
+
+                wf_engine.plot_advanced_heatmap(metric='total_pnl')
+
+
     def _assets(self, target_asset_name: str, target_tf: str):
         # Recupera do contexto da classe
         actual_ltf_df = self._curr_df_context

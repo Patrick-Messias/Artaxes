@@ -1,198 +1,197 @@
 import polars as pl, pandas as pd, numpy as np
-from typing import List, Literal, Dict, Any, Union
-import matplotlib.pyplot as plt, seaborn as sns
+import matplotlib.pyplot as plt
+import seaborn as sns
 from datetime import datetime, timedelta
+from typing import List, Literal, Dict, Any, Union
 
 class Walkforward:
     def __init__(
         self,
-        wfm: List[List[int]],
-        raw_data: List[List[Union[List[str], List[float]]]] = None,
-        wf_res: str='weekly',
-        wf_metric: List[Any] = [1, 'highest', 'pnl'],
-        wfm_wf_selection: List[Any] = [1, 'highest', 'wfe'],
-        returns: Literal['top', 'best_wf_comb', 'all'] = 'top',
+        matrix: pl.DataFrame=None,
+        wfm_configs: List[List[int]]=[[12, 4, 4]], # [[IS, OS, STEP], ...]
+        matrix_resolution: Literal['daily', 'weekly', 'monthly'] = 'weekly',
+        wf_parset_selection_metric: List[Any] = ['pnl', 1, 'des', 'highest'],
+        wfm_wf_selection: List[Any] = ['pnl', 1, 'highest'],
+        returns_mode: Literal['top', 'all'] = 'top'
     ):
-        self.wfm_configs = wfm
-        self.wf_metric = wf_metric
+        # A matrix já vem pronta do seu _process_wfm_to_polars no Operation
+        self.matrix = matrix 
+        self.wfm_configs = wfm_configs
+        self.matrix_resolution = matrix_resolution
+        self.wf_parset_selection_metric = wf_parset_selection_metric
         self.wfm_wf_selection = wfm_wf_selection
-        self.returns_mode = returns
-        if raw_data is not None:
-            self.df = self._consolidate_to_wide_df(raw_data) 
-        else:
-            self.df = pl.DataFrame() # Empty Placeholder
+        self.returns_mode = returns_mode
         self.all_wf_results = {}
 
-    def _consolidate_to_wide_df(self, raw_data):
-        dfs_to_join = []
+    def _find_best_parameter(self, is_data: pl.DataFrame) -> str:
+        if is_data.is_empty(): return None
 
-        for i, (dts, pnls) in enumerate(raw_data):
-            # Groups PnL by Datetime
-            temp_df = pl.DataFrame({"datetime": dts, f"ps_{i}": pnls})
-            temp_df = temp_df.with_columns(pl.col("datetime").str.to_date())
-            temp_df = temp_df.group_by("datetime").agg(pl.col(f"ps_{i}").sum())
-            dfs_to_join.append(temp_df)
+        # Unpacks WF Parset selection config
+        metric_name, top_n, order, logic = self.wf_parset_selection_metric
+        is_descending = False if order == 'asc' else True
 
-        full_df = dfs_to_join[0]
-        for next_df in dfs_to_join[1:]:
-            full_df = full_df.join(
-                next_df, 
-                on="datetime", 
-                how="full",
-                coalesce=True
-            )
-        return full_df.sort("datetime").fill_null(0.0)
+        # Calculates metrics for all columns (ps_ids)
+        ps_cols = [c for c in is_data.columns if c != "ts"]
+        
+        if metric_name == "pnl":
+            stats = is_data.select([pl.col(c).sum().alias(c) for c in ps_cols])
+        elif metric_name == "pnl_dd": #PnL acumulado / Range da curva (Proxy de Drawdown)
+            stats = is_data.select([
+                (pl.col(c).sum() / (pl.col(c).cumsum().max() - pl.col(c).cumsum().min() + 1e-6)).alias(c)
+                for c in ps_cols
+            ])
+        elif metric_name == "sharpe":
+            stats = is_data.select([
+                (pl.col(c).mean() / (pl.col(c).std() + 1e-9)).alias(c) 
+                for c in ps_cols
+            ])
+        else: # Default is PnL only
+            stats = is_data.select([pl.col(c).sum().alias(c) for c in ps_cols])
 
-    def _calculate_fitness(self, df_slice: pl.DataFrame):
-        metric = self.wf_metric[2]
-        if metric == 'pnl':
-            return df_slice.sum()
-        elif metric == 'sharpe':
-            return df_slice.mean() / (df_slice.std() + 1e-9)
-        else:
-            print(f"Unknown metric '{metric}', defaulting to PnL")
-            return df_slice.sum() # Default to sum if unknown metric
+        # Ranks and takes top N
+        ranked_ps = stats.unpivot(variable_name="ps_id", value_name="val")
+        ranked_ps = ranked_ps.sort("val", descending=is_descending).head(top_n)
+        top_ps_list = ranked_ps["ps_id"].to_list()
 
-    def run_wf(self, is_len, os_len, step):
-        total_rows = len(self.df)
-        chunks = []
+        if not top_ps_list: return None
 
-        for start in range(0, total_rows - is_len - os_len + 1, step):
-            is_idx = (start, start + is_len)
-            os_idx = (is_idx[1], is_idx[1] + os_len)
+        # Selection Logic
+        if logic == 'highest' or logic == 'h' or logic == 'rank': 
+            return top_ps_list[0]
+        if logic == 'moda' or logic == 'mode': # Decomposes strings and to finds out parset
+            param_counts = {}
+            for ps_id in top_ps_list: # Removes prefix param_set-, if split with "-"
+                params = tuple(ps_id.replace("ps_param_set-", "").replace("ps_", "").split("-"))
+                param_counts[params] = param_counts.get(params, 0) + 1
 
-            is_df = self.df.slice(is_idx[0], is_len).drop("datetime")
-            fitness_df = self._calculate_fitness(is_df)
+            # Mode is the tuple that showed up the most
+            best_params_tuple = max(param_counts, key=param_counts.get)
 
-            # Selects best param_set and converts to Series to use arg_max/min
-            fitness_series = fitness_df.row(0, named=True)
+            # Reconstructs original ps_id
+            for ps_id in top_ps_list:
+                if tuple(ps_id.replace("ps_param_set-", "").replace("ps_", "").split("-")) == best_params_tuple:
+                    return ps_id
+        
+        return top_ps_list[0]
 
-            # Logic to find the name of the columns (param_set)
-            if self.wf_metric[1] == 'highest':
-                best_ps = max(fitness_series, key=lambda k: fitness_series[k])
-            else:
-                best_ps = min(fitness_series, key=lambda k: fitness_series[k])
+    def run_wf(self, is_periods: int, os_periods: int, step_periods: int = None):
+        if step_periods is None:
+            step_periods = os_periods
 
-            # Collects out of sample performance
-            os_data = self.df.slice(os_idx[0], os_len).select(["datetime", best_ps])
-            os_returns = os_data.select(best_ps).to_series()
+        df = self.matrix.sort("ts")
+        total_rows = len(df)
+        runs = []
 
-            # Calculates WFE
-            os_perf = os_returns.sum()
-            os_sharpe = (os_returns.mean() / (os_returns.std() + 1e-9)) * np.sqrt(252)
+        # Navegates by index (Lines) instead of Timedeltas
+        start_idx = 0
+        current_is_end_idx = is_periods
 
-            is_perf = fitness_series[best_ps]
-            wfe = (os_perf / os_len) / (is_perf / is_len) if is_perf != 0 else 0
+        while current_is_end_idx < total_rows:
+            current_oos_end_idx = current_is_end_idx + os_periods
 
-            chunks.append({
-                "os_curve": os_data.rename({best_ps: "pnl"}),
-                "wfe": wfe,
-                "metrics": {
-                    "is_pnl": is_perf,
-                    "os_pnl": os_perf,
-                    "os_sharpe": os_sharpe,
-                    "os_ev": os_returns.mean() # Valor Esperado por trade/dia
-                }
-            })
-        return chunks
+            # Garantees that OOS matrix limits aren't breached  
+            if current_oos_end_idx > total_rows:
+                current_oos_end_idx = total_rows
+
+            # Slices the Matrix by positions
+            is_data = df.slice(start_idx, is_periods)
+            os_data = df.slice(current_is_end_idx, (current_oos_end_idx - current_is_end_idx))
+
+            # Selects best param IS
+            best_ps_id = self._find_best_parameter(is_data)
+
+            if best_ps_id is not None and not os_data.is_empty() and len(os_data) >= 1: # Extracts values, making shure they are scalars with .item()
+                is_pnl_total = float(is_data[best_ps_id].sum() or 0.0)
+                os_returns = os_data[best_ps_id]
+                os_pnl_total = float(os_returns.sum() or 0.0)
+
+                # WFE (Avg OS / Avg IS)
+                wfe = (os_pnl_total / os_periods) / (is_pnl_total / is_periods) if is_pnl_total != 0 else 0
+
+                # Adjust Sharpe's annualized factor according to resolution
+                sharpe_ann_factor = 252 if self.matrix_resolution == 'daily' else (52 if self.matrix_resolution == 'weekly' else 12)
+                m = os_returns.mean()
+                s = os_returns.std()
+
+                mean_val = float(m) if m is not None else 0.0
+                std_val = float(s) if s is not None else 0.0
+
+                os_sharpe = (mean_val / (std_val + 1e-9)) * np.sqrt(sharpe_ann_factor) 
+
+                runs.append({
+                    "os_curve": os_data.select(["ts", best_ps_id]).rename({best_ps_id: "pnl"}),
+                    "wfe": wfe,
+                    "metrics": {
+                        "is_pnl": is_pnl_total,
+                        "os_pnl": os_pnl_total,
+                        "os_sharpe": os_sharpe,
+                        "best_ps": best_ps_id
+                    }
+                })
+            
+            # Advances window by step_periods
+            start_idx += step_periods
+            current_is_end_idx += step_periods
+
+            # Ends if next IS doen't fit in matrix
+            if start_idx + is_periods > total_rows:
+                break
+        return runs
+
 
     def analyze(self):
+        original_matrix = self.matrix.clone()
+
+        if self.matrix_resolution == 'weekly':
+            self.matrix = self.matrix.upsample(time_column="ts", every="1d").fill_null(0)
+            self.matrix = self.matrix.group_by_dynamic("ts", every="1w").agg(pl.all().exclude("ts").sum())
+        elif self.matrix_resolution == "monthly":
+            self.matrix = self.matrix.group_by_dynamic("ts", every="1mo").agg(pl.all().exclude("ts").sum())
+
         for config in self.wfm_configs:
             is_l, os_l, stp = config
             wf_key = f"IS{is_l}_OS{os_l}"
 
             runs = self.run_wf(is_l, os_l, stp)
-            if not runs: continue
+            if not runs:
+                continue
         
-            full_oos_curve = pl.concat([r["os_curve"] for r in runs]).sort("datetime")
+            full_oos_curve = pl.concat([r["os_curve"] for r in runs]).sort("ts")
 
-            # Calculates Max Drawdown (Not underwater, but has the resolution of pnl curve)
+            # Max Drawdown da curva OOS
             cum_pnl = full_oos_curve["pnl"].cum_sum()
-            running_max = cum_pnl.cum_max()
-            drawdown = running_max - cum_pnl
-            max_dd = drawdown.max()
+            
+            total_pnl_value = full_oos_curve["pnl"].sum()
+            if isinstance(total_pnl_value, pl.Series):
+                total_pnl_value = total_pnl_value.item()
 
-            # WFE Sharpe Ratio
             wfes = [r["wfe"] for r in runs]
-            wfe_sharpe = np.mean(wfes) / (np.std(wfes) + 1e-9)
 
             self.all_wf_results[wf_key] = {
                 "curve": full_oos_curve,
-                "total_pnl": full_oos_curve["pnl"].sum(),
-                "max_dd": max_dd,
-                "avg_sharpe": np.mean([r["metrics"]["os_sharpe"] for r in runs]),
-                "avg_ev": np.mean([r["metrics"]["os_ev"] for r in runs]),
+                "total_pnl": float(total_pnl_value),
+                "max_dd": float((cum_pnl.cum_max() - cum_pnl).max()),
+                "avg_sharpe": float(np.mean([r["metrics"]["os_sharpe"] for r in runs])),
                 "wfe_mean": np.mean(wfes),
-                "wfe_sharpe": wfe_sharpe,
+                "wfe_sharpe": np.mean(wfes) / (np.std(wfes) + 1e-9),
                 "runs": runs,
                 "config": config
             }
-        return self._finalize()
-    
-    def _finalize(self):
-        if self.returns_mode == 'top':
-            best_wf = max(self.all_wf_results, key=lambda k: self.all_wf_results[k]['total_pnl'])
-            return self.all_wf_results[best_wf]
-        elif self.returns_mode == 'best_wf_comb':
-            return self._get_best_combination_curve()
         
+        return self._finalize()
+
+    def _finalize(self):
+        if not self.all_wf_results:
+            print("      > [Warning] No Walkforward results to finalize")
+            return None
+            
+        if self.returns_mode == 'top': # Returns walkforward with highest metric from all wfm
+            best_wf_key = max(self.all_wf_results, key=lambda k: self.all_wf_results[k]['total_pnl'])
+            return self.all_wf_results[best_wf_key]
         return self.all_wf_results
 
 
-    def _get_best_combination_curve(self):
-        combination_oos_data = []
 
-        # Aligns all OOS curves into a single DataFrame for comparison
-        for wf_key, result in self.all_wf_results.items():
-            curve = result['curve'].rename({"pnl": wf_key})
-            combination_oos_data.append(curve)
-
-        # DataFrame with all WF options side by side
-        matrix_df = combination_oos_data[0]
-        for next_df in combination_oos_data[1:]:
-            matrix_df = matrix_df.join(next_df, on="datetime", how="full", coalesce=True)
-
-        # Makes shure doen't exist duplicated data that breaks .item()
-        matrix_df = matrix_df.group_by("datetime").agg(pl.all().mean()).sort("datetime").fill_null(0.0) #matrix_df = matrix_df.sort("datetime").unique(subset=["datetime"]).fill_null(0.0)
-
-        # Creates a ranking with WFE to find best combination for each cronological window
-        final_data = []
-        all_dates = matrix_df["datetime"].unique().sort()
-        current_best_wf = list(self.all_wf_results.keys())[0]
-
-        for dt in all_dates: # Updates best WF combination based on already closed windows before data 'dt'
-            best_val = -float('inf') if self.wfm_wf_selection[1] == 'highest' else float('inf')
-
-            for wf_key, content in self.all_wf_results.items(): # Filters runs (windows) that finished before 'dt'
-                past_runs = [r for r in content['runs'] if r['os_curve']['datetime'].max() < dt]
-
-                if not past_runs: continue
-
-                # Calculates selection metric (WFE of historical average)
-                if self.wfm_wf_selection[2] == 'wfe':
-                    current_metric = np.mean([r['wfe'] for r in past_runs])
-                else: # pnl
-                    current_metric = sum([r['metrics']['os_pnl'] for r in past_runs])
-
-                if self.wfm_wf_selection[1] == 'highest':
-                    if current_metric > best_val:
-                        best_val = current_metric
-                        current_best_wf = wf_key
-                else:
-                    if current_metric < best_val:
-                        best_val = current_metric
-                        current_best_wf = wf_key
-
-            # Takes chosen WF daily PnL
-            day_slice = matrix_df.filter(pl.col("datetime") == dt).select(current_best_wf)
-            pnl_val = day_slice.row(0)[0] if day_slice.height > 0 else 0.0
-            final_data.append({
-                "datetime": dt,
-                "pnl": pnl_val,
-                "selected_wf": current_best_wf
-            })
-        return pl.DataFrame(final_data)
-    
     # Plotting
     def plot_heatmap(self):
         # 1. Aplicar o estilo escuro do Matplotlib
