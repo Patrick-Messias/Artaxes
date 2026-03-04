@@ -12,7 +12,9 @@ class Walkforward:
         self,
         matrix: pl.DataFrame=None,
         wfm_configs: List[List[int]]=[[12, 4, 4]], # [[IS, OS, STEP], ...]
+        wfm_is_always_higher_or_equal_to_oos: bool=True,
         matrix_resolution: Literal['daily', 'weekly', 'monthly'] = 'weekly',
+        time_mode: Literal['trade_days', 'calendar_days'] = 'calendar_days',
 
         # Parset Selection
         is_metric: Literal['pnl', 'sharpe', 'pnl_dd'] = 'pnl',
@@ -29,7 +31,9 @@ class Walkforward:
         # A matrix já vem pronta do seu _process_wfm_to_polars no Operation
         self.matrix = matrix 
         self.wfm_configs = wfm_configs
+        self.wfm_is_always_higher_or_equal_to_oos = wfm_is_always_higher_or_equal_to_oos
         self.matrix_resolution = matrix_resolution
+        self.time_mode = time_mode
 
         self.is_metric = is_metric
         self.is_top_n = is_top_n
@@ -95,119 +99,131 @@ class Walkforward:
 
     def run_wf(self, is_periods: int, os_periods: int, step_periods: int = None):
         if step_periods is None: step_periods = os_periods
-
         df = self._temp_df
         total_rows = len(df)
         runs = []
+        all_oos_returns = []
 
-        # Navegates by index (Lines) instead of Timedeltas
         start_idx = 0
         current_is_end_idx = is_periods
 
         while current_is_end_idx < total_rows:
             current_oos_end_idx = min(current_is_end_idx + os_periods, total_rows)
+            os_len = current_oos_end_idx - current_is_end_idx
 
-            # Garantees that OOS matrix limits aren't breached  
-            if current_oos_end_idx > total_rows:
-                current_oos_end_idx = total_rows
-
-            # Slices the Matrix by positions
             is_data = df.slice(start_idx, is_periods)
-            os_data = df.slice(current_is_end_idx, (current_oos_end_idx - current_is_end_idx))
+            os_data = df.slice(current_is_end_idx, os_len)
+            
+            if is_data.is_empty() or os_data.is_empty(): break
 
-            # Selects best param IS
             best_ps_id = self._find_best_parameter(is_data)
+            if best_ps_id is not None:
+                os_returns = os_data[best_ps_id].to_numpy()
+                all_oos_returns.extend(os_returns.tolist())
 
-            if best_ps_id is not None and not os_data.is_empty(): # Extracts values, making shure they are scalars with .item()
-                os_returns = os_data[best_ps_id]
+                # Cálculo de WFE (Walkforward Efficiency)
+                is_avg_pnl = is_data[best_ps_id].mean()
+                os_avg_pnl = os_returns.mean()
+                wfe = os_avg_pnl / (is_avg_pnl + 1e-9)
 
-                is_pnl_total = float(is_data[best_ps_id].sum() or 0.0)
-                os_pnl_total = float(os_returns.sum() or 0.0)
-
-                # WFE (Avg OS / Avg IS)
-                wfe = (os_pnl_total / os_periods) / (is_pnl_total / is_periods) if is_pnl_total != 0 else 0
-
-                # Adjust Sharpe's annualized factor according to resolution
-                sharpe_ann_factor = 252 if self.matrix_resolution == 'daily' else (52 if self.matrix_resolution == 'weekly' else 12)
-                m = os_returns.mean()
-                s = os_returns.std()
-                mean_val = float(m) if m is not None else 0.0
-                std_val = float(s) if s is not None else 0.0
-
-                os_sharpe = (mean_val / (std_val + 1e-9)) * np.sqrt(sharpe_ann_factor) 
+                # Sharpe OOS Simples
+                std_val = os_returns.std()
+                os_sharpe = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252) # Anualizado base diária
 
                 runs.append({
+                    "is_df": is_data,
                     "os_curve": os_data.select(["ts", best_ps_id]).rename({best_ps_id: "pnl"}),
-                    "wfe": wfe,
+                    "best_param": best_ps_id,
+                    "wfe": float(wfe),
                     "metrics": {
-                        "is_pnl": is_pnl_total,
-                        "os_pnl": os_pnl_total,
-                        "os_sharpe": os_sharpe,
-                        "best_ps": best_ps_id
+                        "os_sharpe": float(os_sharpe), 
+                        "is_metric_val": float(is_data[best_ps_id].sum())
                     }
                 })
             
-            # Advances window by step_periods
             start_idx += step_periods
             current_is_end_idx += step_periods
-
-            # Ends if next IS doen't fit in matrix
             if start_idx + is_periods > total_rows: break
 
-        return runs
+        return {"windows": runs, "cumulative_oos": np.cumsum(all_oos_returns).tolist()}
 
+    def analyze(self, is_always_higher_or_equal_to_oos=True):
+        if self.matrix is None or self.matrix.is_empty():
+            print("      > [Error] Matrix is empty")
+            return None
 
-    def analyze(self):
-        # Clears previous results to avoid leakage
         self.all_wf_results = {} 
-
-        # Keeps original matrix intact
         working_df = self.matrix.clone()
+        
+        # Ajuste de Resolução
+        if self.time_mode == 'calendar_days':
+            working_df = working_df.upsample(time_column="ts", every="1d").fill_null(0)
 
         if self.matrix_resolution == 'weekly':
-            working_df = (
-                working_df.upsample(time_column="ts", every="1d").fill_null(0)
-                .group_by_dynamic("ts", every="1w", closed="left")
-                .agg(pl.all().exclude("ts").sum())
-            )
+            working_df = working_df.group_by_dynamic("ts", every="1w", closed="left").agg(pl.all().exclude("ts").sum())
         elif self.matrix_resolution == 'monthly':
-            working_df = (
-                working_df.group_by_dynamic("ts", every="1mo", closed="left")
-                .agg(pl.all().exclude("ts").sum())
-            )
+            working_df = working_df.group_by_dynamic("ts", every="1mo", closed="left").agg(pl.all().exclude("ts").sum())
 
-        # Stores matrix temp for run_wf
         self._temp_df = working_df.sort("ts")
+        total_rows = len(self._temp_df)
 
-        for config in self.wfm_configs:
+        # Filtro de Robustez: IS >= OS
+        configs_to_run = self.wfm_configs
+        if is_always_higher_or_equal_to_oos:
+            configs_to_run = [c for c in self.wfm_configs if c[0] >= c[1]]
+            print(f"      > [WFM] Running {len(configs_to_run)} robust configurations (IS >= OS).")
+
+        for config in configs_to_run:
             is_l, os_l, stp = config
-            wf_key = f"IS{is_l}_OS{os_l}"
+            if is_l + os_l > total_rows: continue
 
-            runs = self.run_wf(is_l, os_l, stp)
-            if not runs:
-                continue
+            wf_key = f"IS{is_l}_OS{os_l}_ST{stp}"
+            wf_data = self.run_wf(is_l, os_l, stp)
+            
+            if not wf_data or not wf_data["windows"]: continue
+            runs = wf_data["windows"]
         
             full_oos_curve = pl.concat([r["os_curve"] for r in runs]).sort("ts")
+            equity_curve = full_oos_curve["pnl"].cum_sum()
+            
+            total_pnl = float(full_oos_curve["pnl"].sum() or 0.0)
+            max_dd = float((equity_curve.cum_max() - equity_curve).max() or 0.0)
+            
+            # Cálculo de WFE com Limite (Clip) para evitar estouros no gráfico
+            raw_wfes = [r['wfe'] for r in runs]
+            # Limitamos o WFE entre -10 e 10 para o Heatmap não perder a escala de cores
+            avg_wfe = float(np.clip(np.mean(raw_wfes), -10, 10))
+            
+            avg_sharpe = float(np.mean([r['metrics']['os_sharpe'] for r in runs]))
+            
+            windows_metadata = []
+            current_global_idx = 0
+            for r in runs:
+                pnl_data = r["os_curve"]["pnl"].to_numpy()
+                n_points = len(pnl_data)
+                global_indices = np.arange(current_global_idx, current_global_idx + n_points)
+                prev_cum_pnl = equity_curve[current_global_idx - 1] if current_global_idx > 0 else 0.0
+                window_equity = np.cumsum(pnl_data) + prev_cum_pnl
 
-            # Max Drawdown da curva OOS
-            cum_pnl = full_oos_curve["pnl"].cum_sum()
-            wfes = [r["wfe"] for r in runs]
-
-            total_pnl_value = float(full_oos_curve["pnl"].sum() or 0.0)
-            max_dd_val = float((cum_pnl.cum_max() - cum_pnl).max() or 0.0)
-            avg_sharpe = float(np.mean([r["metrics"]["os_sharpe"] for r in runs]) or 0.0)
-            wfe_mean = float(np.mean(wfes) or 0.0)
-            wfe_sharpe = float(np.mean(wfes) / (np.std(wfes) + 1e-9) or 0.0)
+                windows_metadata.append({
+                    'is_start': r['is_df']['ts'].min(), 'is_end': r['is_df']['ts'].max(),
+                    'os_start': r['os_curve']['ts'].min(), 'os_end': r['os_curve']['ts'].max(),
+                    'best_param': r.get('best_param', 'N/A'),
+                    'metric_val': r['metrics'].get('is_metric_val', 0.0),
+                    'global_x': global_indices.tolist(), 'global_y': window_equity.tolist()
+                })
+                current_global_idx += n_points
 
             self.all_wf_results[wf_key] = {
-                "curve": full_oos_curve,
-                "total_pnl": total_pnl_value,
-                "max_dd": max_dd_val,
+                "config": config,
+                "equity": equity_curve.to_list(),
+                "total_pnl": total_pnl,
+                "max_dd": max_dd,
                 "avg_sharpe": avg_sharpe,
-                "wfe_mean": wfe_mean,
-                "wfe_sharpe": wfe_sharpe,
+                "wfe": avg_wfe,
+                "wfe_sharpe": avg_wfe / (np.std(raw_wfes) + 1e-9),
                 "runs": runs,
-                "config": config
+                "windows": windows_metadata
             }
         
         return self._finalize()
@@ -284,49 +300,50 @@ class Walkforward:
         return self.all_wf_results
 
     # Plotting
-    def plot_heatmap(self):
-        # 1. Aplicar o estilo escuro do Matplotlib
+    def plot_heatmap(self, metric='wfe'):
         plt.style.use('dark_background')
-
+        
         data = []
-        for key, res in self.all_wf_results.items():
-            is_l, os_l = res['config'][0], res['config'][1]
-            data.append({"IS": is_l, "OS": os_l, "PnL": res['total_pnl']})
+        for res in self.all_wf_results.values():
+            data.append({
+                "IS": res['config'][0], 
+                "OS": res['config'][1], 
+                "Val": res[metric]
+            })
 
-        df_plot = pd.DataFrame(data).pivot(index="IS", columns="OS", values="PnL")
+        if not data:
+            print("      > [Error] No data to plot heatmap.")
+            return
+
+        df_plot = pd.DataFrame(data).pivot(index="IS", columns="OS", values="Val")
+        # Garantir que o eixo IS fique em ordem decrescente
         df_plot = df_plot.sort_index(ascending=False)
 
-        # 2. Configurar o Seaborn para contexto escuro
-        # 'darkgrid' ou 'white' (com dark_background o white fica transparente/escuro)
-        sns.set_theme(style="darkgrid", rc={"axes.facecolor": "#121212", "figure.facecolor": "#121212"})
-
         plt.figure(figsize=(12, 8))
-        
-        # 3. Gerar o heatmap
-        # cmap="RdYlGn" continua bom, mas você pode usar "viridis" ou "magma" para um look mais 'cyberpunk'
+        sns.set_theme(style="darkgrid", rc={"axes.facecolor": "#0a0a0a", "figure.facecolor": "#0a0a0a"})
+
+        # mask detecta onde os dados são nulos (combinações IS < OS filtradas)
+        mask = df_plot.isnull()
+
         ax = sns.heatmap(
             df_plot, 
             annot=True, 
             fmt=".2f", 
             cmap="RdYlGn", 
-            center=0,
-            annot_kws={"size": 10, "weight": "bold"}, # Melhora leitura no escuro
+            center=0 if metric != 'max_dd' else None,
+            mask=mask, # Isso mantém a parte filtrada escura/vazia
+            annot_kws={"size": 10, "weight": "bold"},
             linewidths=.5, 
-            linecolor='#333333' # Cor da divisão das células
+            linecolor='#333333',
+            cbar_kws={'label': metric.upper()}
         )
 
-        plt.title("WFM Matrix - Robustness Analysis (Dark Theme)", color='white', fontsize=15)
-        plt.xlabel("Out-of-Sample Size (OS)", color='white')
-        plt.ylabel("In-Sample Size (IS)", color='white')
-        
-        # Ajustar as cores das labels dos eixos
+        plt.title(f"WFM Matrix - {metric.upper()} Analysis", color='white', fontsize=14, pad=20)
+        plt.xlabel("Out-of-Sample (OS)", color='white')
+        plt.ylabel("In-Sample (IS)", color='white')
         plt.xticks(color='white')
         plt.yticks(color='white')
-
         plt.show()
-        
-        # Opcional: Resetar para o tema padrão após o plot para não afetar outros gráficos
-        plt.style.use('default')
 
     def plot_advanced_heatmap(self, metric: Literal['total_pnl', 'max_dd', 'avg_sharpe', 'wfe_sharpe'] = 'total_pnl'):
         # 1. Aplicar o estilo escuro
@@ -391,7 +408,142 @@ class Walkforward:
             })
         return pl.DataFrame(summary).sort("Total_PnL", descending=True)
         
+    def plot_timeline(self, wf_result: Dict, show_is=True, show_os=True, show_metrics=True):
+        if not wf_result or 'windows' not in wf_result or not wf_result['windows']:
+            print("      > [Error] No windows data to plot timeline.")
+            return
 
+        import matplotlib.dates as mdates
+        from matplotlib.patches import Patch
+        
+        plt.style.use('dark_background')
+        windows = wf_result['windows']
+        config = wf_result['config']
+        
+        color_is = '#004d4d' # Azul Petróleo
+        color_os = '#4169E1' # Azul Royal
+        
+        # Aumenta a altura proporcionalmente ao número de janelas
+        fig, ax = plt.subplots(figsize=(14, len(windows) * 0.4 + 2))
+        fig.patch.set_facecolor('#0a0a0a')
+        ax.set_facecolor('#0a0a0a')
+
+        use_index = self.time_mode == 'trade_days'
+        
+        # Rastreadores para garantir que o eixo X cubra tudo
+        x_min = float('inf')
+        x_max = float('-inf')
+
+        for i, win in enumerate(windows):
+            if use_index:
+                # Lógica para TRADE_DAYS (Índices sequenciais)
+                is_start_val = i * config[2]
+                is_width = config[0]
+                os_start_val = is_start_val + is_width
+                os_width = config[1]
+                
+                current_end = os_start_val + os_width
+                current_start = is_start_val
+            else:
+                # Lógica para CALENDAR_DAYS (Datas reais)
+                is_start_val = mdates.date2num(win['is_start'])
+                is_end_val = mdates.date2num(win['is_end'])
+                os_start_val = mdates.date2num(win['os_start'])
+                os_end_val = mdates.date2num(win['os_end'])
+                
+                is_width = is_end_val - is_start_val
+                os_width = os_end_val - os_start_val
+
+                # Correção para garantir visibilidade mínima
+                is_width = max(is_width, 0.1)
+                os_width = max(os_width, 0.1)
+                
+                current_start = is_start_val
+                current_end = os_end_val
+
+            # Atualiza os limites globais do gráfico
+            x_min = min(x_min, current_start)
+            x_max = max(x_max, current_end)
+
+            # Plotagem das barras In-Sample
+            if show_is:
+                ax.broken_barh([(is_start_val, is_width)], (i - 0.4, 0.8), 
+                               facecolors=color_is, alpha=0.5, edgecolor='#1a1a1a', linewidth=0.5)
+            
+            # Plotagem das barras Out-of-Sample
+            if show_os:
+                ax.broken_barh([(os_start_val, os_width)], (i - 0.4, 0.8), 
+                               facecolors=color_os, alpha=1.0, edgecolor='white', linewidth=1.0)
+
+            # Métricas ao lado de cada janela
+            if show_metrics:
+                text_x = os_start_val + os_width
+                ax.text(text_x, i, f"  {win['best_param']} ({win['metric_val']:.2f})", 
+                        va='center', color='white', fontsize=8, alpha=0.8)
+
+        # --- AJUSTE DOS LIMITES E FORMATAÇÃO ---
+        
+        # Adiciona 10% de margem à direita para o texto das métricas não ser cortado
+        margin = (x_max - x_min) * 0.10
+        ax.set_xlim(x_min, x_max + margin)
+        
+        # Garante que o eixo Y mostre todas as janelas (incluindo a última no topo)
+        ax.set_ylim(-1, len(windows))
+
+        if not use_index:
+            ax.xaxis_date()
+            ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+            plt.xticks(rotation=45, ha='right', color='#888888')
+        else:
+            ax.set_xlabel("Sequential Periods / Trades", color='#888888')
+
+        ax.set_yticks(range(len(windows)))
+        ax.set_yticklabels([f"W {i+1}" for i in range(len(windows))], color='#888888')
+        
+        title_str = f"Walkforward Timeline | {self.time_mode.upper()} | IS:{config[0]} OS:{config[1]} ST:{config[2]}"
+        ax.set_title(title_str, color='white', loc='left', pad=25, fontsize=12)
+        
+        ax.grid(True, axis='x', linestyle='--', alpha=0.1)
+        
+        # Legenda
+        legend_elements = [
+            Patch(facecolor=color_is, label='In-Sample (Train)'), 
+            Patch(facecolor=color_os, label='Out-of-Sample (Live)')
+        ]
+        ax.legend(handles=legend_elements, loc='upper right', frameon=False, 
+                  bbox_to_anchor=(1, 1.12), ncol=2, fontsize=9)
+
+        plt.tight_layout()
+        plt.show()
+
+    def plot_oos_curves(self, wf_result: Dict = None):
+        if not self.all_wf_results:
+            print("      > [Error] No results found.")
+            return
+
+        plt.style.use('dark_background')
+        fig, ax = plt.subplots(figsize=(12, 6))
+        fig.patch.set_facecolor('#0a0a0a')
+        ax.set_facecolor('#0a0a0a')
+
+        # Se wf_result foi passado (da Operation.py), tentamos extrair a chave dele
+        selected_key = None
+        if wf_result and 'config' in wf_result:
+            c = wf_result['config']
+            selected_key = f"IS{c[0]}_OS{c[1]}_ST{c[2]}"
+        else:
+            selected_key = max(self.all_wf_results, key=lambda k: self.all_wf_results[k]['total_pnl'])
+
+        for wf_key, data in self.all_wf_results.items():
+            if wf_key == selected_key:
+                ax.plot(data['equity'], color='#4169E1', lw=2.5, label=f"Selected: {wf_key}", zorder=10)
+            else:
+                ax.plot(data['equity'], color='#C3C3C3', lw=1, alpha=0.2, zorder=1)
+
+        ax.set_title("Walkforward Matrix Evolution", color='white', loc='left')
+        ax.legend(frameon=False, fontsize='small')
+        plt.show()
 
 
 
