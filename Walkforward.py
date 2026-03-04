@@ -23,7 +23,7 @@ class Walkforward:
         is_order: SortOrder = 'des',
 
         # Final WF Seletion from WFM
-        wf_selection_metric: Literal['pnl', 'pnl_dd', 'wfe', 'wfe_sharpe', 'avg_sharpe', 'wfe_mean', 'wfe_sharpe'] = 'pnl',
+        wf_selection_metric: Literal['pnl', 'pnl_dd', 'pnl_sharpe', 'wfe', 'wfe_sharpe'] = 'pnl',
         wf_selection_analysis_radius_n: int=2,
         wf_selection_logic: Literal['highest', 'highest_stable', 'stable'] = 'highest',
         wf_returns_mode: Literal['selected', 'all'] = 'selected'
@@ -60,7 +60,7 @@ class Walkforward:
             stats = is_data.select([pl.col(c).sum().alias(c) for c in ps_cols])
         elif self.is_metric == "pnl_dd": #PnL acumulado / Range da curva (Proxy de Drawdown)
             stats = is_data.select([
-                (pl.col(c).sum() / (pl.col(c).cumsum().max() - pl.col(c).cumsum().min() + 1e-6)).alias(c)
+                (pl.col(c).sum() / (pl.col(c).cum_sum().max() - pl.col(c).cum_sum().min() + 1e-6)).alias(c)
                 for c in ps_cols
             ])
         elif self.is_metric == "sharpe":
@@ -107,6 +107,8 @@ class Walkforward:
         start_idx = 0
         current_is_end_idx = is_periods
 
+        _WFE_MIN_DENOMINATOR = 1e-4  # Magnitude mínima do IS para WFE ser válido
+
         while current_is_end_idx < total_rows:
             current_oos_end_idx = min(current_is_end_idx + os_periods, total_rows)
             os_len = current_oos_end_idx - current_is_end_idx
@@ -121,20 +123,34 @@ class Walkforward:
                 os_returns = os_data[best_ps_id].to_numpy()
                 all_oos_returns.extend(os_returns.tolist())
 
-                # Cálculo de WFE (Walkforward Efficiency)
-                is_avg_pnl = is_data[best_ps_id].mean()
-                os_avg_pnl = os_returns.mean()
-                wfe = os_avg_pnl / (is_avg_pnl + 1e-9)
+                # Cálculo de WFE (Walkforward Efficiency) - normalizado por período
+                is_total_pnl = float(is_data[best_ps_id].sum())
+                os_total_pnl = float(os_returns.sum())
+
+                if abs(is_total_pnl) < _WFE_MIN_DENOMINATOR:
+                    # IS perto de zero: denominador instável, janela excluída da média
+                    wfe = float('nan')
+                elif is_total_pnl < 0:
+                    # IS negativo: razão sem interpretação válida (seleção em período perdedor)
+                    wfe = 0.0
+                else:
+                    # Normaliza pelo comprimento real de cada janela para comparar configs diferentes
+                    is_avg = is_total_pnl / is_periods
+                    os_avg = os_total_pnl / os_len
+                    wfe = os_avg / is_avg
+                    # Clamp por janela individual — protege a média agregada de outliers
+                    wfe = float(np.clip(wfe, -2.0, 2.0))
 
                 # Sharpe OOS Simples
                 std_val = os_returns.std()
-                os_sharpe = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252) # Anualizado base diária
+                os_avg_pnl = os_returns.mean()
+                os_sharpe = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252)
 
                 runs.append({
                     "is_df": is_data,
                     "os_curve": os_data.select(["ts", best_ps_id]).rename({best_ps_id: "pnl"}),
                     "best_param": best_ps_id,
-                    "wfe": float(wfe),
+                    "wfe": float(wfe) if not np.isnan(wfe) else float('nan'),
                     "metrics": {
                         "os_sharpe": float(os_sharpe), 
                         "is_metric_val": float(is_data[best_ps_id].sum())
@@ -146,6 +162,7 @@ class Walkforward:
             if start_idx + is_periods > total_rows: break
 
         return {"windows": runs, "cumulative_oos": np.cumsum(all_oos_returns).tolist()}
+
 
     def analyze(self, is_always_higher_or_equal_to_oos=True):
         if self.matrix is None or self.matrix.is_empty():
@@ -188,13 +205,22 @@ class Walkforward:
             
             total_pnl = float(full_oos_curve["pnl"].sum() or 0.0)
             max_dd = float((equity_curve.cum_max() - equity_curve).max() or 0.0)
+            pnl_dd = float(total_pnl / (max_dd + 1e-9) or 0.0)
             
-            # Cálculo de WFE com Limite (Clip) para evitar estouros no gráfico
+            # Agrega WFE excluindo janelas inválidas (nan) antes da média
             raw_wfes = [r['wfe'] for r in runs]
-            # Limitamos o WFE entre -10 e 10 para o Heatmap não perder a escala de cores
-            avg_wfe = float(np.clip(np.mean(raw_wfes), -10, 10))
+            valid_wfes = [v for v in raw_wfes if not np.isnan(v)]
+
+            if valid_wfes:
+                avg_wfe = float(np.mean(valid_wfes))
+                # Clamp final na média como segunda camada de defesa
+                avg_wfe = float(np.clip(avg_wfe, -2.0, 2.0))
+                wfe_std = float(np.std(valid_wfes)) if len(valid_wfes) > 1 else 1.0
+            else:
+                avg_wfe = 0.0
+                wfe_std = 1.0
             
-            avg_sharpe = float(np.mean([r['metrics']['os_sharpe'] for r in runs]))
+            pnl_sharpe = float(np.mean([r['metrics']['os_sharpe'] for r in runs]))
             
             windows_metadata = []
             current_global_idx = 0
@@ -219,9 +245,10 @@ class Walkforward:
                 "equity": equity_curve.to_list(),
                 "total_pnl": total_pnl,
                 "max_dd": max_dd,
-                "avg_sharpe": avg_sharpe,
+                "pnl_dd": pnl_dd,
+                "pnl_sharpe": pnl_sharpe,
                 "wfe": avg_wfe,
-                "wfe_sharpe": avg_wfe / (np.std(raw_wfes) + 1e-9),
+                "wfe_sharpe": avg_wfe / (wfe_std + 1e-9),
                 "runs": runs,
                 "windows": windows_metadata
             }
@@ -233,7 +260,10 @@ class Walkforward:
             print("      > [Warning] No Walkforward results to finalize")
             return None
         
-        metric_key = 'total_pnl' if self.wf_selection_metric == 'pnl' else self.wf_selection_metric
+        _metric_alias = {
+            'pnl': 'total_pnl',
+        }
+        metric_key = _metric_alias.get(self.wf_selection_metric, self.wf_selection_metric)
 
         # If highest and selected then cuts here
         if self.wf_selection_logic == 'highest' and self.wf_returns_mode == 'selected':
@@ -345,7 +375,7 @@ class Walkforward:
         plt.yticks(color='white')
         plt.show()
 
-    def plot_advanced_heatmap(self, metric: Literal['total_pnl', 'max_dd', 'avg_sharpe', 'wfe_sharpe'] = 'total_pnl'):
+    def plot_advanced_heatmap(self, metric: Literal['total_pnl', 'max_dd', 'pnl_sharpe', 'wfe_sharpe'] = 'total_pnl'):
         # 1. Aplicar o estilo escuro
         plt.style.use('dark_background')
         sns.set_theme(style="darkgrid", rc={"axes.facecolor": "#121212", "figure.facecolor": "#121212"})

@@ -1243,12 +1243,12 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Walkforward(
-                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([4, 12, 24, 48], [1, 4, 12, 24])],
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([4, 12, 24, 48], [4, 12, 24])],
                 wfm_is_always_higher_or_equal_to_oos=True,
                 matrix_resolution='weekly', time_mode = 'calendar_days',
                 is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
-                wf_selection_metric='wfe', wf_selection_analysis_radius_n=2,
-                wf_selection_logic='highest', wf_returns_mode='selected'
+                wf_selection_metric='wfe', wf_selection_analysis_radius_n=1,
+                wf_selection_logic='highest_stable', wf_returns_mode='selected'
             ),
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                                                  order_type='market', limit_order_base_calc_ref_price='open', offset=0.0, 
