@@ -51,7 +51,7 @@ class Walkforward:
         if is_data.is_empty(): return None
 
         # Unpacks WF Parset selection config
-        is_descending = False if self.is_logic == 'asc' else True
+        is_descending = False if self.is_order == 'asc' else True
 
         # Calculates metrics for all columns (ps_ids)
         ps_cols = [c for c in is_data.columns if c != "ts"]
@@ -326,7 +326,7 @@ class Walkforward:
             return self.all_wf_results[best_key]
         if self.wf_returns_mode == 'all':
             for k in self.all_wf_results:
-                self.all_wf_results[key]['stability_score'] = final_scores.get(key, 0)
+                self.all_wf_results[k]['stability_score'] = final_scores.get(k, 0)
         return self.all_wf_results
 
     # Plotting
@@ -418,7 +418,7 @@ class Walkforward:
         plt.figure(figsize=(12, 6))
         for wf_key, res in self.all_wf_results.items():
             wfes = [r['wfe'] for r in res['runs']]
-            dates = [r['os_curve']['datetime'].min() for r in res['runs']]
+            dates = [r['ts']['datetime'].min() for r in res['runs']]
             plt.plot(dates, wfes, label=f"{wf_key} (Avg: {res['wfe']:.2f})")
         
         plt.axhline(y=1.0, color='r', linestyle='--', label='Perfect Efficiency (1.0)')
@@ -430,11 +430,13 @@ class Walkforward:
     def get_summary(self): # Returns statistical summary of all WFs tested
         summary = []
         for key, res in self.all_wf_results.items():
+            wfes = [r['wfe'] for r in res['runs']]
+            valid = [v for v in wfes if not np.isnan(v)]
             summary.append({
                 "WF_Config": key,
                 "Total_PnL": res['total_pnl'],
                 'Avg_WFE': res['wfe'],
-                "Consistency": np.std([r['wfe'] for r in res['runs']])
+                "Consistency": np.std(valid) if valid else 0.0
             })
         return pl.DataFrame(summary).sort("Total_PnL", descending=True)
         

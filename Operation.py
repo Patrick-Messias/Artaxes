@@ -969,11 +969,17 @@ class Operation(BaseClass):
                             "metric_wf_parset": wf_parset_metric
                         }
                     else: # Mode ALL, wf_final_results is a dict with dicts
-                        def get_val(val):
-                            val = wf_final_results.get(res_key, 0.0)
-                            if hasattr(val, "item"): return float(val.item())
-                            try: return float(val)
+                        def get_val(key):
+                            res = wf_final_results.get(key, {})
+                            v = res.get(res_key, 0.0) if isinstance(res, dict) else 0.0
+                            if hasattr(v, "item"): return float(v.item())
+                            try: return float(v)
                             except: return 0.0
+                        # def get_val(val):
+                        #     val = wf_final_results.get(res_key, 0.0)
+                        #     if hasattr(val, "item"): return float(val.item())
+                        #     try: return float(val)
+                        #     except: return 0.0
                             
                         best_key = builtins.max(wf_final_results.keys(), key=get_val)
                         display_val = get_val(best_key)
@@ -1136,10 +1142,10 @@ if __name__ == "__main__":
             'exit_nb_long': range(0, 0+1, 3),
             'exit_nb_short': range(0, 0+1, 3),
             
-            'sl_perc': range(2, 2+1, 1), # 3
+            'sl_perc': range(2, 8+1, 3), # 3
             'tp_perc': range(5, 5+1, 8), 
-            'param1': range(21, 147+1, 21), #50
-            'param2': range(2, 2+1, 1), # 3
+            'param1': range(21, 85+1, 21), #50
+            'param2': range(8, 24+1, 8), # 3
             'param3': ['sma'] #, 'ema', 'ema'
         }
     }
@@ -1152,7 +1158,7 @@ if __name__ == "__main__":
 
     # User imput Indicators
     ind = { 
-        'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param1'),
+        'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param2'),
         'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         # 'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
@@ -1218,8 +1224,8 @@ if __name__ == "__main__":
     exit_tp_long_price = None #[2000] #[atr * tp_perc]
     exit_tp_short_price = None #[2000] #[atr * tp_perc]
 
-    exit_sl_long_price = None #[400] #[atr * sl_perc]
-    exit_sl_short_price = None #[400] #[atr * sl_perc]
+    exit_sl_long_price = [atr * sl_perc] #[400] #
+    exit_sl_short_price = [atr * sl_perc] #[400] #
 
     entry_long_limit_position = None #["low"]
     entry_short_limit_position = None #["high"]
@@ -1243,7 +1249,7 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Walkforward(
-                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([4, 12, 24, 48], [4, 12, 24])],
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])],
                 wfm_is_always_higher_or_equal_to_oos=True,
                 matrix_resolution='weekly', time_mode = 'calendar_days',
                 is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
