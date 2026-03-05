@@ -430,13 +430,12 @@ class Walkforward:
     def get_summary(self): # Returns statistical summary of all WFs tested
         summary = []
         for key, res in self.all_wf_results.items():
-            wfes = [r['wfe'] for r in res['runs']]
-            valid = [v for v in wfes if not np.isnan(v)]
+            valid_wfes = [r['wfe'] for r in res['runs'] if not np.isnan(r['wfe'])]
             summary.append({
                 "WF_Config": key,
                 "Total_PnL": res['total_pnl'],
                 'Avg_WFE': res['wfe'],
-                "Consistency": np.std(valid) if valid else 0.0
+                "Consistency": np.std(valid_wfes) if valid_wfes else 0.0
             })
         return pl.DataFrame(summary).sort("Total_PnL", descending=True)
         
@@ -580,56 +579,6 @@ class Walkforward:
 
 
 
-# def generate_mock_data(n_params=10, n_days=500):
-#     all_raw_data = []
-#     start_date = datetime(2022, 1, 1)
-#     dates = [(start_date + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(n_days)]
-    
-#     for i in range(n_params):
-#         # Gera retornos: PS_0 é bom, PS_4 é lixo, outros são neutros
-#         mu = 0.001 if i == 0 else (-0.001 if i == n_params-1 else 0.0)
-#         pnls = np.random.normal(mu, 0.01, n_days).tolist()
-#         all_raw_data.append([dates, pnls])
-        
-#     return all_raw_data
-
-# import itertools
-# def run_full_grid_test(raw_data, is_values: List[int], os_values: List[int], step_ratio: float = 1.0):
-#     """
-#     Executa o Walkforward para todas as combinações possíveis de IS e OS.
-#     step_ratio: define o step como proporção do OS (ex: 1.0 significa step = os_len)
-#     """
-#     # Gera todas as combinações possíveis: [(21, 6), (21, 16), (63, 6), (63, 16)...]
-#     full_grid = []
-#     for is_l, os_l in itertools.product(is_values, os_values):
-#         step = int(os_l * step_ratio)
-#         full_grid.append([is_l, os_l, step])
-    
-#     # Instancia a classe com a grade completa
-#     wf = Walkforward(
-#         raw_data=raw_data,
-#         wfm=full_grid,
-#         returns='best_wf_comb'
-#     )
-    
-#     return wf
-
-# # --- SETUP DO TESTE ---
-# is_options = [21, 63, 168, 252] #[21, 42, 63, 84, 105, 126, 147, 168, 189, 210, 231, 252]
-# os_options = [21, 63, 168, 252] #[21, 42, 63, 84, 105, 126, 147, 168, 189, 210, 231, 252]
-
-# raw_mock = generate_mock_data(n_params=5, n_days=1500)
-
-# wf_grid = run_full_grid_test(raw_mock, is_options, os_options)
-# wf_grid.analyze()
-# wf_grid.plot_heatmap()
-# wf_grid.plot_advanced_heatmap(metric='wfe_sharpe')
-
-
-# Se step < os_len pode acontecer de ter janelas com trades sobrepostos o que pode criar um vies
-# para resolver isso foi modificado para usar a média dos resultados sobrespostos
-# 1. Desenvolver as métricas do gem
-# 2. Testar com resultados reais
 
 
 

@@ -19,6 +19,8 @@ struct Trade {
     std::optional<double> max_fav_price;
     std::optional<double> max_adv_price;
 
+    std::optional<double> prev_day_price;
+
     std::optional<double> mfe;
     std::optional<double> mae;
     std::optional<double> exit_price;

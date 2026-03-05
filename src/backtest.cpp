@@ -543,9 +543,11 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
                         counter+=1;
                     }
 
+                    double prev_p = it->prev_day_price.value_or(entry);
+                    double daily_var = ((exit - prev_p) / entry) * 100  * (is_long ? 1 : -1);
                     DailyResult res;
                     res.timestamp = format_datetime_to_int(datetime[i]);
-                    res.pnl = pnl;
+                    res.pnl = daily_var;
                     res.ps_id = ps_id;
                     daily_results_matrix.push_back(res);
 
@@ -619,7 +621,8 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
                     std::string instant_exit = check_limit_instant_exit(is_long, entry, curr_sl, curr_tp, open[i], high[i], low[i], close[i]);
 
                     if (instant_exit != "") { // If SL/TP hit instantaneously, we close the trade immediately at the respective level
-                        p_it->exit_price = (instant_exit == "TP" ? curr_tp : curr_sl);
+                        double exit = (instant_exit == "TP" ? curr_tp : curr_sl);
+                        p_it->exit_price = exit;
                         p_it->exit_reason = instant_exit;
                         p_it->exit_datetime = datetime[i];
                         p_it->status = "closed";
@@ -634,10 +637,11 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
                             counter++;
                         }
 
-                        // Move para o histórico de trades finalizadas
+                        // Entry and exit in the same bar, calculates based on entry
+                        double daily_var = ((exit - entry) / entry) * 100  * (is_long ? 1 : -1);
                         DailyResult res;
                         res.timestamp = format_datetime_to_int(datetime[i]);
-                        res.pnl = pnl;
+                        res.pnl = daily_var;
                         res.ps_id = ps_id;
                         daily_results_matrix.push_back(res);
 
@@ -653,11 +657,13 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
                             counter++;
                         }
 
+                        // Since TP/SL wheren't immediatly hit, normal entry 
                         DailyResult res;
                         res.timestamp = format_datetime_to_int(datetime[i]);
                         res.pnl = 0.0;
                         res.ps_id = ps_id;
                         daily_results_matrix.push_back(res);
+                        p_it->prev_day_price = entry;
 
                         active_trades.push_back(std::move(*p_it));
                         p_it = pending_orders.erase(p_it);
@@ -804,6 +810,7 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
                             res.pnl = 0.0;
                             res.ps_id = ps_id;
                             daily_results_matrix.push_back(res);
+                            t.prev_day_price = final_entry;
 
                             active_trades.push_back(std::move(t));
                             is_long ? ++day_trades_long : ++day_trades_short;
@@ -903,12 +910,13 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
 
                 if (closed) {
                     double entry = *it->entry_price;
+                    double exit = *it->exit_price;
                     it->exit_datetime = datetime[i];
                     it->exit_reason = reason;
                     it->status = "closed";
                     it->mae = *it->max_adv_price;
                     it->mfe = *it->max_fav_price;
-                    double pnl = ((*it->exit_price - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                    double pnl = ((exit - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
                     it->profit = pnl;
                     temp_cumulative_pnl += *it->profit;
 
@@ -918,9 +926,11 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
                         counter+=1;
                     }
 
+                    double prev_p = it->prev_day_price.value_or(entry);
+                    double daily_var = ((exit - prev_p) / entry) * 100  * (is_long ? 1 : -1);
                     DailyResult res;
                     res.timestamp = format_datetime_to_int(datetime[i]);
-                    res.pnl = pnl;
+                    res.pnl = daily_var;
                     res.ps_id = ps_id;
                     daily_results_matrix.push_back(res);
 
@@ -950,17 +960,21 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
             // --- 4. Daily PnL Update
             if (day_switched || daytrade_time_final || is_last_bar) {
                 for (auto& trade : active_trades) {
-                    double entry_p = *trade.entry_price;
+                    double entry = *trade.entry_price;
                     double current_p = close[i];
                     bool is_long = (trade.lot_size.value_or(0.0) > 0);
 
-                    float pnl = (float)(((current_p - entry_p) / entry_p) * 100.0) * (is_long ? 1.0 : -1.0);
+                    float pnl = (float)(((current_p - entry) / entry) * 100.0) * (is_long ? 1.0 : -1.0);
 
+                    double prev_p = trade.prev_day_price.value_or(entry);
+                    double daily_var = ((current_p - prev_p) / entry) * 100  * (is_long ? 1 : -1);
                     DailyResult res;
                     res.timestamp = format_datetime_to_int(datetime[i]);
-                    res.pnl = pnl;
+                    res.pnl = daily_var;
                     res.ps_id = ps_id;
                     daily_results_matrix.push_back(res);
+
+                    trade.prev_day_price = current_p;
                 }
             }
         }

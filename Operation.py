@@ -1242,9 +1242,6 @@ if __name__ == "__main__":
     be_neg_long_value = None #[atr]
     be_neg_short_value = None #[atr]
 
-    # 1. Adicionar limite de plot para os plots do wf
-    # 2. 
-
     AT15 = Strat(
         StratParams(
             name="AT15",
