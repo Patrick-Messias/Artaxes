@@ -391,9 +391,9 @@ class Operation(BaseClass):
             # 2. Payload final setup (key names align with Operation::run in cpp)
             final_payload = {
                 "asset_header": asset_batch.get('asset_header', 'Unknown'),
-                "data": df.to_dict(as_series=False), # Now only has numbers and string datetime
-                "time_settings": asset_batch.get('time_settings', {}),
+                "data": df.to_dict(as_series=False),
                 "execution_settings": asset_batch.get('execution_settings', {}),
+                "shared_indicators": asset_batch.get('shared_indicators', {}),  # <- adiciona
                 "simulations": asset_batch.get('simulations', [])
             }
 
@@ -1127,7 +1127,6 @@ if __name__ == "__main__":
 
 
 
-    # REIMPLEMENTAR SISTEMA DE SINAIS, GERAR SINAIS PY E ENVIAR SINAIS, COLUNAS RELEVANTES E 1 DF DE CADA ASSET RELEVANTE PARA CPP
     # def entry_long(self, df, params):
     #     # Regras de entrada (3 candles)
     #     df = df.with_columns(
@@ -1186,7 +1185,7 @@ if __name__ == "__main__":
     be_neg_long_value = None #[atr]
     be_neg_short_value = None #[atr]
 
-    # 1. Recriar ponte py - cpp - py
+    # XXX 1. Recriar ponte py - cpp - py
     # 2. Recriar sistema de regras para ficar mais simples (def)
     # - Adicionar lado
     # - Sistema pra recriar trades Open Close pnl com trades do WFM ou já pegar direto?
