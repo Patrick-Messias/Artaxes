@@ -10,13 +10,13 @@
 using json = nlohmann::json;
 
 class Operation {
-public:
-    // Adicionamos 'static' para o Engine poder chamar sem instanciar a classe
+public: // Static so that Engine will call without initiating a class
     static json run(const std::string& header, 
                     const std::map<std::string, std::vector<double>>& data,
                     const std::vector<std::string>& datetime,
                     const nlohmann::json& sim_params,
-                    const nlohmann::json& exec_settings
+                    const nlohmann::json& exec_settings,
+                    const nlohmann::json& shared_inds
                     );
 };
 

@@ -11,7 +11,9 @@ json Operation::run(const std::string& header,
                     const std::map<std::string, std::vector<double>>& data,
                     const std::vector<std::string>& datetime,
                     const nlohmann::json& sim_params,
-                    const nlohmann::json& exec_settings) {
+                    const nlohmann::json& exec_settings,
+                    const nlohmann::json& shared_inds
+                    ) {
 
     // Lista para armazenar os resultados de todas as simulações
     std::vector<json> all_trades_results;
@@ -36,6 +38,11 @@ json Operation::run(const std::string& header,
 
         // Creates local copy of OHLC for this thread
         std::map<std::string, std::vector<double>> local_data = data; 
+
+        // Injects shared indicators unce for all param_sets
+        for (auto& [key, val] : shared_inds.items()) {
+            local_data[key] = val.get<std::vector<double>>();
+        }
 
         // Injects indicadots into local_data (if any)
         if (sim.contains("indicator_data") && sim["indicator_data"].is_object()) {
