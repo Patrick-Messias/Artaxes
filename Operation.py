@@ -125,7 +125,6 @@ class Operation(BaseClass):
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
-        unique_indicators_lists = {}
 
         for model_name, model_obj in models.items():
             strats = model_obj.strat
@@ -140,6 +139,7 @@ class Operation(BaseClass):
                 for asset_name in assets:
                     asset_class = self.assets.get(asset_name)
                     if not asset_class: continue
+                    
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
                     base_asset_df = asset_class.data_get(model_tf)
 
@@ -148,37 +148,23 @@ class Operation(BaseClass):
                     
                     # Normalize for cpp
                     exec_set_mod = self.prepare_time_params(exec_set_raw)
-        
-                    # Creates batch preset
-                    asset_batch = {
-                        "asset_header": f"{model_name}_{strat_name}_{asset_name}",
-                        "data": base_asset_df.to_dict(as_series=False),
-                        "execution_settings": exec_set_mod,
-                        "simulations": []
-                    }
+
+                    n_ps = len(param_sets)
+
+                    # (LOCAL) For ind data management and bridge py-cpp to aboid redundant data copy
+                    ind_cache: dict[str, dict] = {} # unique_key -> col_data_map
+                    ind_usage: dict[str, int] = {} # unique_key -> how many param_sets are used
+                    ps_ind_keys: dict[str, list] = {} # ps_name -> list of unique_keys used
 
                     for ps_name, ps_dict in param_sets.items():
-                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][ps_name] = {
-                            'param_set_dict': ps_dict,
-                            'trades': []
-                        }
-                        indicator_data = {}
+                        ps_ind_keys[ps_name] = []
 
                         for ind_key, ind_obj in strat_obj.indicators.items():
                             eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                             ind_p_hash = self.param_suffix(eff_params)
                             unique_key = f"{asset_name}_{model_tf}_{ind_key}_{ind_p_hash}"
 
- 
-
-                           # 1. OK? Estava com nome do ind errado, agora como estou passando para o obj ele deveria funcionar
-                           # 2. Não está calculando ou traduzindo HTF->LTF ind ou calculate?, NÃO CONFUNDIR HTF-LTF COM PRIORCOTE
-
-
-
-
-
-                            if unique_key not in unique_indicators_lists:
+                            if unique_key not in ind_cache:
                                 print(f"   > Calculating indicator >>> name: {ind_key} >>> unique_key: {unique_key}")
 
                                 temp_ind_df = self._calculate_indicator(
@@ -192,48 +178,67 @@ class Operation(BaseClass):
                                 )
 
                                 novas_colunas = [c for c in temp_ind_df.columns if c not in base_asset_df.columns]
-
-                                col_data_map = {}
-                                for col in novas_colunas:
-                                    col_data_map[col] = temp_ind_df[col].to_list()
-
-                                unique_indicators_lists[unique_key] = col_data_map
+                                ind_cache[unique_key] = {c: temp_ind_df[c].to_list() for c in novas_colunas}
+                                ind_usage[unique_key] = 0
                             else:
                                 print(f"   > Using cache indicator >>> name: {ind_key} >>> unique_key: {unique_key}")
 
-                            indicator_data.update(unique_indicators_lists[unique_key])
+                            ind_usage[unique_key] += 1
+                            ps_ind_keys[ps_name].append(unique_key) 
 
                         # debug_df = base_asset_df.clone()
                         # for col_name, values_list in indicator_data.items(): debug_df = debug_df.with_columns(pl.Series(name=col_name, values=values_list))
                         # output_filename = f"debug_{asset_name}_{ps_name}.xlsx"
                         # debug_df.tail(-500).write_excel(output_filename)
 
+                    # Indicators used by all param_sets go shared
+                    shared_keys = {uk for uk, count in ind_usage.items() if count == n_ps}
+                    shared_indicators: dict={}
+                    for uk in shared_keys:
+                        shared_indicators.update(ind_cache[uk])
+
+                    # Creates asset_batch with shared_indicators already separate
+                    asset_batch = {
+                        "asset_header": f"{model_name}_{strat_name}_{asset_name}",
+                        "data": base_asset_df.to_dict(as_series=False),
+                        "execution_settings": exec_set_mod,
+                        "shared_indicators": shared_indicators,
+                        "simulations": []
+                    }
+
+                    for ps_name, ps_dict in param_sets.items():
+                        self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][ps_name] = {
+                            'param_set_dict': ps_dict,
+                            'trades': []
+                        }
+
+                        # Only send the ones that are not shared
+                        exclusive = {}
+                        for uk in ps_ind_keys[ps_name]:
+                            if uk not in shared_keys:
+                                exclusive.update(ind_cache[uk])
+
                         asset_batch["simulations"].append({
                             "id": ps_name,
                             "params": ps_dict,
-                            "indicator_data": indicator_data,
+                            "indicator_data": exclusive,
                             "rules": {
                                 "entry_long": self._translate_signals(strat_obj.signal_rules.get('entry_long')),
                                 "entry_short": self._translate_signals(strat_obj.signal_rules.get('entry_short')),
-
                                 "entry_long_limit_position": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_position')),
                                 "entry_short_limit_position": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_position')),
                                 "entry_long_limit_value": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_value')),
                                 "entry_short_limit_value": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_value')),
-
                                 "exit_tf_long": self._translate_signals(strat_obj.signal_rules.get('exit_tf_long')),
                                 "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short')),
-
                                 "exit_sl_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_long_price')),
                                 "exit_tp_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_long_price')),
                                 "exit_sl_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_short_price')),
                                 "exit_tp_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_short_price')),
-
                                 'be_pos_long_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_long_signal')),
                                 'be_pos_short_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_short_signal')),
                                 'be_neg_long_signal': self._translate_signals(strat_obj.signal_rules.get('be_neg_long_signal')),
                                 'be_neg_short_signal': self._translate_signals(strat_obj.signal_rules.get('be_neg_short_signal')),
-
                                 'be_pos_long_value': self._translate_signals(strat_obj.signal_rules.get('be_pos_long_value')),
                                 'be_pos_short_value': self._translate_signals(strat_obj.signal_rules.get('be_pos_short_value')),
                                 'be_neg_long_value': self._translate_signals(strat_obj.signal_rules.get('be_neg_long_value')),
@@ -248,6 +253,86 @@ class Operation(BaseClass):
 
         return True
     
+    def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):        
+        final_output = None
+
+        # 1. Resolução de Alvos (Asset e Timeframe onde o indicador "mora")
+        target_asset = ind_obj.asset if ind_obj.asset else asset_name
+        target_tf = ind_obj.timeframe if ind_obj.timeframe else model_timeframe
+
+        # Validação de Timeframe (Garante que não tentamos olhar o futuro/LTF)
+        if self._tf_to_seconds(target_tf) < self._tf_to_seconds(model_timeframe):
+            raise ValueError(f"Indicador '{ind_name}' ({target_tf}) não pode ser menor que o TF da Estratégia ({model_timeframe}).")
+
+        # 2. Setup do Cache de Dados BRUTOS (Raw)
+        effective_params = self.effective_params_from_global(ind_obj.params, param_set_dict)
+        params_suffix = self.param_suffix(effective_params)
+
+        if not hasattr(self, '_indicators_cache'): 
+            self._indicators_cache = {}
+        
+        # Estrutura: self._indicators_cache[Ativo][Nome_Ind][TF_Ind][Param_Hash]
+        tf_cache = self._indicators_cache.setdefault(target_asset, {}).setdefault(ind_name, {}).setdefault(target_tf, {})
+
+        # --- CAMADA 1: Recuperar ou Calcular o dado no TF original ---
+        if params_suffix in tf_cache:
+            raw_result = tf_cache[params_suffix]
+        else:
+            source_asset_class = self.assets.get(target_asset)
+            if not source_asset_class:
+                raise ValueError(f"Ativo {target_asset} não encontrado nos ativos globais.")
+            
+            df_source = source_asset_class.data_get(target_tf)
+            
+            # Cálculo Real (Chama a lógica matemática do indicador)
+            calc_res = ind_obj.calculate(df_source, param_set_dict=param_set_dict, ind_name=ind_name)
+
+            # Normalização do Raw: Garante que temos um DataFrame com a coluna 'datetime' para o join
+            if isinstance(calc_res, pl.Series):
+                raw_result = pl.DataFrame({
+                    "datetime": df_source["datetime"], 
+                    ind_name: calc_res.fill_null(0.0)
+                })
+            else:
+                raw_result = calc_res.fill_null(0.0)
+                if "datetime" not in raw_result.columns:
+                    raw_result = raw_result.with_columns(df_source["datetime"])
+
+            # SALVA NO CACHE: Guardamos o dado no TF nativo (Ex: Diário)
+            tf_cache[params_suffix] = raw_result
+
+        # --- CAMADA 2: Alinhamento (Sincronização HTF -> LTF) ---
+        is_same_asset = (target_asset == asset_name)
+        is_same_tf = (target_tf == model_timeframe)
+
+        if not (is_same_asset and is_same_tf):
+            # Se o indicador for de outro ativo ou timeframe maior, precisamos alinhar
+            # Ex: Pegar SMA(200) do Diário e expandir para cada minuto do intraday
+            print(f'      > Synchronizing: {ind_name} ({target_asset} {target_tf}) -> {asset_name} ({model_timeframe})')
+            
+            # Criamos um esqueleto apenas com o datetime do gráfico atual (LTF)
+            temp_align_df = curr_asset_obj.select("datetime")
+            
+            # Transferimos todas as colunas do indicador (exceto datetime) para o LTF
+            for col in raw_result.columns:
+                if col == "datetime": continue
+                
+                # Preparamos o dado HTF para o transfer_htf_columns
+                htf_data_to_align = raw_result.select(["datetime", col])
+                temp_align_df = self.transfer_htf_columns(temp_align_df, htf_data_to_align, col)
+            
+            # O resultado final não deve conter o datetime, apenas os valores alinhados
+            final_output = temp_align_df.drop("datetime")
+        else:
+            # Caso seja o mesmo ativo e TF, apenas removemos colunas de sistema/ohlc
+            # para evitar duplicidade no payload do C++
+            cols_to_drop = [c for c in raw_result.columns if c in ['datetime', 'date', 'ativo', 'open', 'high', 'low', 'close', 'tick_volume', 'real_volume', 'spread']]
+            final_output = raw_result.drop(cols_to_drop)
+
+        # 3. Limpeza Final e Retorno
+        # fill_nan(0) é importante pois joins HTF podem gerar NaNs no início do histórico
+        return final_output.fill_nan(0.0).fill_null(0.0)
+
     # || ===================================================================== || III - Portfolio Simulator || ===================================================================== ||
 
     def _simulate_portfolio(self, portfolio_backtests_dict ='All'):
@@ -276,7 +361,7 @@ class Operation(BaseClass):
             if path_to_dll not in sys.path: 
                 sys.path.append(path_to_dll)
             
-            import engine_cpp # type: ignore
+            import engine_cpp, msgpack # type: ignore
 
             # 1. PREPARAÇÃO DO DATAFRAME (Convertemos aqui para garantir tipos corretos)
             # Se o 'data' no asset_batch já for um dict vindo do to_dict(), transformamos em DF para tratar
@@ -294,49 +379,43 @@ class Operation(BaseClass):
                 pl.col(pl.Float32)
             ])
                 
-            # --- TRATAMENTO DE DATETIME ---
+            # Datetime treatment
             if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
                 df = df.with_columns(pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S'))
 
-                # if numeric_cols:
-                #     df = df.with_columns([
-                #         pl.col(c).cast(pl.Float64).fill_nan(0.0).fill_null(0.0) 
-                #         for c in numeric_cols
-                #     ])
-
-            # --- TRATAMENTO NUMÉRICO (Cast para Float64) ---
+            # Mumerical treatment (Cast to Float64) ---
             numeric_cols = [name for name, dtype in df.schema.items() if dtype.is_numeric()]
             if numeric_cols:
                 df = df.with_columns([pl.col(c).cast(pl.Float64).fill_null(0.0) for c in numeric_cols])
 
-            # 2. MONTAGEM DO PAYLOAD FINAL (Nomes de chaves alinhados com Operation::run no C++)
+            # 2. Payload final setup (key names align with Operation::run in cpp)
             final_payload = {
                 "asset_header": asset_batch.get('asset_header', 'Unknown'),
-                "data": df.to_dict(as_series=False), # Agora só tem números e a string datetime
+                "data": df.to_dict(as_series=False), # Now only has numbers and string datetime
                 "time_settings": asset_batch.get('time_settings', {}),
                 "execution_settings": asset_batch.get('execution_settings', {}),
                 "simulations": asset_batch.get('simulations', [])
             }
 
-            # 3. SERIALIZAÇÃO SEGURA
-            def json_serial(obj):
-                """Lida com objetos que o json standard não consegue serializar."""
+            # 3. Serialization
+            def msgpack_default(obj):
                 if isinstance(obj, (datetime.datetime, datetime.date)):
                     return obj.isoformat()
-                # Se for um objeto de Regra (Col/Params), tenta pegar o dict dele
                 if hasattr(obj, 'to_dict'):
                     return obj.to_dict()
                 return str(obj)
-
-            # Transforma tudo em uma string JSON para o C++
-            json_str = json.dumps(final_payload, default=json_serial)
             
-            # 4. CHAMADA DA ENGINE C++
-            # O engine_cpp.run() agora retorna uma STRING (json.dump do C++)
-            raw_output = engine_cpp.run(json_str)
+            packed = msgpack.packb(final_payload, default=msgpack_default, use_bin_type=True)
+            
+            # 4. Calls cpp
+            raw_output = engine_cpp.run_msgpack(packed)
+
+            # Makes shure is str before json.loads
+            if isinstance(raw_output, bytes):
+                raw_output = raw_output.decode('utf-8')
             
             # 5. PARSE DO RESULTADO
-            if not raw_output or raw_output == "[]" or raw_output == "{}":
+            if not raw_output or raw_output in ("[]", "{}"):
                 return {"simulations": [], "wfm_data": []}
                 
             # Como o C++ retornou uma string, precisamos de json.loads para voltar a ser lista/dict
@@ -458,86 +537,6 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Signals Functions || ===================================================================== ||
 
-    def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):        
-        final_output = None
-
-        # 1. Resolução de Alvos (Asset e Timeframe onde o indicador "mora")
-        target_asset = ind_obj.asset if ind_obj.asset else asset_name
-        target_tf = ind_obj.timeframe if ind_obj.timeframe else model_timeframe
-
-        # Validação de Timeframe (Garante que não tentamos olhar o futuro/LTF)
-        if self._tf_to_seconds(target_tf) < self._tf_to_seconds(model_timeframe):
-            raise ValueError(f"Indicador '{ind_name}' ({target_tf}) não pode ser menor que o TF da Estratégia ({model_timeframe}).")
-
-        # 2. Setup do Cache de Dados BRUTOS (Raw)
-        effective_params = self.effective_params_from_global(ind_obj.params, param_set_dict)
-        params_suffix = self.param_suffix(effective_params)
-
-        if not hasattr(self, '_indicators_cache'): 
-            self._indicators_cache = {}
-        
-        # Estrutura: self._indicators_cache[Ativo][Nome_Ind][TF_Ind][Param_Hash]
-        tf_cache = self._indicators_cache.setdefault(target_asset, {}).setdefault(ind_name, {}).setdefault(target_tf, {})
-
-        # --- CAMADA 1: Recuperar ou Calcular o dado no TF original ---
-        if params_suffix in tf_cache:
-            raw_result = tf_cache[params_suffix]
-        else:
-            source_asset_class = self.assets.get(target_asset)
-            if not source_asset_class:
-                raise ValueError(f"Ativo {target_asset} não encontrado nos ativos globais.")
-            
-            df_source = source_asset_class.data_get(target_tf)
-            
-            # Cálculo Real (Chama a lógica matemática do indicador)
-            calc_res = ind_obj.calculate(df_source, param_set_dict=param_set_dict, ind_name=ind_name)
-
-            # Normalização do Raw: Garante que temos um DataFrame com a coluna 'datetime' para o join
-            if isinstance(calc_res, pl.Series):
-                raw_result = pl.DataFrame({
-                    "datetime": df_source["datetime"], 
-                    ind_name: calc_res.fill_null(0.0)
-                })
-            else:
-                raw_result = calc_res.fill_null(0.0)
-                if "datetime" not in raw_result.columns:
-                    raw_result = raw_result.with_columns(df_source["datetime"])
-
-            # SALVA NO CACHE: Guardamos o dado no TF nativo (Ex: Diário)
-            tf_cache[params_suffix] = raw_result
-
-        # --- CAMADA 2: Alinhamento (Sincronização HTF -> LTF) ---
-        is_same_asset = (target_asset == asset_name)
-        is_same_tf = (target_tf == model_timeframe)
-
-        if not (is_same_asset and is_same_tf):
-            # Se o indicador for de outro ativo ou timeframe maior, precisamos alinhar
-            # Ex: Pegar SMA(200) do Diário e expandir para cada minuto do intraday
-            print(f'      > Synchronizing: {ind_name} ({target_asset} {target_tf}) -> {asset_name} ({model_timeframe})')
-            
-            # Criamos um esqueleto apenas com o datetime do gráfico atual (LTF)
-            temp_align_df = curr_asset_obj.select("datetime")
-            
-            # Transferimos todas as colunas do indicador (exceto datetime) para o LTF
-            for col in raw_result.columns:
-                if col == "datetime": continue
-                
-                # Preparamos o dado HTF para o transfer_htf_columns
-                htf_data_to_align = raw_result.select(["datetime", col])
-                temp_align_df = self.transfer_htf_columns(temp_align_df, htf_data_to_align, col)
-            
-            # O resultado final não deve conter o datetime, apenas os valores alinhados
-            final_output = temp_align_df.drop("datetime")
-        else:
-            # Caso seja o mesmo ativo e TF, apenas removemos colunas de sistema/ohlc
-            # para evitar duplicidade no payload do C++
-            cols_to_drop = [c for c in raw_result.columns if c in ['datetime', 'date', 'ativo', 'open', 'high', 'low', 'close', 'tick_volume', 'real_volume', 'spread']]
-            final_output = raw_result.drop(cols_to_drop)
-
-        # 3. Limpeza Final e Retorno
-        # fill_nan(0) é importante pois joins HTF podem gerar NaNs no início do histórico
-        return final_output.fill_nan(0.0).fill_null(0.0)
-
     def _get_all_models(self) -> dict: # Returns all Model(s) from data
         if isinstance(self.data, Model): # Single Model
             return {self.data.name: self.data}
@@ -654,60 +653,6 @@ class Operation(BaseClass):
             print(f"   ⚠️ WARNING: Only {success_rate:.2f}% of success aligning data.")
 
         return aligned
-    
-
-    """
-    def transfer_htf_columns(self, ltf_df, htf_df, ind_name):
-        
-        # Alinha dados de ativos diferentes ou timeframes diferentes (HTF -> LTF).
-        # Regra de Leakage:
-        # - Se for 'open': Usa o valor do próprio candle (Safe: o Open não muda após a abertura).
-        # - Se for outro (close, max, min): Garante o uso do dado do período anterior para 
-        # evitar que o LTF conheça o fechamento/máxima/mínima antes do tempo.
-        
-        # 1. Limpeza e Ordenação (Essencial para o join_asof)
-        ltf_df = ltf_df.sort("datetime")
-        htf_df = htf_df.select(["datetime", ind_name]).sort("datetime")
-
-        # 2. Tratamento de Leakage para dados que não são 'Open'
-        # Se estamos alinhando o 'close' do D1 no M15, o M15 às 10:00 não pode ver 
-        # o 'close' do dia que só existirá às 18:00.
-        if ind_name.lower() != "open":
-            # Deslocamos os dados HTF em 1 posição. Assim, o 'backward' join 
-            # pegará o valor que estava disponível no fechamento do candle anterior.
-            htf_df = htf_df.with_columns(
-                pl.col(ind_name).shift(1)
-            )
-
-        # 3. Join Asof (Sincronização de Relógio)
-        # 'backward' busca o último valor HTF onde HTF_datetime <= LTF_datetime
-        aligned = ltf_df.join_asof(
-            htf_df,
-            on="datetime",
-            strategy="backward"
-        )
-
-        # 4. Cálculo de Integridade
-        total = len(aligned)
-        nulos = aligned[ind_name].null_count()
-        success_rate = ((total - nulos) / total) * 100 if total > 0 else 0
-        
-        # 5. Tratamento de Gaps e Início de Histórico
-        # forward: preenche feriados/gaps com o último valor conhecido
-        # backward: preenche o início do histórico (antes do HTF começar) com o primeiro valor disponível
-        aligned = aligned.with_columns(
-            pl.col(ind_name)
-            .fill_null(strategy="forward")
-            .fill_null(strategy="backward")
-            .fill_null(0.0)
-        )
-
-        # Logging para monitoramento
-        status = "OK" if success_rate > 85 else "⚠️ LOW COVERAGE"
-        print(f"      > Aligned {ind_name}: {success_rate:.2f}% [{status}]")
-
-        return aligned
-    """
     
     def _tf_to_seconds(self, tf: str) -> int:
         
@@ -998,7 +943,6 @@ class Operation(BaseClass):
 
         return True
 
-
     # || ======================================================================================================================================================================= ||
                         
     def run(self):
@@ -1242,6 +1186,18 @@ if __name__ == "__main__":
     be_neg_long_value = None #[atr]
     be_neg_short_value = None #[atr]
 
+    # 1. Recriar ponte py - cpp - py
+    # 2. Recriar sistema de regras para ficar mais simples (def)
+    # - Adicionar lado
+    # - Sistema pra recriar trades Open Close pnl com trades do WFM ou já pegar direto?
+    # 3. Dev Roadmap png/list
+    # 4. Desenvolver sistema de slippage, lot, comission, offset, etc
+    # 5. Plot with list of all model-strat-asset-parset results and wfm results
+    # 6. Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
+    # 7. Adicionar Backtest Laterilazed Close-Close, Open-Open
+    # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
+    # 8. Adicionar Backtest Tick
+
     AT15 = Strat(
         StratParams(
             name="AT15",
@@ -1329,101 +1285,6 @@ if __name__ == "__main__":
 - Modulo de Summary, Plot e Analise de Resultados
 - Sistema de armazenamento de dados de Asset (substituir var local global_assets)
 - Support for tick data
-
-
-"""
-"""
-def _extract_returns_for_wf(self, model_name, strat_name, asset_name): # Extracts all param_sets daily historical returns for wf
-    wf_input_data = []
-
-    asset_data = self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]
-    param_sets = asset_data.get("param_sets", {})
-
-    for ps_name, ps_data in param_sets.items():
-        trades = ps_data.get("trades", [])
-        if not trades: continue
-
-        # Converts trades list into a dict
-        ts_map = {}
-        for t in trades:
-            dts = t.get('daily_datetime', [])
-            pnls = t.get('daily_pnl', [])
-
-            for dt, pnl in zip(dts, pnls):
-                ts_map[dt] = ts_map.get(dt, 0.0) + pnl
-
-        if not ts_map: continue
-
-        # Cronological order to garantee walkforard integrity
-        sorted_dts = sorted(ts_map.keys())
-        sorted_pnls = [ts_map[dt] for dt in sorted_dts]
-        wf_input_data.append([sorted_dts, sorted_pnls, ps_name])
-    return wf_input_data
-
-def _run_walkforward(self): # Executes WFM for all results
-    models_dict = self._get_all_models()
-
-    for m_name, m_obj in models_dict.items():
-        strats = m_obj.strat
-        assets = m_obj.assets
-
-        for s_name, s_obj in strats.items():
-
-            # Checks strat configuration for if walkforward parameters
-            if not hasattr(s_obj, 'operation') or not isinstance(s_obj.operation, Walkforward): continue
-
-            # Iterates over assets to extract returns and run walkforward for each asset in model
-            for a_name in assets:
-                print(f"\n>>> Running Walkforward for Model: {m_name} | Strat: {s_name} | Asset: {a_name} <<<")
-                
-                wf_raw_data = self._extract_returns_for_wf(m_name, s_name, a_name)
-
-                if not wf_raw_data:
-                    print(f"< No data extracted for Walkforward in {m_name} | {s_name} | {a_name}. Skipping.")
-                    continue
-
-                engine_input = [[d[0], d[1]] for d in wf_raw_data]
-                wf_engine = s_obj.operation
-
-                # Updates internal engine dataframe with the extracted data, now in the wide format expected by the C++ engine
-                wf_engine.df = wf_engine._consolidate_to_wide_df(engine_input)
-
-                # Executes Walkforward Matrix and returns combined OOS curve from all param sets
-                wf_final_results = wf_engine.analyze()
-
-                # Saves consolidated results on asset level (model->strat->asset)
-                self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["walkforward"] = {
-                    "trades": wf_final_results,
-                    "matrix": wf_engine.all_wf_results,
-                    "config": wf_engine.wfm_configs
-                }
-
-                wf_engine.plot_advanced_heatmap(metric='total_pnl')
-
-
-    def _assets(self, target_asset_name: str, target_tf: str):
-        # Recupera do contexto da classe
-        actual_ltf_df = self._curr_df_context
-        actual_model_tf = self._curr_tf_context
-        actual_asset_name = self._curr_asset
-
-        asset_obj = self.assets.get(target_asset_name)
-        htf_df = asset_obj.data_get(target_tf) # Retorna pl.DataFrame
-        
-        # Se for o mesmo ativo e TF, retorna o DF de contexto
-        if target_asset_name == actual_asset_name and target_tf == actual_model_tf:
-            return actual_ltf_df
-            
-        # Usa a função original para alinhar
-        return self.transfer_htf_columns(
-            ltf_df=actual_ltf_df.select(["datetime"]), # Apenas datetime para o join
-            ltf_tf=actual_model_tf,
-            htf_df=htf_df,
-            htf_tf=target_tf,
-            datetime_reference_candles=self._curr_datetime_references,
-            add_htf_tag=False
-        )
-    
 
 
 """

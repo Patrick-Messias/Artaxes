@@ -14,9 +14,9 @@ set(Python3_LIBRARY "${PYTHON_HOME}/libs/python311.lib")
 find_package(Python3 3.11 REQUIRED COMPONENTS Interpreter Development.Module)
 find_package(pybind11 REQUIRED)
 find_package(nlohmann_json REQUIRED)
-find_package(TBB REQUIRED) 
+find_package(TBB REQUIRED)
 
-# 1. ADICIONADO: src/bindings.cpp na lista de fontes
+# Define o módulo
 pybind11_add_module(engine_cpp
     src/bindings.cpp
     src/engine.cpp
@@ -24,8 +24,10 @@ pybind11_add_module(engine_cpp
     src/backtest.cpp
 )
 
-# 2. RECOMENDADO: Indicar onde estão os headers (.h)
-target_include_directories(engine_cpp PRIVATE src)
+target_include_directories(engine_cpp PRIVATE 
+    src
+    "${CMAKE_SOURCE_DIR}/msgpack-cpp/include"
+)
 
 target_link_libraries(engine_cpp PRIVATE 
     nlohmann_json::nlohmann_json
@@ -33,13 +35,16 @@ target_link_libraries(engine_cpp PRIVATE
     Python3::Module
 )
 
-# Flags de performance
+target_compile_definitions(engine_cpp PRIVATE
+    MSGPACK_NO_BOOST
+)
+
 if(MSVC)
-    target_compile_options(engine_cpp PRIVATE /O2 /Oi /Ot /EHsc) # /EHsc é importante para exceções no MSVC
+    target_compile_options(engine_cpp PRIVATE /O2 /Oi /Ot /EHsc)
 else()
     target_compile_options(engine_cpp PRIVATE -O3)
 endif()
 
-if (WIN32)
+if(WIN32)
     set_target_properties(engine_cpp PROPERTIES PREFIX "" SUFFIX ".pyd")
 endif()

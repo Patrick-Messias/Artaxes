@@ -8,6 +8,41 @@
 using json = nlohmann::json;
 
 std::string Engine::run(const std::string& payload_json) {
+    if (payload_json.empty()) return "[]";
+    return run_from_json(json::parse(payload_json));
+}
+
+std::string Engine::run_from_json(const json& payload) {
+    try {
+        std::string header = payload["asset_header"];
+        auto datetime = payload["data"]["datetime"].get<std::vector<std::string>>();
+        auto sim_params = payload["simulations"];
+        auto exec_settings = payload["execution_settings"];
+        json shared_inds = payload.value("shared_indicators", json::object());
+
+        std::map<std::string, std::vector<double>> data_map;
+
+        for (auto& el : payload["data"].items()) {
+            std::string col_name = el.key();
+            if (col_name == "datetime") continue;
+            try {
+                data_map[col_name] = el.value().get<std::vector<double>>();
+            } catch (const std::exception& e) {
+                std::cerr << " > ERROR na coluna '" << col_name << "': " << e.what() << std::endl;
+            }
+        }
+
+        json results = Operation::run(header, data_map, datetime, sim_params, exec_settings, shared_inds);
+        return results.dump();
+
+    } catch (const std::exception& e) {
+        std::cerr << "[C++ Engine Error]: " << e.what() << std::endl;
+        return "[]";
+    }
+}
+
+/*
+std::string Engine::run(const std::string& payload_json) {
     try {
         if (payload_json.empty()) return "[]";
 
@@ -72,3 +107,6 @@ std::string Engine::run(const std::string& payload_json) {
         return "[]";
     }
 }
+
+
+*/
