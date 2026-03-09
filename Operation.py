@@ -116,12 +116,6 @@ class Operation(BaseClass):
 
     # || ===================================================================== || II - Data Processing || ===================================================================== ||
 
-    def _translate_signals(self, signal_list):
-        """ Converte a lista de objetos gerados pela classe Col em JSON puro. """
-        if not signal_list: return []
-        # Garante que estamos lidando com uma lista de dicts (as regras)
-        return [rule if isinstance(rule, dict) else rule for rule in signal_list]
-
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
@@ -155,10 +149,12 @@ class Operation(BaseClass):
                     ind_cache: dict[str, dict] = {} # unique_key -> col_data_map
                     ind_usage: dict[str, int] = {} # unique_key -> how many param_sets are used
                     ps_ind_keys: dict[str, list] = {} # ps_name -> list of unique_keys used
+                    sig_cache: dict[str, list] = {} # sig_hash -> {col_name: list}
 
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_keys[ps_name] = []
 
+                        # Indicator
                         for ind_key, ind_obj in strat_obj.indicators.items():
                             eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                             ind_p_hash = self.param_suffix(eff_params)
@@ -185,6 +181,32 @@ class Operation(BaseClass):
 
                             ind_usage[unique_key] += 1
                             ps_ind_keys[ps_name].append(unique_key) 
+
+                        # Signal Generation
+                        sig_hash = self.param_suffix(ps_dict)
+                        if sig_hash not in sig_cache: # Mounts df_full with OHLC + all indicators from this param_set
+                            df_full = base_asset_df.clone()
+                            for uk in ps_ind_keys[ps_name]:
+                                for col_name, values in ind_cache[uk].items():
+                                    df_full = df_full.with_columns(pl.Series(col_name, values))
+
+                            # Generates signals
+                            sig_result = strat_obj.signals(df_full, ps_dict)
+                            sig_cache[sig_hash] = {}
+                            for sig_name, sig_val in sig_result.items():
+                                if sig_val is None:
+                                    continue
+                                if isinstance(sig_val, pl.Series):
+                                    if sig_val.dtype == pl.Boolean:
+                                        sig_cache[sig_hash][sig_name] = sig_val.cast(pl.Float64).fill_null(0.0).to_list()
+                                    else:
+                                        sig_cache[sig_hash][sig_name] = sig_val.cast(pl.Float64).fill_null(0.0).to_list()
+                                else:
+                                    # Já é lista/constante
+                                    sig_cache[sig_hash][sig_name] = sig_val
+                        else:
+                            print(f"   > Using cache signals >>> hash: {sig_hash}")
+
 
                         # debug_df = base_asset_df.clone()
                         # for col_name, values_list in indicator_data.items(): debug_df = debug_df.with_columns(pl.Series(name=col_name, values=values_list))
@@ -222,28 +244,7 @@ class Operation(BaseClass):
                             "id": ps_name,
                             "params": ps_dict,
                             "indicator_data": exclusive,
-                            "rules": {
-                                "entry_long": self._translate_signals(strat_obj.signal_rules.get('entry_long')),
-                                "entry_short": self._translate_signals(strat_obj.signal_rules.get('entry_short')),
-                                "entry_long_limit_position": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_position')),
-                                "entry_short_limit_position": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_position')),
-                                "entry_long_limit_value": self._translate_signals(strat_obj.signal_rules.get('entry_long_limit_value')),
-                                "entry_short_limit_value": self._translate_signals(strat_obj.signal_rules.get('entry_short_limit_value')),
-                                "exit_tf_long": self._translate_signals(strat_obj.signal_rules.get('exit_tf_long')),
-                                "exit_tf_short": self._translate_signals(strat_obj.signal_rules.get('exit_tf_short')),
-                                "exit_sl_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_long_price')),
-                                "exit_tp_long_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_long_price')),
-                                "exit_sl_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_sl_short_price')),
-                                "exit_tp_short_price": self._translate_signals(strat_obj.signal_rules.get('exit_tp_short_price')),
-                                'be_pos_long_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_long_signal')),
-                                'be_pos_short_signal': self._translate_signals(strat_obj.signal_rules.get('be_pos_short_signal')),
-                                'be_neg_long_signal': self._translate_signals(strat_obj.signal_rules.get('be_neg_long_signal')),
-                                'be_neg_short_signal': self._translate_signals(strat_obj.signal_rules.get('be_neg_short_signal')),
-                                'be_pos_long_value': self._translate_signals(strat_obj.signal_rules.get('be_pos_long_value')),
-                                'be_pos_short_value': self._translate_signals(strat_obj.signal_rules.get('be_pos_short_value')),
-                                'be_neg_long_value': self._translate_signals(strat_obj.signal_rules.get('be_neg_long_value')),
-                                'be_neg_short_value': self._translate_signals(strat_obj.signal_rules.get('be_neg_short_value')),
-                            }
+                            "signal_data": sig_cache[self.param_suffix(ps_dict)],
                         })
 
                     # 4. Envio único para C++
@@ -970,75 +971,7 @@ class Operation(BaseClass):
 
 # || ======================================================================================================================================================================= ||
 
-class Col:
-    def __init__(self, name, shift=0):
-        self.name = name
-        self.shift = shift
 
-    # Allows using Col("close")[1] for shift 1
-    def __getitem__(self, s):
-        return Col(self.name, s)
-    
-    # Comparison operators
-    def __gt__(self, other): return self._build_rule(other, ">")
-    def __lt__(self, other): return self._build_rule(other, "<")
-    def __ge__(self, other): return self._build_rule(other, ">=")
-    def __le__(self, other): return self._build_rule(other, "<=")
-    def __eq__(self, other): return self._build_rule(other, "==")
-
-    def _build_rule(self, other, op):
-        return {
-            "a": self.name, 
-            "shift_a": self.shift,
-            "op": op,
-            "b": other.name if isinstance(other, Col) else ("const" if not hasattr(other, 'to_dict') else "expr"),
-            "shift_b": other.shift if isinstance(other, Col) else 0,
-            "val": other if not (isinstance(other, Col) or hasattr(other, 'to_dict')) else None,
-            "expr": other.to_dict() if hasattr(other, 'to_dict') else None
-        }
-    
-    # Arithmetic operators
-    def __sub__(self, other):
-        return Expression(self, "=", other)
-    def __add__(self, other):
-        return Expression(self, "+", other)
-    def __mul__(self, other):
-        return Expression(self, "*", other)
-    def rolling_mean(self, window):
-        return Expression(self, "rolling_mean", window)
-    def to_dict(self):
-        return {"type": "col", "name": self.name, "shift": self.shift}
-    
-class Expression:
-    def __init__(self, left, op, right):
-        self.left = left
-        self.op = op
-        self.right = right
-
-    def __mul__(self, other):
-        return Expression(self, "*", other)
-    def rolling_mean(self, window):
-        return Expression(self, "rolling_mean", window)
-    def to_dict(self):
-        return {
-            "type": "operation",
-            "left": self.left.to_dict() if hasattr(self.left, 'to_dict') else self.left,
-            "op": self.op,
-            "right": self.right.to_dict() if hasattr(self.right, 'to_dict') else self.right
-        }
-
-class ParamRef:
-    def __init__(self, name):
-        self.name = name
-    
-    def __repr__(self):
-        return f"PARAM_{self.name}"
-    
-    def to_dict(self):
-        return {"type": "param", "name": self.name}
-    
-def Params(name):
-    return ParamRef(name)
 
 if __name__ == "__main__":
     eurusd = Asset(
@@ -1111,91 +1044,47 @@ if __name__ == "__main__":
         # 'open_day': DayOpen(assertsset=None, timeframe=model_execution_tf),
     }
 
-    close = Col("close")
-    open = Col("open")
-    high = Col("high")
-    low = Col("low")
-    atr = Col("atr")
-    ema = Col("ema")
-    #ma = Col("ma")
-    tp_perc = Params("tp_perc")
-    sl_perc = Params("sl_perc")
-    #htf_ma = Col("htf_ma")
-    max = Col('max')
-    min = Col('min')
-    open_day = Col('open_day')
+    def strat_signals(df: pl.DataFrame, params: dict) -> dict:
+        atr = df['atr']
+        ema = df['ema']
 
+        return {
+            # Bool Signals
+            'entry_long': (df['close'] > ema) & (df['close'].shift(1) < ema.shift(1)),
+            'entry_short': (df['close'] < ema) & (df['close'].shift(1) > ema.shift(1)),
+            'exit_tf_long': df['close'] < ema,
+            'exit_tf_short': df['close'] > ema,
 
+            # Float SL-TP
+            'exit_sl_long': atr * params['sl_perc'],
+            'exit_sl_short': atr * params['sl_perc'],
+            'exit_tp_long': atr * params['tp_perc'],
+            'exti_tp_short': atr * params['tp_perc'],
 
-    # def entry_long(self, df, params):
-    #     # Regras de entrada (3 candles)
-    #     df = df.with_columns(
-    #         sig_entry_long = (pl.col("close") > pl.col("open")).rolling_sum(3) == 3
-    #     )
-    #     # Regra de saída (Cruzamento de média)
-    #     ma = df["close"].ewm_mean(span=params['period'])
-    #     df = df.with_columns(
-    #         sig_exit_long = pl.col("close") < ma
-    #     )
-    #     return df
+            # Limit Order - Absolute price (optinal, None=Market)
+            'limit_long': None,
+            'limit_short': None,
 
+            # Break Even
+            'be_pos_val_long': atr * 1.5,
+            'be_pos_val_short': atr * 1.5,
+            'be_neg_val_long': None,
+            'be_neg_val_short': None,
+        }
 
-    entry_long = [
-        close[1] < open[1],
-        close[2] < open[2],
-        close[3] < open[3],
-        close[1] < ema[1],
-        ema[1] < ema[2],
-    ]
-    entry_short = [
-        close[1] > open[1],
-        close[2] > open[2],
-        close[3] > open[3],
-        close[1] > ema[1],
-        ema[1] > ema[2],
-    ]
-
-    exit_tf_long = [
-        close[1] > open[1],
-        close[2] > open[2],
-    ]
-    exit_tf_short = [
-        close[1] < open[1],
-        close[2] < open[2],
-    ]
-
-    exit_tp_long_price = None #[2000] #[atr * tp_perc]
-    exit_tp_short_price = None #[2000] #[atr * tp_perc]
-
-    exit_sl_long_price = [atr * sl_perc] #[400] #
-    exit_sl_short_price = [atr * sl_perc] #[400] #
-
-    entry_long_limit_position = None #["low"]
-    entry_short_limit_position = None #["high"]
-    entry_long_limit_value = None #[0.0002]
-    entry_short_limit_value = None #[0.0002]
-
-    be_pos_long_signal = None #[close > close[1]]
-    be_pos_short_signal = None #[close < close[1]]
-    be_neg_long_signal = None #[close < close[1]]
-    be_neg_short_signal = None #[close > close[1]]
-
-    be_pos_long_value = None #[atr]
-    be_pos_short_value = None #[atr]
-    be_neg_long_value = None #[atr]
-    be_neg_short_value = None #[atr]
 
     # XXX 1. Recriar ponte py - cpp - py
-    # 2. Recriar sistema de regras para ficar mais simples (def)
+    # 2. Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
     # - Adicionar lado
     # - Sistema pra recriar trades Open Close pnl com trades do WFM ou já pegar direto?
+    # - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
+    #   talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
     # 3. Dev Roadmap png/list
     # 4. Desenvolver sistema de slippage, lot, comission, offset, etc
     # 5. Plot with list of all model-strat-asset-parset results and wfm results
     # 6. Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
-    # 7. Adicionar Backtest Laterilazed Close-Close, Open-Open
+    # 7. Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
     # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
-    # 8. Adicionar Backtest Tick
 
     AT15 = Strat(
         StratParams(
@@ -1212,37 +1101,11 @@ if __name__ == "__main__":
                                                  order_type='market', limit_order_base_calc_ref_price='open', offset=0.0, 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
-                                                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily'),
+                                                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', print_logs=False),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=ind,
-            signal_rules={
-                'entry_long': entry_long,
-                'entry_short': entry_short,
-
-                'entry_long_limit_position': entry_long_limit_position,
-                'entry_short_limit_position': entry_short_limit_position,
-                'entry_long_limit_value': entry_long_limit_value,
-                'entry_short_limit_value': entry_short_limit_value,
-
-                'exit_tf_long': exit_tf_long,
-                'exit_tf_short': exit_tf_short,
-
-                'exit_sl_long_price': exit_sl_long_price,
-                'exit_sl_short_price': exit_sl_short_price,
-                'exit_tp_long_price': exit_tp_long_price,
-                'exit_tp_short_price': exit_tp_short_price,
-
-                'be_pos_long_signal': be_pos_long_signal,
-                'be_pos_short_signal': be_pos_short_signal,
-                'be_neg_long_signal': be_neg_long_signal,
-                'be_neg_short_signal': be_neg_short_signal,
-
-                'be_pos_long_value': be_pos_long_value,
-                'be_pos_short_value': be_pos_short_value,
-                'be_neg_long_value': be_neg_long_value,
-                'be_neg_short_value': be_neg_short_value,
-            }
+            signals=strat_signals
         )
     )
     

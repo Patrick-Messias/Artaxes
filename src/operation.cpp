@@ -44,6 +44,13 @@ json Operation::run(const std::string& header,
             local_data[key] = val.get<std::vector<double>>();
         }
 
+        // Injects Signals
+        if (sim.contains("signal_data") && sim["signal_data"].is_object()) {
+            for (auto& [key, val] : sim["signal_data"].items()) {
+                local_data[key] = val.get<std::vector<double>>();
+            }
+        }
+
         // Injects indicadots into local_data (if any)
         if (sim.contains("indicator_data") && sim["indicator_data"].is_object()) {
             for (auto& [key, val] : sim["indicator_data"].items()) {

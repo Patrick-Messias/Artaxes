@@ -42,6 +42,8 @@ class ExecutionSettings:
 
     trade_pnl_resolution: str='daily'
 
+    print_logs: bool=True
+
 
 @dataclass
 class StratParams():
@@ -53,33 +55,34 @@ class StratParams():
     mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
     indicators: Dict[str, Indicator] = field(default_factory=dict) 
 
-    signal_rules: Dict = field(default_factory=lambda: {
-        'entry_long': None,
-        'entry_short': None,
+    signals: Callable = None
+    # signal_rules: Dict = field(default_factory=lambda: {
+    #     'entry_long': None,
+    #     'entry_short': None,
 
-        'entry_long_limit_position': None,
-        'entry_short_limit_position': None,
-        'entry_long_limit_value': None,
-        'entry_short_limit_value': None,
+    #     'entry_long_limit_position': None,
+    #     'entry_short_limit_position': None,
+    #     'entry_long_limit_value': None,
+    #     'entry_short_limit_value': None,
 
-        'exit_tf_long': None,
-        'exit_tf_short': None,
+    #     'exit_tf_long': None,
+    #     'exit_tf_short': None,
 
-        'exit_sl_long_price': None,
-        'exit_sl_short_price': None,
-        'exit_tp_long_price': None,
-        'exit_tp_short_price': None,
+    #     'exit_sl_long_price': None,
+    #     'exit_sl_short_price': None,
+    #     'exit_tp_long_price': None,
+    #     'exit_tp_short_price': None,
 
-        'be_pos_long_signal': None,
-        'be_pos_short_signal': None,
-        'be_neg_long_signal': None,
-        'be_neg_short_signal': None,
+    #     'be_pos_long_signal': None,
+    #     'be_pos_short_signal': None,
+    #     'be_neg_long_signal': None,
+    #     'be_neg_short_signal': None,
 
-        'be_pos_long_value': None,
-        'be_pos_short_value': None,
-        'be_neg_long_value': None,
-        'be_neg_short_value': None,
-    })
+    #     'be_pos_long_value': None,
+    #     'be_pos_short_value': None,
+    #     'be_neg_long_value': None,
+    #     'be_neg_short_value': None,
+    # })
 
     strat_money_manager: Optional['StratMoneyManager'] = None
 
@@ -100,7 +103,7 @@ class Strat(BaseClass):
         self.mma_settings = strat_params.mma_settings # If mma_rules=None then will use default or PMA or othe MMA define in Operation
         self.indicators = strat_params.indicators
 
-        self.signal_rules = strat_params.signal_rules
+        self.signals = strat_params.signals
 
         # StratMoneyManager is optional - if None, will use default or PMA/MMM from Operation
         self.strat_money_manager = strat_params.strat_money_manager
