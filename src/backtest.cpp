@@ -1,4 +1,3 @@
-
 #include "Backtest.h"
 #include "Trade.h"
 #include "Utils.h"
@@ -6,14 +5,12 @@
 #include <random>
 #include <sstream>
 #include <algorithm>
-#include <iomanip> // Para formatar logs
+#include <iomanip>
 
 using json = nlohmann::json;
 
 double calculate_lot_size(double price_entry, bool is_long_trade);
 
-
-// Auxiliary function to generate unique IDs for the trades
 static std::string generate_id() {
     static std::mt19937_64 rng{std::random_device{}()};
     std::stringstream ss;
@@ -21,171 +18,47 @@ static std::string generate_id() {
     return ss.str();
 }
 
+// Used to get timeEI/EF/TF from exec_settings as numbers
 double get_value_safe(const json& node, const json& params) {
     if (node.is_number()) return node.get<double>();
-    
     if (node.is_object() && node.value("type", "") == "param") {
         std::string p_name = node.value("name", "");
-        if (params.contains(p_name)) {
-            // VERIFICAÇÃO CRUCIAL: Se for string (ex: "sma"), não tente converter para double
-            if (params[p_name].is_number()) {
-                return params[p_name].get<double>();
-            }
-        }
+        if (params.contains(p_name) && params[p_name].is_number())
+            return params[p_name].get<double>();
     }
     return 0.0;
 }
 
-double get_numeric_value(const json& node, const json& params) {
-    if (node.is_number()) return node.get<double>();
-    
-    if (node.is_object()) {
-        if (node.value("type", "") == "param") {
-            return params.value(node.value("name", ""), 0.0);
-        }
-    }
-    return 0.0;
-}
-
-// 1. Função que resolve qualquer conta (+, -, *, /) vinda do Python
-double resolve_expression(const json& expr, const std::map<std::string, std::vector<double>>& data, const json& params, size_t i) {
-    try {
-        // Se for um número puro (ex: 0.001)
-        if (expr.is_number()) return expr.get<double>();
-        
-        if (expr.is_object()) {
-            std::string type = expr.value("type", "");
-
-            // Caso 1: Referência de Parâmetro (sl_perc)
-            if (type == "param") {
-                std::string name = expr.value("name", "");
-                auto& val = params[name];
-                if (!val.is_number()) {
-                    // LOG AQUI: Identifica se o parâmetro (ex: 'sma') está vindo errado
-                    // std::cout << "[DEBUG] Parametro " << name << " nao e numero: " << val.dump() << std::endl;
-                    return 0.0;
-                }
-                return val.get<double>();
-            }
-            
-            // Caso 2: Coluna de Indicador (atr)
-            if (type == "col") {
-                std::string name = expr.value("name", "");
-                if (data.find(name) == data.end()) {
-                    return 0.0; // Retorna 0 em vez de crashar se a coluna não existir
-                }
-                int shift = expr.value("shift", 0);
-                size_t idx = i - shift;
-                
-                // Proteção contra índice negativo ou fora do range
-                if (i >= (size_t)shift && idx < data.at(name).size()) {
-                    double val = data.at(name)[idx];
-                    return std::isnan(val) ? 0.0 : val; // Trata NaN vindo do Python
-                }
-                return 0.0;
-            }
-            
-            // Caso 3: Operação Matemática (Aqui resolve o ATR * SL_PERC)
-            if (type == "operation") {
-                // Chamada recursiva para resolver os dois lados da conta
-                double left = resolve_expression(expr["left"], data, params, i);
-                double right = resolve_expression(expr["right"], data, params, i);
-                std::string op = expr.value("op", "");
-
-                if (op == "*") return left * right;
-                if (op == "+") return left + right;
-                if (op == "-") return left - right;
-                if (op == "/") return (right != 0) ? left / right : 0.0;
-            }
-        }
-    } catch (const std::exception& e) {
-        std::cout << "[DEBUG] ERRO NA RESOLUCAO: " << e.what() << " | JSON: " << expr.dump() << std::endl;
-    }
-    return 0.0;
-}
-
-// 2. Ajuste a evaluate_value para chamar a resolve_expression
-double evaluate_value(const json& rules, const std::map<std::string, std::vector<double>>& data, const json& current_params, size_t i) {
-    if (rules.is_null()) return 0.0;
-    
-    // Se for um array (como o Python envia [rule]), pegamos o primeiro
-    if (rules.is_array()) {
-        if (rules.empty()) return 0.0;
-        return resolve_expression(rules[0], data, current_params, i);
-    }
-    
-    // Se for o objeto direto
-    return resolve_expression(rules, data, current_params, i);
-}
-
-// Rules selector
-bool evaluate_signals(const json& rules, const std::map<std::string, std::vector<double>>& data, const json& current_params, size_t i) {
-    if (!rules.is_array() || rules.empty()) return false;
-
-    for (const auto& cond : rules) {
-        std::string col_a = cond.value("a", "");
-        int shift_a = cond.value("shift_a", 0);
-        std::string op = cond.value("op", "");
-
-        // Proteção de índice: i é o ponto de referência, shift_a olha para trás
-        if (data.find(col_a) == data.end() || i < (size_t)shift_a) return false;
-        double val_a = data.at(col_a)[i - shift_a];
-        
-        double val_b = 0.0;
-        if (cond.contains("expr") && !cond["expr"].is_null()) {
-            val_b = resolve_expression(cond["expr"], data, current_params, i);
-        } else {
-            std::string b_type = cond.value("b", "");
-            if (b_type == "const") {
-                if (cond.contains("val") && cond["val"].is_number()) val_b = cond["val"].get<double>();
-            } else if (b_type == "param") {
-                val_b = current_params.value(cond.value("name", ""), 0.0);
-            } else {
-                int shift_b = cond.value("shift_b", 0);
-                if (data.find(b_type) != data.end() && i >= (size_t)shift_b) {
-                    val_b = data.at(b_type)[i - shift_b];
-                }
-            }
-        }
-
-        if (op == ">" && !(val_a > val_b)) return false;
-        if (op == "<" && !(val_a < val_b)) return false;
-        if (op == ">=" && !(val_a >= val_b)) return false;
-        if (op == "<=" && !(val_a <= val_b)) return false;
-        if (op == "==" && !(val_a == val_b)) return false;
-    }
-    return true;
-}
-
-std::string check_limit_instant_exit(bool is_long, double limit, double sl, double tp, double open, double high, double low, double close) {
+// Checks if a limit/stop order has immediatly been closed by SL or TP 
+std::string check_limit_instant_exit(bool is_long, double limit, double sl, double tp,
+                                     double open, double high, double low, double close) {
     bool bullish = (close > open);
-    // Verifica se os níveis estão no range da barra
-    bool hit_tp = (is_long ? (tp > 0 && high >= tp) : (tp > 0 && low <= tp));
-    bool hit_sl = (is_long ? (sl > 0 && low <= sl) : (sl > 0 && high >= sl));
+    bool hit_tp = (is_long ? (tp > 0 && high >= tp) : (tp > 0 && low  <= tp));
+    bool hit_sl = (is_long ? (sl > 0 && low  <= sl) : (sl > 0 && high >= sl));
 
     if (bullish) {
-        if (limit > open) { // --- REGRA 1: limit > open e close > open ---
-            if (is_long) return hit_tp ? "TP" : ""; // sl=n/a
-            else         return hit_sl ? "SL" : ""; // tp=n/a
-        } else {            // --- REGRA 2: limit < open e close > open ---
+        if (limit > open) {
+            if (is_long) return hit_tp ? "TP" : "";
+            else         return hit_sl ? "SL" : "";
+        } else {
             if (is_long) {
-                if (hit_tp && hit_sl) return "SL"; // sl ganha (caminho O->L->H)
+                if (hit_tp && hit_sl) return "SL";
                 return hit_sl ? "SL" : (hit_tp ? "TP" : "");
             } else {
-                if (hit_tp && hit_sl) return "TP"; // tp ganha (caminho O->L->H)
+                if (hit_tp && hit_sl) return "TP";
                 return hit_tp ? "TP" : (hit_sl ? "SL" : "");
             }
         }
-    } else { // Bearish (close < open)
-        if (limit < open) { // --- REGRA 3: limit < open e close < open ---
-            if (is_long) return hit_sl ? "SL" : ""; // tp=n/a
-            else         return hit_tp ? "TP" : ""; // sl=n/a
-        } else {            // --- REGRA 4: limit > open e close < open ---
+    } else {
+        if (limit < open) {
+            if (is_long) return hit_sl ? "SL" : "";
+            else         return hit_tp ? "TP" : "";
+        } else {
             if (is_long) {
-                if (hit_tp && hit_sl) return "TP"; // tp ganha (caminho O->H->L)
+                if (hit_tp && hit_sl) return "TP";
                 return hit_tp ? "TP" : (hit_sl ? "SL" : "");
             } else {
-                if (hit_tp && hit_sl) return "SL"; // sl ganha (caminho O->H->L)
+                if (hit_tp && hit_sl) return "SL";
                 return hit_sl ? "SL" : (hit_tp ? "TP" : "");
             }
         }
@@ -195,205 +68,166 @@ std::string check_limit_instant_exit(bool is_long, double limit, double sl, doub
 
 
 
-SimulationOutput Backtest::run_simulation(const std::string& header, 
-                              const std::map<std::string, std::vector<double>>& data,
-                              const std::vector<std::string>& datetime,
-                              const nlohmann::json& sim,
-                              const nlohmann::json& exec_settings,
-                              int ps_id
-                              ){
-    
-    // LOG inicial de verificação de indicadores
-    // --- DEBUG: Print das últimas 30 linhas de todos os indicadores/preços ---
-    std::cout << "\n[C++ DEBUG] Exibindo últimas 30 linhas de todos os dados (" << header << "):" << std::endl;
-
-    if (!data.empty()) {
-        // Pegamos o tamanho do primeiro vetor para referência (ex: 'close')
-        size_t total_rows = data.begin()->second.size();
-        size_t start_row = (total_rows > 30) ? (total_rows - 30) : 0;
-
-        // Cabeçalho das colunas
-        std::cout << "Row\t";
-        for (auto const& [col_name, _] : data) {
-            std::cout << col_name << "\t\t";
-        }
-        std::cout << "\n" << std::string(80, '-') << std::endl;
-
-        // Loop pelas linhas
-        for (size_t i = start_row; i < total_rows; ++i) {
-            std::cout << i << "\t";
-            for (auto const& [col_name, vec] : data) {
-                // Formatação para 5 casas decimais
-                if (i < vec.size()) {
-                    printf("%.5f\t", vec[i]);
-                } else {
-                    std::cout << "N/A\t\t";
-                }
-            }
-            std::cout << "\n";
-        }
-    } else {
-        std::cout << "Warning: Data map is empty!" << std::endl;
-    }
-    std::cout << std::string(80, '=') << "\n" << std::endl;
+SimulationOutput Backtest::run_simulation(const std::string& header,
+                                          const std::map<std::string, std::vector<double>>& data,
+                                          const std::vector<std::string>& datetime,
+                                          const nlohmann::json& sim,
+                                          const nlohmann::json& exec_settings,
+                                          int ps_id) {
 
     std::vector<Trade> trades;
     std::vector<Trade> active_trades;
     std::vector<Trade> pending_orders;
     std::vector<DailyResult> daily_results_matrix;
-    
-    // PnL Temporário para validação cruzada (Aritmético simples)
     double temp_cumulative_pnl = 0.0;
-    int counter = 50000;
-    int counter_max = counter + 90;
-
-    // Lambda auxiliar para evitar repetição de código e tratar erros
-    auto get_vec_from_json = [&](json& field, std::string label) -> const double* {
-        if (field.is_null()) return nullptr;
-
-        std::string col_name = "";
-        if (field.is_string()) {
-            col_name = field.get<std::string>();
-        } else if (field.is_array() && !field.empty() && field[0].is_string()) {
-            col_name = field[0].get<std::string>();
-        }
-
-        if (!col_name.empty()) {
-            if (data.count(col_name)) {
-                return data.at(col_name).data();
-            } else {
-                std::cout << "[WARNING] Column " << label << " not found: " << col_name << std::endl;
-            }
-        }
-        return nullptr;
-    };
 
     auto get_vec_ptr = [&](const std::string& key) -> const double* {
         auto it = data.find(key);
-        if (it != data.end() && !it->second.empty()) {
-            return it->second.data();
-        }
+        if (it != data.end() && !it->second.empty()) return it->second.data();
         return nullptr;
     };
 
     try {
         json params = sim.value("params", json::object());
-        json rules = sim.value("rules", json::object());
 
-        const auto& open = get_vec_ptr("open");
-        const auto& high = get_vec_ptr("high");
-        const auto& low = get_vec_ptr("low");
-        const auto& close = get_vec_ptr("close");
-        const size_t n_bars = datetime.size();
+        // ── OHLC ──────────────────────────────────────────────────────────────
+        const double* open  = get_vec_ptr("open");
+        const double* high  = get_vec_ptr("high");
+        const double* low   = get_vec_ptr("low");
+        const double* close = get_vec_ptr("close");
+        const size_t  n_bars = datetime.size();
 
-        // Param Values
+        // ── SIGNAL COLUMNS (from Python) ───────────────────────────────────────
+        // Bool signals — 1.0 = true, 0.0 = false
+        const double* sig_entry_long  = get_vec_ptr("entry_long");
+        const double* sig_entry_short = get_vec_ptr("entry_long");
+        const double* exit_tf_long   = get_vec_ptr("exit_tf_long");
+        const double* exit_tf_short  = get_vec_ptr("exit_tf_short");
+
+        // SL/TP — distance from entry price (positive float, 0 = not set)
+        // Python computes: atr * sl_perc, or any expression → column
+        const double* exit_sl_long  = get_vec_ptr("exit_sl_long");
+        const double* exit_sl_short = get_vec_ptr("exit_sl_short");
+        const double* exit_tp_long  = get_vec_ptr("exit_tp_long");
+        const double* exti_tp_short = get_vec_ptr("exti_tp_short");
+
+        // Limit order — absolute target price (0 = not set → falls back to market)
+        // Python computes: df['low'].shift(1), or any expression → column
+        const double* limit_long  = get_vec_ptr("limit_long");
+        const double* limit_short = get_vec_ptr("limit_short");
+
+        // Break-even trigger — distance from entry that triggers moving SL to entry
+        // be_trigger_long  > 0 → move SL when price rises   >= entry + dist
+        // be_trigger_short > 0 → move SL when price drops   <= entry - dist
+        const double* be_pos_val_long  = get_vec_ptr("be_pos_val_long");
+        const double* be_pos_val_short = get_vec_ptr("be_pos_val_short");
+
+        // W I P
+        const double* be_neg_val_long  = get_vec_ptr("be_neg_val_long");
+        const double* be_neg_val_short = get_vec_ptr("be_neg_val_short");
+
+        // ── EXECUTION SETTINGS ────────────────────────────────────────────────
         int backtest_start_idx = params.value("backtest_start_idx", 1);
         int limit_order_expiry = params.value("limit_order_exclusion_after_period", 1);
-        double limit_order_perc_treshold_for_order_diff = 1.0;
-        if (params.contains("limit_order_perc_treshold_for_order_diff")) limit_order_perc_treshold_for_order_diff = params["limit_order_perc_treshold_for_order_diff"].get<double>();
-        bool limit_can_enter_at_market_if_gap = params.value("limit_can_enter_at_market_if_gap", false);
+        double limit_order_perc_treshold = params.value("limit_order_perc_treshold_for_order_diff", 1.0);
+        bool limit_can_enter_at_market_if_gap    = params.value("limit_can_enter_at_market_if_gap", false);
         bool limit_opposite_order_closes_pending = params.value("limit_opposite_order_closes_pending", true);
 
-        int nb_long = params.value("exit_nb_long", 0);
+        int nb_long  = params.value("exit_nb_long",  0);
         int nb_short = params.value("exit_nb_short", 0);
         int exit_nb_only_if_pnl_is = params.value("exit_nb_only_if_pnl_is", 0);
 
-
-        // Entry Rules
-        json rules_entry_long = rules.value("entry_long", json::array());
-        json rules_entry_short = rules.value("entry_short", json::array());
-    
-        // Limit Orders - As regras de "value" (offsets) geralmente são listas de operações, então podem manter json::array()
-        json entry_long_limit_value = rules.value("entry_long_limit_value", json::array());
-        json entry_short_limit_value = rules.value("entry_short_limit_value", json::array());
-
-        json entry_long_raw = rules.value("entry_long_limit_position", json(nullptr));
-        json entry_short_raw = rules.value("entry_short_limit_position", json(nullptr));
-        const double* long_pos_vec = get_vec_from_json(entry_long_raw, "Long Pos");
-        const double* short_pos_vec = get_vec_from_json(entry_short_raw, "Short Pos");
-
-
-        // Exit and Trade Management Rules
-        json rules_tf_long = rules.value("exit_tf_long", json::array());
-        json rules_tf_short = rules.value("exit_tf_short", json::array());
-        json rules_sl_long = rules.value("exit_sl_long_price", json::array());
-        json rules_sl_short = rules.value("exit_sl_short_price", json::array());
-        json rules_tp_long = rules.value("exit_tp_long_price", json::array());
-        json rules_tp_short = rules.value("exit_tp_short_price", json::array());
-        json be_pos_long_signal = rules.value("be_pos_long_signal", json::array());
-        json be_pos_short_signal = rules.value("be_pos_short_signal", json::array());
-        json be_neg_long_signal = rules.value("be_neg_long_signal", json::array());
-        json be_neg_short_signal = rules.value("be_neg_short_signal", json::array());
-        json be_pos_long_value = rules.value("be_pos_long_value", json::array());
-        json be_pos_short_value = rules.value("be_pos_short_value", json::array());
-        json be_neg_long_value = rules.value("be_neg_long_value", json::array());
-        json be_neg_short_value = rules.value("be_neg_short_value", json::array());
-        bool has_be_pos_l_sig = !be_pos_long_signal.empty();
-        bool has_be_pos_s_sig = !be_pos_short_signal.empty();
-        bool has_be_neg_l_sig = !be_neg_long_signal.empty();
-        bool has_be_neg_s_sig = !be_neg_short_signal.empty();
-        bool has_be_pos_l_val = !be_pos_long_value.empty();
-        bool has_be_pos_s_val = !be_pos_short_value.empty();
-        bool has_be_neg_l_val = !be_neg_long_value.empty();
-        bool has_be_neg_s_val = !be_neg_short_value.empty();
-
         auto strat_num_pos = exec_settings.value("strat_num_pos", json::array({1,1}));
-        int max_long = strat_num_pos[0].get<int>();
+        int max_long  = strat_num_pos[0].get<int>();
         int max_short = strat_num_pos[1].get<int>();
 
         auto strat_max_num_pos_per_day = exec_settings.value("strat_max_num_pos_per_day", json::array({1,1}));
-        int max_long_trades_per_day = strat_max_num_pos_per_day[0].get<int>();
+        int max_long_trades_per_day  = strat_max_num_pos_per_day[0].get<int>();
         int max_short_trades_per_day = strat_max_num_pos_per_day[1].get<int>();
-        if (max_long_trades_per_day == -1) max_long_trades_per_day=999999;
-        if (max_short_trades_per_day == -1) max_short_trades_per_day=999999;
-        int day_trades_long=0; int day_trades_short=0;
+        if (max_long_trades_per_day  == -1) max_long_trades_per_day  = 999999;
+        if (max_short_trades_per_day == -1) max_short_trades_per_day = 999999;
+        int day_trades_long = 0, day_trades_short = 0;
 
         bool hedge_enabled = exec_settings.value("hedge", false);
-        double offset = exec_settings.value("offset", 0.0);
-        bool is_daytrade = exec_settings.value("day_trade", false);
+        double offset      = exec_settings.value("offset", 0.0);
+        bool is_daytrade   = exec_settings.value("day_trade", false);
 
         std::string order_type = exec_settings.at("order_type").get<std::string>();
-        std::string limit_order_base_calc_ref_price = exec_settings.at("limit_order_base_calc_ref_price").get<std::string>();
+        std::string limit_order_base_ref = exec_settings.at("limit_order_base_calc_ref_price").get<std::string>();
+
         size_t last_underscore = header.find_last_of('_');
         std::string asset_base_name = (last_underscore != std::string::npos) ? header.substr(last_underscore + 1) : header;
         std::string trade_path = header + "_" + sim["id"].get<std::string>();
+
         std::vector<int> close_days = exec_settings.value("day_of_week_close_and_stop_trade", std::vector<int>{});
 
-        // Datetime
-        int timeEI = exec_settings.contains("timeEI") && !exec_settings["timeEI"].is_null() 
-            ? (int)get_value_safe(exec_settings["timeEI"], params) 
-            : 0;
+        int timeEI = exec_settings.contains("timeEI") && !exec_settings["timeEI"].is_null()
+            ? (int)get_value_safe(exec_settings["timeEI"], params) : 0;
+        int timeEF = exec_settings.contains("timeEF") && !exec_settings["timeEF"].is_null()
+            ? (int)get_value_safe(exec_settings["timeEF"], params) : 1440;
+        int timeTF = exec_settings.contains("timeTF") && !exec_settings["timeTF"].is_null()
+            ? (int)get_value_safe(exec_settings["timeTF"], params) : 1440;
 
-        int timeEF = exec_settings.contains("timeEF") && !exec_settings["timeEF"].is_null() 
-            ? (int)get_value_safe(exec_settings["timeEF"], params) 
-            : 1440;
 
-        int timeTF = exec_settings.contains("timeTF") && !exec_settings["timeTF"].is_null() 
-            ? (int)get_value_safe(exec_settings["timeTF"], params) 
-            : 1440;
 
-        // bar_dates YYYYMMDD | bar_times HHMMSS
-        std::vector<int> bar_dates(n_bars);
-        std::vector<int> bar_times(n_bars);
-        std::vector<int> bar_days(n_bars);
 
-        for (size_t i=0; i<n_bars; ++i) {
-            const std::string& dt=datetime[i];
 
-            // Direct numeral extraction (ASCII '0' é 48)
-            // Date: YYYYMMDD
-            bar_dates[i] = (dt[0]-'0')*10000000 + (dt[1]-'0')*1000000 + (dt[2]-'0')*100000 + (dt[3]-'0')*10000 +
-                        (dt[5]-'0')*1000 + (dt[6]-'0')*100 + 
-                        (dt[8]-'0')*10 + (dt[9]-'0');
 
-            // Time: HHMMSS
-            bar_times[i] = ((dt[11]-'0')*10 + (dt[12]-'0')) * 10000 + 
-                        ((dt[14]-'0')*10 + (dt[15]-'0')) * 100 + 
-                        ((dt[17]-'0')*10 + (dt[18]-'0'));
 
-            // for day of week keep the same
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        bool print_logs = exec_settings.value("print_logs", false);
+        int max_num_logs_per_backtest = 50;
+        int num_logs_counter = backtest_start_idx;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+
+        // ── PRE-COMPUTE DATES ─────────────────────────────────────────────────
+        std::vector<int> bar_dates(n_bars), bar_times(n_bars), bar_days(n_bars);
+        for (size_t i = 0; i < n_bars; ++i) {
+            const std::string& dt = datetime[i];
+            bar_dates[i] = (dt[0]-'0')*10000000 + (dt[1]-'0')*1000000 + (dt[2]-'0')*100000 + (dt[3]-'0')*10000
+                         + (dt[5]-'0')*1000      + (dt[6]-'0')*100
+                         + (dt[8]-'0')*10        + (dt[9]-'0');
+            bar_times[i] = ((dt[11]-'0')*10 + (dt[12]-'0')) * 10000
+                         + ((dt[14]-'0')*10 + (dt[15]-'0')) * 100
+                         + ((dt[17]-'0')*10 + (dt[18]-'0'));
             std::tm tm = {};
-            std::istringstream ss(dt.substr(0,10));
+            std::istringstream ss(dt.substr(0, 10));
             ss >> std::get_time(&tm, "%Y-%m-%d");
             tm.tm_isdst = -1;
             std::mktime(&tm);
@@ -401,63 +235,58 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
         }
 
 
+        
 
-        //export_to_csv("debug_market_data.csv", datetime, data);
-
-
-
-        // -------------------------------------------------------------------------------------------------------------------------||
-
+        // ── MAIN LOOP ─────────────────────────────────────────────────────────
         for (size_t i = backtest_start_idx; i < n_bars; ++i) {
-            // --- Config
-            int currentTime = extract_minutes(datetime[i]);
-            bool is_last_bar = (i == n_bars - 1);
-            bool day_switched = (!is_last_bar && bar_dates[i+1] != bar_dates[i]); //
+            int  currentTime      = extract_minutes(datetime[i]);
+            bool is_last_bar      = (i == n_bars - 1);
+            bool day_switched     = (!is_last_bar && bar_dates[i+1] != bar_dates[i]);
             bool daytrade_time_final = (currentTime >= timeTF);
-            if (day_switched) { day_trades_long = 0; day_trades_short = 0;}
+            if (day_switched) { day_trades_long = 0; day_trades_short = 0; }
 
-            
+            // Read signals for this bar
+            bool signal_long  = sig_entry_long  && sig_entry_long[i]  > 0.5;
+            bool signal_short = sig_entry_short && sig_entry_short[i] > 0.5;
+            bool do_exit_long  = exit_tf_long  && exit_tf_long[i]   > 0.5;
+            bool do_exit_short = exit_tf_short && exit_tf_short[i]  > 0.5;
 
 
-            // --- 1. EXIT LOGIC (Baseado no Open do candle atual para evitar look-ahead) ---
+            // ── 1. EXIT LOGIC ─────────────────────────────────────────────────
+            // Exit at Open[i] based on signal from previous bar
             auto it = active_trades.begin();
             while (it != active_trades.end()) {
                 bool is_long = (it->lot_size.value_or(0.0) > 0.0);
                 bool closed = false;
                 std::string reason = "";
-                
-                // TF - Trend Following
-                if (evaluate_signals(is_long ? rules_tf_long : rules_tf_short, data, params, i)) {
+
+                // TF — Timeframe/Signal exit
+                if (is_long ? do_exit_long : do_exit_short) {
                     reason = "TF"; closed = true;
                 }
-                
-                // NB - Number of Bars
+
+                // NB — Number of bars exit
                 if (!closed) {
                     int target_nb = is_long ? nb_long : nb_short;
-                    
                     if (target_nb > 0 && it->bars_held >= target_nb) {
-                        bool can_exit_by_pnl = false;
-
-                        if (exit_nb_only_if_pnl_is == 0) { can_exit_by_pnl = true; }
-                        else {
-                            double current_price = open[i];
-                            double entry_p = *it->entry_price;
-                            double pnl = (current_price - entry_p) / entry_p * (is_long ? 1.0 : -1.0);
-
-                            if (exit_nb_only_if_pnl_is > 0 && pnl > 0) can_exit_by_pnl = true;
-                            else if (exit_nb_only_if_pnl_is < 0 && pnl < 0) can_exit_by_pnl = true;
+                        bool can_exit = false;
+                        if (exit_nb_only_if_pnl_is == 0) {
+                            can_exit = true;
+                        } else {
+                            double pnl = (open[i] - *it->entry_price) / *it->entry_price * (is_long ? 1.0 : -1.0);
+                            if (exit_nb_only_if_pnl_is > 0 && pnl > 0) can_exit = true;
+                            else if (exit_nb_only_if_pnl_is < 0 && pnl < 0) can_exit = true;
                         }
-
-                        if (can_exit_by_pnl) { reason = "NB"; closed = true; }
+                        if (can_exit) { reason = "NB"; closed = true; }
                     }
                 }
 
-                // DT - Day Trade
+                // DT — Daytrade forced close
                 if (!closed && is_daytrade && (daytrade_time_final || day_switched || is_last_bar)) {
                     reason = "DT"; closed = true;
                 }
 
-                // WC - Weekday Close
+                // WC — Weekday close
                 if (!closed && !close_days.empty()) {
                     int today = bar_days[i];
                     if (std::find(close_days.begin(), close_days.end(), today) != close_days.end()) {
@@ -465,204 +294,138 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
                     }
                 }
 
-                // EF - End of File
-                if (!closed && i == n_bars - 1) {
+                // EF — End of file
+                if (!closed && is_last_bar) {
                     reason = "EF"; closed = true;
                 }
 
-                // BE - SL/TP to Break Even
+                // BE — Break-even: move SL to entry when price reaches trigger distance
                 if (!closed) {
-                    double entry_p = *it->entry_price;
+                    double entry_p   = *it->entry_price;
                     double current_p = open[i];
 
-                    // BE Positive
-                    if (it->stop_loss != entry_p && (is_long ? (has_be_pos_l_sig || has_be_pos_l_val) : (has_be_pos_s_sig || has_be_pos_s_val))) {
-                        bool trig_be_pos = false;
-
-                        if (is_long ? has_be_pos_l_sig : has_be_pos_s_sig) {
-                            trig_be_pos = evaluate_signals(is_long ? be_pos_long_signal : be_pos_short_signal, data, params, i);
-                        }
-
-                        if (!trig_be_pos && (is_long ? has_be_pos_l_val : has_be_pos_s_val)) {
-                            double v = evaluate_value(is_long ? be_pos_long_value : be_pos_short_value, data, params, i);
-                            if (v > 0) {
-                                trig_be_pos = is_long ? (current_p >= entry_p + v) : (current_p <= entry_p - v);
-                            }
-                        }
-
-                        if (trig_be_pos) {
-                            if (is_long ? (current_p > entry_p) : (current_p < entry_p)) {
-                                it->stop_loss = entry_p;
-                            }
-                        }
-                    }
-
-                    // BE Negative
-                    if (it->take_profit != entry_p && (is_long ? (has_be_neg_l_sig || has_be_neg_l_val) : (has_be_neg_s_sig || has_be_neg_s_val))) {
-                        bool trig_be_neg = false;
-
-                        if (is_long ? has_be_neg_l_sig : has_be_neg_s_sig) {
-                            trig_be_neg = evaluate_signals(is_long ? be_neg_long_signal : be_neg_short_signal, data, params, i);
-                        }
-
-                        if (!trig_be_neg && (is_long ? has_be_neg_l_val : has_be_neg_s_val)) {
-                            double v = evaluate_value(is_long ? be_neg_long_value : be_neg_short_value, data, params, i);
-                            if (v > 0) {
-                                trig_be_neg = is_long ? (current_p <= entry_p - v) : (current_p >= entry_p + v);
-                            }
-                        }
-                        
-                        if (trig_be_neg) {
-                            if (is_long ? (current_p < entry_p) : (current_p > entry_p)) {
-                                it->take_profit = entry_p;
+                    const double* be_col = is_long ? be_pos_val_long : be_pos_val_short;
+                    if (be_col && it->stop_loss.value_or(0.0) != entry_p) {
+                        double be_dist = be_col[i];
+                        if (be_dist > 0) {
+                            bool triggered = is_long
+                                ? (current_p >= entry_p + be_dist)
+                                : (current_p <= entry_p - be_dist);
+                            if (triggered) {
+                                // Only move SL in the favorable direction
+                                if (is_long ? (current_p > entry_p) : (current_p < entry_p))
+                                    it->stop_loss = entry_p;
                             }
                         }
                     }
                 }
 
-
-
                 if (closed) {
-                    it->exit_price = open[i];
+                    it->exit_price    = open[i];
                     it->exit_datetime = datetime[i];
-                    it->exit_reason = reason;
-                    it->status = "closed";
+                    it->exit_reason   = reason;
+                    it->status        = "closed";
                     it->mae = *it->max_adv_price;
                     it->mfe = *it->max_fav_price;
-                    
+
                     double entry = *it->entry_price;
-                    double exit = *it->exit_price;
-                    double pnl = ((exit - entry) / entry) * 100 * (is_long ? 1 : -1);
+                    double exit  = *it->exit_price;
+                    double pnl   = ((exit - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
                     it->profit = pnl;
-                    temp_cumulative_pnl += it->profit.value_or(0.0);
+                    temp_cumulative_pnl += pnl;
 
-                    if (counter < counter_max) {
-                        std::cout << "[EXIT  ] " << (is_long ? "L" : "S") << " | " << reason << " " << datetime[i] 
-                                << " | In: " << entry << " | Out: " << exit
-                                << " | PnL: " << pnl << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
-                        counter+=1;
-                    }
+                    if (print_logs)
+                        std::cout << "[EXIT  ] " << (is_long ? "L" : "S") << " | " << reason
+                                  << " " << datetime[i] << " | In: " << entry << " | Out: " << exit
+                                  << " | PnL: " << pnl << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
 
-                    double prev_p = it->prev_day_price.value_or(entry);
-                    double daily_var = ((exit - prev_p) / entry) * 100  * (is_long ? 1 : -1);
-                    DailyResult res;
-                    res.timestamp = format_datetime_to_int(datetime[i]);
-                    res.pnl = daily_var;
-                    res.ps_id = ps_id;
-                    daily_results_matrix.push_back(res);
+                    double prev_p    = it->prev_day_price.value_or(entry);
+                    double daily_var = ((exit - prev_p) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                    daily_results_matrix.push_back({format_datetime_to_int(datetime[i]), daily_var, ps_id});
 
                     trades.push_back(*it);
                     it = active_trades.erase(it);
                 } else { ++it; }
             }
-            
 
 
-            // --- 2. ENTRY LOGIC (Sinal no candle anterior i-1, entrada no Open de i) ---
-            // Pending Orders Management
+            // ── 2. PENDING ORDERS ─────────────────────────────────────────────
             auto p_it = pending_orders.begin();
             while (p_it != pending_orders.end()) {
                 bool is_long = (p_it->lot_size.value_or(0.0) > 0.0);
                 double entry = *p_it->entry_price;
-                bool triggered = false;
-                bool expired = false;
+                bool triggered = false, expired = false;
 
-                // Order Expiration
+                // Expiration
                 if (p_it->bars_held.value_or(0) >= limit_order_expiry) expired = true;
                 else if (((daytrade_time_final || day_switched) && is_daytrade) || is_last_bar) expired = true;
 
                 if (expired) {
-                    if (counter < counter_max) {
-                        std::cout << "[EN-LIM EXPIRED] " << (is_long ? "L" : "S") << " | " << datetime[i] 
-                                << " | Price: " << entry << " | Held: " << p_it->bars_held.value() << " bars" << std::endl;
-                    }
+                    if (print_logs)
+                        std::cout << "[LIM-EXPIRED] " << (is_long ? "L" : "S") << " | " << datetime[i]
+                                  << " | Price: " << entry << " | Held: " << p_it->bars_held.value() << " bars" << std::endl;
                     p_it = pending_orders.erase(p_it);
                     continue;
                 }
 
-                // Order Execution
-                std::string pos_type = p_it->exit_reason.value_or(""); //Temp using exit_reason for gap handling
+                // Execution check (pos_type stored temporarily in exit_reason)
+                std::string pos_type = p_it->exit_reason.value_or("");
                 if (is_long) {
-                    if (pos_type == "L_BELOW") {
-                        if (open[i] <= entry) { triggered=true; entry=open[i]; }
-                        else if (low[i] < entry) { triggered=true; }
-                    }
-                    else if (pos_type == "L_ABOVE") {
-                        if (open[i] >= entry) { triggered=true; entry=open[i]; }
-                        else if (high[i] > entry) triggered=true;
-                    }
+                    if      (pos_type == "L_BELOW" && open[i] <= entry) { triggered = true; entry = open[i]; }
+                    else if (pos_type == "L_BELOW" && low[i]  <  entry)   triggered = true;
+                    else if (pos_type == "L_ABOVE" && open[i] >= entry) { triggered = true; entry = open[i]; }
+                    else if (pos_type == "L_ABOVE" && high[i] >  entry)   triggered = true;
                 } else {
-                    if (pos_type == "S_ABOVE") { 
-                        if (open[i] >= entry) { triggered=true; entry=open[i]; }
-                        else if (high[i] > entry) triggered=true; 
-                    }
-                    else if (pos_type == "S_BELOW") {
-                        if (open[i] <= entry) { triggered=true; entry=open[i]; }
-                        else if (low[i] < entry) triggered=true;
-                    }
+                    if      (pos_type == "S_ABOVE" && open[i] >= entry) { triggered = true; entry = open[i]; }
+                    else if (pos_type == "S_ABOVE" && high[i] >  entry)   triggered = true;
+                    else if (pos_type == "S_BELOW" && open[i] <= entry) { triggered = true; entry = open[i]; }
+                    else if (pos_type == "S_BELOW" && low[i]  <  entry)   triggered = true;
                 }
 
                 if (triggered) {
                     p_it->status = "open";
                     p_it->entry_datetime = datetime[i];
+                    p_it->entry_price = entry;
 
-                    // Recalculates SL/TP based on execution price
-                    const json& sl_rules = is_long ? rules_sl_long : rules_sl_short;
-                    const json& tp_rules = is_long ? rules_tp_long : rules_tp_short;
-                    double sl_dist = evaluate_value(sl_rules, data, params, i);
-                    double tp_dist = evaluate_value(tp_rules, data, params, i);
+                    // Recalculate SL/TP at execution bar using signal columns
+                    double sl_dist = (is_long ? exit_sl_long  : exit_sl_short)  ? (is_long ? exit_sl_long[i]  : exit_sl_short[i])  : 0.0;
+                    double tp_dist = (is_long ? exit_tp_long  : exti_tp_short)  ? (is_long ? exit_tp_long[i]  : exti_tp_short[i])  : 0.0;
 
-                    if (sl_dist > 0) p_it->stop_loss = is_long ? (entry - sl_dist) : (entry + sl_dist);
+                    if (sl_dist > 0) p_it->stop_loss   = is_long ? (entry - sl_dist) : (entry + sl_dist);
                     if (tp_dist > 0) p_it->take_profit = is_long ? (entry + tp_dist) : (entry - tp_dist);
 
-                    // Verificação se SL ou TP foram atingidos instantaneamente no candle de entrada
                     double curr_sl = p_it->stop_loss.value_or(0.0);
                     double curr_tp = p_it->take_profit.value_or(0.0);
-                    std::string instant_exit = check_limit_instant_exit(is_long, entry, curr_sl, curr_tp, open[i], high[i], low[i], close[i]);
+                    std::string instant_exit = check_limit_instant_exit(
+                        is_long, entry, curr_sl, curr_tp, open[i], high[i], low[i], close[i]);
 
-                    if (instant_exit != "") { // If SL/TP hit instantaneously, we close the trade immediately at the respective level
-                        double exit = (instant_exit == "TP" ? curr_tp : curr_sl);
-                        p_it->exit_price = exit;
-                        p_it->exit_reason = instant_exit;
+                    if (!instant_exit.empty()) {
+                        double exit_px = (instant_exit == "TP") ? curr_tp : curr_sl;
+                        p_it->exit_price    = exit_px;
+                        p_it->exit_reason   = instant_exit;
                         p_it->exit_datetime = datetime[i];
-                        p_it->status = "closed";
-                        
-                        double pnl = ((p_it->exit_price.value() - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                        p_it->status        = "closed";
+
+                        double pnl = ((exit_px - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
                         p_it->profit = pnl;
                         temp_cumulative_pnl += pnl;
 
-                        if (counter < counter_max) {
-                            std::cout << "[INSTANT EXIT] " << (is_long ? "L" : "S") << " | " << instant_exit 
-                                    << " " << datetime[i] << " | PnL: " << pnl << "%" << std::endl;
-                            counter++;
-                        }
+                        if (print_logs)
+                            std::cout << "[LIM-INSTANT] " << (is_long ? "L" : "S") << " | " << instant_exit
+                                      << " " << datetime[i] << " | PnL: " << pnl << "%" << std::endl;
 
-                        // Entry and exit in the same bar, calculates based on entry
-                        double daily_var = ((exit - entry) / entry) * 100  * (is_long ? 1 : -1);
-                        DailyResult res;
-                        res.timestamp = format_datetime_to_int(datetime[i]);
-                        res.pnl = daily_var;
-                        res.ps_id = ps_id;
-                        daily_results_matrix.push_back(res);
+                        double daily_var = ((exit_px - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                        daily_results_matrix.push_back({format_datetime_to_int(datetime[i]), daily_var, ps_id});
 
                         trades.push_back(std::move(*p_it));
                         p_it = pending_orders.erase(p_it);
-                    } else { // If limit order is instantly executed but no SL/TP hit, it becomes an active trade
-                        if (counter < counter_max) {
-                            std::cout << "[EN-LIM EXECUTED] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
-                                    << " | Price: " << std::fixed << std::setprecision(5) << entry 
-                                    << " | TP: " << *p_it->take_profit << " | SL: " << *p_it->stop_loss 
-                                    << " | OHL[i]: " << (open[i]) << "/" << (high[i]) << "/" << (low[i]) 
-                                    << std::endl;
-                            counter++;
-                        }
+                    } else {
+                        if (print_logs)
+                            std::cout << "[LIM-EXEC] " << (is_long ? "L" : "S") << " | " << datetime[i]
+                                      << " | Price: " << entry
+                                      << " | SL: " << curr_sl << " | TP: " << curr_tp << std::endl;
 
-                        // Since TP/SL wheren't immediatly hit, normal entry 
-                        DailyResult res;
-                        res.timestamp = format_datetime_to_int(datetime[i]);
-                        res.pnl = 0.0;
-                        res.ps_id = ps_id;
-                        daily_results_matrix.push_back(res);
+                        daily_results_matrix.push_back({format_datetime_to_int(datetime[i]), 0.0, ps_id});
                         p_it->prev_day_price = entry;
 
                         active_trades.push_back(std::move(*p_it));
@@ -676,329 +439,244 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
             }
 
 
-
+            // ── 3. NEW ENTRY ──────────────────────────────────────────────────
             bool day_is_blocked = false;
             if (!close_days.empty()) {
                 int today = bar_days[i];
                 day_is_blocked = std::find(close_days.begin(), close_days.end(), today) != close_days.end();
             }
-            if (!day_is_blocked && is_daytrade) {
-                if (currentTime < timeEI || currentTime > timeEF) day_is_blocked=true;
-            }
             
-            if (!day_is_blocked) {
-                bool signal_long = evaluate_signals(rules_entry_long, data, params, i);
-                bool signal_short = evaluate_signals(rules_entry_short, data, params, i);
+            if (!day_is_blocked && is_daytrade) {
+                if (currentTime < timeEI || currentTime > timeEF) day_is_blocked = true;
+            }
 
-                if (signal_long || signal_short) {
-                    int current_longs = 0; int current_shorts = 0;
+            if (!day_is_blocked && (signal_long || signal_short)) {
+                int current_longs = 0, current_shorts = 0;
+                for (const auto& t : active_trades) {
+                    double lot = t.lot_size.value_or(0.0);
+                    if (lot > 0) current_longs++; else if (lot < 0) current_shorts++;
+                }
+                for (const auto& p : pending_orders) {
+                    double lot = p.lot_size.value_or(0.0);
+                    if (lot > 0) current_longs++; else if (lot < 0) current_shorts++;
+                }
 
-                    // Open Trades
-                    for (const auto& t : active_trades) {
-                        double lot = t.lot_size.value_or(0.0);
-                        if (lot > 0) current_longs++;
-                        else if (lot < 0) current_shorts++;
-                    }
-                    // Pending Trades
-                    for (const auto& p : pending_orders) {
-                        double lot = p.lot_size.value_or(0.0);
-                        if (lot > 0) current_longs++;
-                        else if (lot < 0) current_shorts++;
-                    }
+                auto execute_entry_internal = [&](bool is_long) {
+                    Trade t;
+                    t.id     = generate_id();
+                    t.asset  = asset_base_name;
+                    t.path   = trade_path;
 
-                    auto execute_entry_internal = [&](bool is_long) {
-                        Trade t;
-                        t.id = generate_id();
-                        t.asset = asset_base_name;
-                        t.path = trade_path;
+                    double target_price = 0.0;
+                    bool gap_too_big = false, already_hit = false;
 
-                        double target_price = 0.0;
-                        bool gap_too_big = false;
-                        bool already_hit = false;
-
-                        // Defines and Calculates target
-                        if (order_type == "market") {
+                    if (order_type == "market") {
+                        // Market order — always enters at open[i]
+                        target_price = open[i];
+                    } else {
+                        // Limit order — target price comes from signal column
+                        // Python is responsible for computing the absolute price:
+                        //   limit_long  = df['low'].shift(1)   (buy below yesterday's low)
+                        //   limit_short = df['high'].shift(1)  (sell above yesterday's high)
+                        //   or any other expression
+                        const double* lim_col = is_long ? limit_long : limit_short;
+                        if (lim_col && lim_col[i] > 0.0) {
+                            target_price = lim_col[i];
+                        } else {
+                            // Fallback: no limit column provided → treat as market
                             target_price = open[i];
+                        }
+
+                        // Gap handling: is target realistically reachable from open?
+                        if (is_long) {
+                            std::string side = (target_price > open[i]) ? "L_ABOVE" : "L_BELOW";
+                            t.exit_reason = side; // temp storage
+                            double diff = (side == "L_ABOVE")
+                                ? (target_price - open[i]) / open[i]
+                                : (open[i] - target_price) / open[i];
+                            if (limit_order_base_ref != "open" && open[i] <= target_price) already_hit = true;
+                            if (diff > limit_order_perc_treshold) gap_too_big = true;
                         } else {
-                            if (is_long) {
-                                if (long_pos_vec && !std::isnan(long_pos_vec[i])) {
-                                    target_price = long_pos_vec[i];
-                                }
-                                else {
-                                    double base = (limit_order_base_calc_ref_price == "open") ? open[i] : close[i-1];
-                                    target_price = base + (evaluate_value(entry_long_limit_value, data, params, i));
-                                }
-                            } else {
-                                if (short_pos_vec && !std::isnan(short_pos_vec[i])) {
-                                    target_price = short_pos_vec[i];
-                                }
-                                else {
-                                    double base = (limit_order_base_calc_ref_price == "open") ? open[i] : close[i-1];
-                                    target_price = base - (evaluate_value(entry_short_limit_value, data, params, i));
-                                }
-                            }
-
-                            
-                            // Gap Handling: Checks if the target price is realistically reachable from the open price. If the gap is too big, it can skip placing the order or execute at market price based on settings.
-                            if (is_long) {
-                                std::string side = (target_price > open[i]) ? "L_ABOVE" : "L_BELOW"; //Temp using exit_reason for gap handling
-                                t.exit_reason = side;
-                                double diff = 0.0;
-                                
-                                if (side == "L_ABOVE") {
-                                    diff = (target_price - open[i]) / open[i];
-                                    if (limit_order_base_calc_ref_price != "open" && open[i] >= target_price) already_hit=true;
-                                }
-                                else {
-                                    diff = (open[i] - target_price) / open[i];
-                                    if (limit_order_base_calc_ref_price != "open" && open[i] <= target_price) already_hit=true;
-                                }
-                                if (diff > limit_order_perc_treshold_for_order_diff) gap_too_big=true;
-
-                            } else {
-                                std::string side = (target_price > open[i]) ? "S_ABOVE" : "S_BELOW"; //Temp using exit_reason for gap handling
-                                t.exit_reason = side;
-                                double diff = 0.0;
-
-                                if (side == "S_BELOW") {
-                                    diff = (open[i] - target_price) / open[i];
-                                    if (limit_order_base_calc_ref_price != "open" && open[i] <= target_price) already_hit=true;
-                                }
-                                else {
-                                    diff = (target_price - open[i]) / open[i];
-                                    if (limit_order_base_calc_ref_price != "open" && open[i] >= target_price) already_hit=true;
-                                }
-                                if (diff > limit_order_perc_treshold_for_order_diff) gap_too_big=true;
-                            }
-                            
-                            // Doesn't create order
-                            if (gap_too_big) { 
-                                if (counter < counter_max) {
-                                    std::cout << "[SKIP-GAP] " << (is_long ? "L" : "S") << " | Gap too big at Open" << std::endl;
-                                }
-                                return; 
-                            }
+                            std::string side = (target_price > open[i]) ? "S_ABOVE" : "S_BELOW";
+                            t.exit_reason = side;
+                            double diff = (side == "S_BELOW")
+                                ? (open[i] - target_price) / open[i]
+                                : (target_price - open[i]) / open[i];
+                            if (limit_order_base_ref != "open" && open[i] >= target_price) already_hit = true;
+                            if (diff > limit_order_perc_treshold) gap_too_big = true;
                         }
 
-                        bool execute_now = (order_type == "market" || (already_hit && limit_can_enter_at_market_if_gap));
-                        double final_entry = execute_now ? open[i] : target_price;
-
-                        t.entry_price = final_entry;
-                        t.status = execute_now ? "open" : "pending";
-                        t.entry_datetime = datetime[i];
-                        t.bars_held = 0;
-                        t.lot_size = calculate_lot_size(final_entry, is_long);
-                        t.max_fav_price = final_entry;
-                        t.max_adv_price = final_entry;
-
-                        double sl_dist = evaluate_value(is_long ? rules_sl_long : rules_sl_short, data, params, i);
-                        double tp_dist = evaluate_value(is_long ? rules_tp_long : rules_tp_short, data, params, i);
-
-                        double sl=0.0; double tp=0.0;
-                        if (sl_dist > 0) {
-                            sl = is_long ? (final_entry - sl_dist) : (final_entry + sl_dist);
-                            t.stop_loss = sl;
+                        if (gap_too_big) {
+                            if (print_logs)
+                                std::cout << "[SKIP-GAP] " << (is_long ? "L" : "S")
+                                          << " | " << datetime[i] << " | Gap too big" << std::endl;
+                            return;
                         }
-                        if (tp_dist > 0) {
-                            tp = is_long ? (final_entry + tp_dist) : (final_entry - tp_dist);
-                            t.take_profit = tp;
-                        }
-
-                        if (execute_now) {
-                            DailyResult res;
-                            res.timestamp = format_datetime_to_int(datetime[i]);
-                            res.pnl = 0.0;
-                            res.ps_id = ps_id;
-                            daily_results_matrix.push_back(res);
-                            t.prev_day_price = final_entry;
-
-                            active_trades.push_back(std::move(t));
-                            is_long ? ++day_trades_long : ++day_trades_short;
-                            if (counter < counter_max) {
-                                std::cout << "[EN-MKT] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
-                                        << " | Price: " << std::fixed << std::setprecision(5) << final_entry 
-                                        << " | TP: " << tp << " | SL: " << sl 
-                                        << " | Active+Pending: " << (is_long ? current_longs + 1 : current_shorts + 1)
-                                        << " | O[i] Setup: " << open[i] << "/" << target_price 
-                                        << std::endl;
-                                counter++;
-                            }
-                        } else {
-                            pending_orders.push_back(std::move(t));
-                            if (counter < counter_max) {
-                                std::cout << "[EN-LIM] " << (is_long ? "L" : "S") << " |    " << datetime[i] 
-                                        << " | Price: " << std::fixed << std::setprecision(5) << final_entry 
-                                        << " | TP: " << tp << " | SL: " << sl 
-                                        << " | Active+Pending: " << (is_long ? current_longs + 1 : current_shorts + 1)
-                                        << " | OHLSetup[i] | HL[i-1]: " << open[i] << " / " << high[i] << " / " << low[i] << "/" << target_price 
-                                        << "/" << high[i-1] << "/" << low[i-1] << " | Entry pos: " << *t.exit_reason
-                                        << std::endl;
-                                counter++;
-                            }
-                        }
-                    };
-
-                    if (signal_long) {
-                        if (limit_opposite_order_closes_pending) {
-                            auto it = pending_orders.begin();
-                            while (it != pending_orders.end()) {
-                                if (it->lot_size.value_or(0.0) < 0) {
-                                    if (counter < counter_max) {
-                                        std::cout << "[CANCEL-INV] S | " << datetime[i] 
-                                                << " | Price: " << *it->entry_price << " due to Long signal." << std::endl;
-                                    }
-                                    it = pending_orders.erase(it);
-                                } else {
-                                    ++it;
-                                }
-                            }
-                        }
-
-                        bool hedge_ok = hedge_enabled || (current_shorts == 0);
-                        if (current_longs < max_long && day_trades_long < max_long_trades_per_day && hedge_ok) execute_entry_internal(true);
                     }
 
-                    if (signal_short) {
-                        if (limit_opposite_order_closes_pending) {
-                            auto it = pending_orders.begin();
-                            while (it != pending_orders.end()) {
-                                if (it->lot_size.value_or(0.0) > 0) {
-                                    if (counter < counter_max) {
-                                        std::cout << "[CANCEL-INV] L | " << datetime[i] 
-                                                << " | Price: " << *it->entry_price << " due to Long signal." << std::endl;
-                                    }
-                                    it = pending_orders.erase(it);
-                                } else {
-                                    ++it;
-                                }
-                            }
-                        }
+                    bool execute_now = (order_type == "market" || (already_hit && limit_can_enter_at_market_if_gap));
+                    double final_entry = execute_now ? open[i] : target_price;
 
-                        bool hedge_ok = hedge_enabled || (current_longs == 0);
-                        if (current_shorts < max_short && day_trades_short < max_short_trades_per_day && hedge_ok) execute_entry_internal(false);
+                    t.entry_price    = final_entry;
+                    t.status         = execute_now ? "open" : "pending";
+                    t.entry_datetime = datetime[i];
+                    t.bars_held      = 0;
+                    t.lot_size       = calculate_lot_size(final_entry, is_long);
+                    t.max_fav_price  = final_entry;
+                    t.max_adv_price  = final_entry;
+
+                    // SL/TP distances read directly from signal columns
+                    double sl_dist = (is_long ? exit_sl_long  : exit_sl_short)  ? (is_long ? exit_sl_long[i]  : exit_sl_short[i])  : 0.0;
+                    double tp_dist = (is_long ? exit_tp_long  : exti_tp_short)  ? (is_long ? exit_tp_long[i]  : exti_tp_short[i])  : 0.0;
+
+                    double sl = 0.0, tp = 0.0;
+                    if (sl_dist > 0) { sl = is_long ? (final_entry - sl_dist) : (final_entry + sl_dist); t.stop_loss   = sl; }
+                    if (tp_dist > 0) { tp = is_long ? (final_entry + tp_dist) : (final_entry - tp_dist); t.take_profit = tp; }
+
+                    if (execute_now) {
+                        daily_results_matrix.push_back({format_datetime_to_int(datetime[i]), 0.0, ps_id});
+                        t.prev_day_price = final_entry;
+                        active_trades.push_back(std::move(t));
+                        is_long ? ++day_trades_long : ++day_trades_short;
+
+                        if (print_logs)
+                            std::cout << "[EN-MKT] " << (is_long ? "L" : "S") << " | " << datetime[i]
+                                      << " | Price: " << std::fixed << std::setprecision(5) << final_entry
+                                      << " | SL: " << sl << " | TP: " << tp
+                                      << " | Open pos: " << (is_long ? current_longs + 1 : current_shorts + 1) << std::endl;
+                    } else {
+                        pending_orders.push_back(std::move(t));
+
+                        if (print_logs)
+                            std::cout << "[EN-LIM] " << (is_long ? "L" : "S") << " | " << datetime[i]
+                                      << " | Target: " << std::fixed << std::setprecision(5) << final_entry
+                                      << " | SL: " << sl << " | TP: " << tp
+                                      << " | Open pos: " << (is_long ? current_longs + 1 : current_shorts + 1) << std::endl;
                     }
+                };
+
+                // Cancel opposite pending orders if configured
+                auto cancel_opposite = [&](bool is_long_signal) {
+                    if (!limit_opposite_order_closes_pending) return;
+                    auto oit = pending_orders.begin();
+                    while (oit != pending_orders.end()) {
+                        double lot = oit->lot_size.value_or(0.0);
+                        bool is_opposite = is_long_signal ? (lot < 0) : (lot > 0);
+                        if (is_opposite) {
+                            if (print_logs)
+                                std::cout << "[CANCEL-OPP] " << datetime[i]
+                                          << " | Price: " << *oit->entry_price << std::endl;
+                            oit = pending_orders.erase(oit);
+                        } else { ++oit; }
+                    }
+                };
+
+                if (signal_long) {
+                    cancel_opposite(true);
+                    bool hedge_ok = hedge_enabled || (current_shorts == 0);
+                    if (current_longs < max_long && day_trades_long < max_long_trades_per_day && hedge_ok)
+                        execute_entry_internal(true);
+                }
+                if (signal_short) {
+                    cancel_opposite(false);
+                    bool hedge_ok = hedge_enabled || (current_longs == 0);
+                    if (current_shorts < max_short && day_trades_short < max_short_trades_per_day && hedge_ok)
+                        execute_entry_internal(false);
                 }
             }
 
 
-            
-            // --- 3. INTRA-CANDLE EXIT (SL/TP) ---
+            // ── 4. INTRA-CANDLE SL/TP ────────────────────────────────────────
             it = active_trades.begin();
-            while (it != active_trades.end()){
+            while (it != active_trades.end()) {
                 double sl = it->stop_loss.value_or(0.0);
                 double tp = it->take_profit.value_or(0.0);
                 bool is_long = (it->lot_size.value_or(0.0) > 0.0);
                 bool closed = false;
                 std::string reason = "";
 
-                // Checagem de Stop Loss / Take Profit usando High/Low do candle i
                 if (is_long) {
-                    if (sl > 0.0 && low[i] <= sl) {
-                        it->exit_price = sl; reason = "SL"; closed = true; 
-                    }
-                    else if (tp > 0.0 && high[i] >= tp){
-                        it->exit_price = tp; reason = "TP"; closed = true;
-                    }
+                    if (sl > 0.0 && low[i]  <= sl) { it->exit_price = sl; reason = "SL"; closed = true; }
+                    else if (tp > 0.0 && high[i] >= tp) { it->exit_price = tp; reason = "TP"; closed = true; }
                 } else {
-                    if (sl > 0.0 && high[i] >= sl) {
-                        it->exit_price = sl; reason = "SL"; closed = true;
-                    }
-                    else if (tp > 0.0 && low[i] <= tp){
-                        it->exit_price = tp; reason = "TP"; closed = true;
-                    }
+                    if (sl > 0.0 && high[i] >= sl) { it->exit_price = sl; reason = "SL"; closed = true; }
+                    else if (tp > 0.0 && low[i]  <= tp) { it->exit_price = tp; reason = "TP"; closed = true; }
                 }
 
                 if (closed) {
                     double entry = *it->entry_price;
-                    double exit = *it->exit_price;
+                    double exit  = *it->exit_price;
                     it->exit_datetime = datetime[i];
-                    it->exit_reason = reason;
-                    it->status = "closed";
+                    it->exit_reason   = reason;
+                    it->status        = "closed";
                     it->mae = *it->max_adv_price;
                     it->mfe = *it->max_fav_price;
+
                     double pnl = ((exit - entry) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
                     it->profit = pnl;
-                    temp_cumulative_pnl += *it->profit;
+                    temp_cumulative_pnl += pnl;
 
-                    if (counter < counter_max) { 
-                        std::cout << "[EXIT  ] " << (is_long ? "L" : "S") << " | " << reason << " " << datetime[i] << " | PnL: " << pnl 
-                                << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
-                        counter+=1;
-                    }
+                    if (print_logs)
+                        std::cout << "[SL/TP ] " << (is_long ? "L" : "S") << " | " << reason
+                                  << " " << datetime[i] << " | PnL: " << pnl
+                                  << "% | Acc: " << temp_cumulative_pnl << "%" << std::endl;
 
-                    double prev_p = it->prev_day_price.value_or(entry);
-                    double daily_var = ((exit - prev_p) / entry) * 100  * (is_long ? 1 : -1);
-                    DailyResult res;
-                    res.timestamp = format_datetime_to_int(datetime[i]);
-                    res.pnl = daily_var;
-                    res.ps_id = ps_id;
-                    daily_results_matrix.push_back(res);
+                    double prev_p    = it->prev_day_price.value_or(entry);
+                    double daily_var = ((exit - prev_p) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                    daily_results_matrix.push_back({format_datetime_to_int(datetime[i]), daily_var, ps_id});
 
                     trades.push_back(*it);
                     it = active_trades.erase(it);
-                }
-                else {
-                    // Atualiza MFE/MAE se o trade continuar aberto
-                    double current_high = high[i];
-                    double current_low = low[i];
-
+                } else {
                     if (is_long) {
-                        if (current_high > *it->max_fav_price) it->max_fav_price = current_high;
-                        if (current_low < *it->max_adv_price) it->max_adv_price = current_low;
+                        if (high[i] > *it->max_fav_price) it->max_fav_price = high[i];
+                        if (low[i]  < *it->max_adv_price) it->max_adv_price = low[i];
                     } else {
-                        if (current_low < *it->max_fav_price) it->max_fav_price = current_low;
-                        if (current_high > *it->max_adv_price) it->max_adv_price = current_high;
+                        if (low[i]  < *it->max_fav_price) it->max_fav_price = low[i];
+                        if (high[i] > *it->max_adv_price) it->max_adv_price = high[i];
                     }
-
-                    it->bars_held = (it->bars_held.value_or(0)) + 1;
+                    it->bars_held = it->bars_held.value_or(0) + 1;
                     ++it;
+                }
+            }
+
+
+            // ── 5. DAILY PnL UPDATE ───────────────────────────────────────────
+            if (day_switched || daytrade_time_final || is_last_bar) {
+                for (auto& trade : active_trades) {
+                    double entry    = *trade.entry_price;
+                    double current_p = close[i];
+                    bool is_long    = (trade.lot_size.value_or(0.0) > 0);
+
+                    double prev_p    = trade.prev_day_price.value_or(entry);
+                    double daily_var = ((current_p - prev_p) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                    daily_results_matrix.push_back({format_datetime_to_int(datetime[i]), daily_var, ps_id});
+                    trade.prev_day_price = current_p;
                 }
             }
         
 
-
-            // --- 4. Daily PnL Update
-            if (day_switched || daytrade_time_final || is_last_bar) {
-                for (auto& trade : active_trades) {
-                    double entry = *trade.entry_price;
-                    double current_p = close[i];
-                    bool is_long = (trade.lot_size.value_or(0.0) > 0);
-
-                    float pnl = (float)(((current_p - entry) / entry) * 100.0) * (is_long ? 1.0 : -1.0);
-
-                    double prev_p = trade.prev_day_price.value_or(entry);
-                    double daily_var = ((current_p - prev_p) / entry) * 100  * (is_long ? 1 : -1);
-                    DailyResult res;
-                    res.timestamp = format_datetime_to_int(datetime[i]);
-                    res.pnl = daily_var;
-                    res.ps_id = ps_id;
-                    daily_results_matrix.push_back(res);
-
-                    trade.prev_day_price = current_p;
-                }
-            }
         }
+    } catch (const std::exception& e) {
+        std::cerr << "[C++ Backtest Data Init Error]: " << e.what() << std::endl;
+    }
 
-    } catch (const std::exception& e) { std::cerr << "[C++ Backtest Error]: " << e.what() << std::endl; }
+    if (exec_settings.value("print_logs", false))
+        std::cout << "[FINISH] Total Trades: " << trades.size()
+                  << " | PnL: " << temp_cumulative_pnl << "%" << std::endl;
 
-    std::cout << "[FINISH] Total Trades: " << trades.size() << " | PnL Validado: " << temp_cumulative_pnl << "%" << std::endl;
-
-    // Final do backtest.cpp
-    std::cout << "[C++ Debug] Total de trades completados: " << trades.size() << std::endl;
-    
-    std::string trade_pnl_resolution = exec_settings.value("trade_pnl_resolution", "weekly");
-
+    std::string trade_pnl_resolution = exec_settings.value("trade_pnl_resolution", "daily");
     SimulationOutput output;
     output.trades_json = trades_to_json(trades, trade_pnl_resolution);
-    output.daily_vec = daily_results_matrix;
+    output.daily_vec   = daily_results_matrix;
     return output;
 }
 
-
-// Placeholder
 double calculate_lot_size(double price_entry, bool is_long_trade) {
-    return (is_long_trade) ? 1.0 : -1.0;
+    return is_long_trade ? 1.0 : -1.0;
 }
+
+
 
 
 
