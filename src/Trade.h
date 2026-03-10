@@ -13,6 +13,9 @@ struct Trade {
     std::optional<double> entry_price;
     std::optional<double> position_value; // entry_price * lot_size 
     std::optional<double> lot_size;
+    std::optional<double> trail_stop;
+    std::optional<double> comission;
+    std::optional<double> pnl_gross;
     std::optional<double> stop_loss;
     std::optional<double> take_profit;
 

@@ -18,7 +18,8 @@ std::string Engine::run_from_json(const json& payload) {
         auto datetime = payload["data"]["datetime"].get<std::vector<std::string>>();
         auto sim_params = payload["simulations"];
         auto exec_settings = payload["execution_settings"];
-        json shared_inds = payload.value("shared_indicators", json::object());
+        json ind_pool    = payload.value("indicators_pool", json::object());
+        json shared_sigs = payload.value("shared_signals",  json::object());
 
         std::map<std::string, std::vector<double>> data_map;
 
@@ -32,7 +33,11 @@ std::string Engine::run_from_json(const json& payload) {
             }
         }
 
-        json results = Operation::run(header, data_map, datetime, sim_params, exec_settings, shared_inds);
+        json results = Operation::run(
+            header, data_map, datetime,
+            sim_params, exec_settings,
+            ind_pool, shared_sigs
+        );
         return results.dump();
 
     } catch (const std::exception& e) {

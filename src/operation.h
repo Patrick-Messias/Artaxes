@@ -16,7 +16,8 @@ public: // Static so that Engine will call without initiating a class
                     const std::vector<std::string>& datetime,
                     const nlohmann::json& sim_params,
                     const nlohmann::json& exec_settings,
-                    const nlohmann::json& shared_inds
+                    const nlohmann::json& shared_inds,
+                    const nlohmann::json& payload_shared_sigs
                     );
 };
 
