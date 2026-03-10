@@ -115,7 +115,7 @@ class Operation(BaseClass):
         pass
 
     # || ===================================================================== || II - Data Processing || ===================================================================== ||
-
+    
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
@@ -133,99 +133,120 @@ class Operation(BaseClass):
                 for asset_name in assets:
                     asset_class = self.assets.get(asset_name)
                     if not asset_class: continue
-                    
+
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
                     base_asset_df = asset_class.data_get(model_tf)
 
-                    # Converts to dict
                     exec_set_raw = asdict(strat_obj.execution_settings)
-                    
-                    # Normalize for cpp
                     exec_set_mod = self.prepare_time_params(exec_set_raw)
 
                     n_ps = len(param_sets)
 
-                    # (LOCAL) For ind data management and bridge py-cpp to aboid redundant data copy
-                    ind_cache: dict[str, dict] = {} # unique_key -> col_data_map
-                    ind_usage: dict[str, int] = {} # unique_key -> how many param_sets are used
-                    ps_ind_keys: dict[str, list] = {} # ps_name -> list of unique_keys used
-                    sig_cache: dict[str, list] = {} # sig_hash -> {col_name: list}
+                    # ── Caches locais ──────────────────────────────────────────────
+                    ind_cache: dict[str, dict]   = {}  # unique_key → {col_name: list}
+                    ps_ind_keys: dict[str, list] = {}  # ps_name → [unique_keys]
+                    sig_cache: dict[str, dict]   = {}  # sig_hash → {col_name: list}
 
+                    # ── Fase 1: Indicadores e Sinais ───────────────────────────────
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_keys[ps_name] = []
 
-                        # Indicator
+                        # Indicadores
                         for ind_key, ind_obj in strat_obj.indicators.items():
                             eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                             ind_p_hash = self.param_suffix(eff_params)
                             unique_key = f"{asset_name}_{model_tf}_{ind_key}_{ind_p_hash}"
 
                             if unique_key not in ind_cache:
-                                print(f"   > Calculating indicator >>> name: {ind_key} >>> unique_key: {unique_key}")
-
+                                print(f"   > Calculating indicator >>> {ind_key} >>> {unique_key}")
                                 temp_ind_df = self._calculate_indicator(
                                     model_timeframe=model_tf,
                                     ind_name=ind_key,
                                     ind_obj=ind_obj,
                                     param_set_dict=ps_dict,
-                                    curr_asset_obj=base_asset_df, 
+                                    curr_asset_obj=base_asset_df,
                                     asset_name=asset_name,
                                     datetime_candle_references=asset_class.datetime_candle_references
                                 )
-
                                 novas_colunas = [c for c in temp_ind_df.columns if c not in base_asset_df.columns]
                                 ind_cache[unique_key] = {c: temp_ind_df[c].to_list() for c in novas_colunas}
-                                ind_usage[unique_key] = 0
                             else:
-                                print(f"   > Using cache indicator >>> name: {ind_key} >>> unique_key: {unique_key}")
+                                print(f"   > Using cache indicator >>> {ind_key} >>> {unique_key}")
 
-                            ind_usage[unique_key] += 1
-                            ps_ind_keys[ps_name].append(unique_key) 
+                            ps_ind_keys[ps_name].append(unique_key)
 
-                        # Signal Generation
+                        # Sinais
                         sig_hash = self.param_suffix(ps_dict)
-                        if sig_hash not in sig_cache: # Mounts df_full with OHLC + all indicators from this param_set
+                        if sig_hash not in sig_cache:
                             df_full = base_asset_df.clone()
                             for uk in ps_ind_keys[ps_name]:
                                 for col_name, values in ind_cache[uk].items():
                                     df_full = df_full.with_columns(pl.Series(col_name, values))
 
-                            # Generates signals
                             sig_result = strat_obj.signals(df_full, ps_dict)
                             sig_cache[sig_hash] = {}
                             for sig_name, sig_val in sig_result.items():
                                 if sig_val is None:
                                     continue
+                                if isinstance(sig_val, pl.Expr):
+                                    sig_val = df_full.select(sig_val).to_series()
                                 if isinstance(sig_val, pl.Series):
-                                    if sig_val.dtype == pl.Boolean:
-                                        sig_cache[sig_hash][sig_name] = sig_val.cast(pl.Float64).fill_null(0.0).to_list()
-                                    else:
-                                        sig_cache[sig_hash][sig_name] = sig_val.cast(pl.Float64).fill_null(0.0).to_list()
-                                else:
-                                    # Já é lista/constante
+                                    sig_cache[sig_hash][sig_name] = sig_val.cast(pl.Float64).fill_null(0.0).to_list()
+                                elif isinstance(sig_val, list):
                                     sig_cache[sig_hash][sig_name] = sig_val
                         else:
                             print(f"   > Using cache signals >>> hash: {sig_hash}")
 
+                    # ── Fase 2: Indicators Pool ────────────────────────────────────
+                    # Cada unique_key vai UMA vez no pool — C++ referencia por chave
+                    # pool_key = "{unique_key}__{col_name}"  ex: "EURUSD_M15_atr_window-8__atr"
+                    indicators_pool: dict = {}
+                    ps_ind_col_keys: dict[str, list] = {}  # ps_name → [pool_keys]
 
-                        # debug_df = base_asset_df.clone()
-                        # for col_name, values_list in indicator_data.items(): debug_df = debug_df.with_columns(pl.Series(name=col_name, values=values_list))
-                        # output_filename = f"debug_{asset_name}_{ps_name}.xlsx"
-                        # debug_df.tail(-500).write_excel(output_filename)
+                    for ps_name, ps_dict in param_sets.items():
+                        ps_ind_col_keys[ps_name] = []
+                        for uk in ps_ind_keys[ps_name]:
+                            for col_name, values in ind_cache[uk].items():
+                                pool_key = f"{uk}__{col_name}"
+                                if pool_key not in indicators_pool:
+                                    indicators_pool[pool_key] = values
+                                ps_ind_col_keys[ps_name].append(pool_key)
 
-                    # Indicators used by all param_sets go shared
-                    shared_keys = {uk for uk, count in ind_usage.items() if count == n_ps}
-                    shared_indicators: dict={}
-                    for uk in shared_keys:
-                        shared_indicators.update(ind_cache[uk])
+                    # ── Fase 3: Shared Signals ─────────────────────────────────────
+                    # Coluna shared = mesmos valores em todos os sig_hashes
+                    all_col_names: set[str] = set()
+                    for col_map in sig_cache.values():
+                        all_col_names.update(col_map.keys())
 
-                    # Creates asset_batch with shared_indicators already separate
+                    shared_signals: dict = {}
+                    for col_name in all_col_names:
+                        first_vals = None
+                        all_same = True
+                        for col_map in sig_cache.values():
+                            vals = col_map.get(col_name)
+                            if vals is None or not isinstance(vals, list):
+                                all_same = False; break
+                            if first_vals is None:
+                                first_vals = vals
+                            elif vals is not first_vals:
+                                n = len(vals)
+                                probe = [0, n//4, n//2, 3*n//4, n-1]
+                                if any(vals[p] != first_vals[p] for p in probe if p < n):
+                                    all_same = False; break
+                        if all_same and first_vals is not None:
+                            shared_signals[col_name] = first_vals
+
+                    print(f"   > Pool: {len(indicators_pool)} ind cols únicas | "
+                        f"Signals: {len(shared_signals)}/{len(all_col_names)} shared")
+
+                    # ── Fase 4: Monta asset_batch ──────────────────────────────────
                     asset_batch = {
-                        "asset_header": f"{model_name}_{strat_name}_{asset_name}",
-                        "data": base_asset_df.to_dict(as_series=False),
+                        "asset_header":    f"{model_name}_{strat_name}_{asset_name}",
+                        "data":            base_asset_df.to_dict(as_series=False),
                         "execution_settings": exec_set_mod,
-                        "shared_indicators": shared_indicators,
-                        "simulations": []
+                        "indicators_pool": indicators_pool,   # pool único, sem duplicatas
+                        "shared_signals":  shared_signals,
+                        "simulations":     []
                     }
 
                     for ps_name, ps_dict in param_sets.items():
@@ -234,21 +255,20 @@ class Operation(BaseClass):
                             'trades': []
                         }
 
-                        # Only send the ones that are not shared
-                        exclusive = {}
-                        for uk in ps_ind_keys[ps_name]:
-                            if uk not in shared_keys:
-                                exclusive.update(ind_cache[uk])
+                        # Sinais exclusivos (colunas que variam entre param_sets)
+                        ps_sig = sig_cache[self.param_suffix(ps_dict)]
+                        exclusive_sig = {col: vals for col, vals in ps_sig.items()
+                                        if col not in shared_signals}
 
                         asset_batch["simulations"].append({
-                            "id": ps_name,
-                            "params": ps_dict,
-                            "indicator_data": exclusive,
-                            "signal_data": sig_cache[self.param_suffix(ps_dict)],
+                            "id":             ps_name,
+                            "params":         ps_dict,
+                            "indicator_keys": ps_ind_col_keys[ps_name],  # só strings, sem dados
+                            "signal_data":    exclusive_sig,
                         })
 
-                    # 4. Envio único para C++
-                    print(f"   > Processing {asset_name}: {len(param_sets)} simulations...")
+                    # ── Fase 5: Envio para C++ ─────────────────────────────────────
+                    print(f"   > Processing {asset_name}: {n_ps} simulations...")
                     full_output = self._run_cpp_operation(asset_batch)
                     self._save_trades(full_output, model_name, strat_name, asset_name)
 
@@ -355,6 +375,8 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Execution Functions || ===================================================================== ||
 
+
+
     def _run_cpp_operation(self, asset_batch: dict):
         try:
             # Configuração do Caminho da DLL
@@ -394,7 +416,8 @@ class Operation(BaseClass):
                 "asset_header": asset_batch.get('asset_header', 'Unknown'),
                 "data": df.to_dict(as_series=False),
                 "execution_settings": asset_batch.get('execution_settings', {}),
-                "shared_indicators": asset_batch.get('shared_indicators', {}),  # <- adiciona
+                "shared_indicators": asset_batch.get('shared_indicators', {}),
+                "shared_signals":    asset_batch.get('shared_signals', {}),
                 "simulations": asset_batch.get('simulations', [])
             }
 
@@ -1020,7 +1043,8 @@ if __name__ == "__main__":
             'exit_nb_short': range(0, 0+1, 3),
             
             'sl_perc': range(2, 8+1, 3), # 3
-            'tp_perc': range(5, 5+1, 8), 
+            'tp_perc': range(3, 8+1, 5), 
+            'rr': range(2, 2+1, 2), 
             'param1': range(21, 85+1, 21), #50
             'param2': range(8, 24+1, 8), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -1048,28 +1072,58 @@ if __name__ == "__main__":
         atr = df['atr']
         ema = df['ema']
 
+        bull = df['close'] > df['open']
+        bear = df['close'] < df['open']
+
+        entry_long  = bull & bull.shift(1) & bull.shift(2) & (ema < ema.shift(1))
+        entry_short = bear & bear.shift(1) & bear.shift(2) & (ema > ema.shift(1))
+
+        exit_tf_long  = bear & bear.shift(1)
+        exit_tf_short = bull & bull.shift(1)
+
+        # Preço da ordem pendente
+        limit_long_price  = df['low']
+        limit_short_price = df['high']
+
+        # SL absoluto: swing dos últimos 3 candles
+        swing_low_sl  = pl.min_horizontal(df['low'],  df['low'].shift(1),  df['low'].shift(2))
+        swing_high_sl = pl.max_horizontal(df['high'], df['high'].shift(1), df['high'].shift(2))
+
+        # Distâncias (definidas ANTES de serem usadas)
+        sl_long_dist  = (limit_long_price  - swing_low_sl).clip(lower_bound=0.0001)
+        sl_short_dist = (swing_high_sl - limit_short_price).clip(lower_bound=0.0001)
+
+        # TP absoluto: 2R
+        tp_long_price  = limit_long_price  + sl_long_dist  * params['rr']
+        tp_short_price = limit_short_price - sl_short_dist * params['rr']
+
+        # Trailing: 0.5R
+        trail_long_dist  = sl_long_dist  * 0.5
+        trail_short_dist = sl_short_dist * 0.5
+
+        # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
+        be_long_dist  = sl_long_dist  * 1.0
+        be_short_dist = sl_short_dist * 1.0
+
         return {
-            # Bool Signals
-            'entry_long': (df['close'] > ema) & (df['close'].shift(1) < ema.shift(1)),
-            'entry_short': (df['close'] < ema) & (df['close'].shift(1) > ema.shift(1)),
-            'exit_tf_long': df['close'] < ema,
-            'exit_tf_short': df['close'] > ema,
+            'entry_long':       entry_long,
+            'entry_short':      entry_short,
+            'exit_long':        exit_tf_long,
+            'exit_short':       exit_tf_short,
 
-            # Float SL-TP
-            'exit_sl_long': atr * params['sl_perc'],
-            'exit_sl_short': atr * params['sl_perc'],
-            'exit_tp_long': atr * params['tp_perc'],
-            'exti_tp_short': atr * params['tp_perc'],
+            'sl_price_long':    swing_low_sl,
+            'sl_price_short':   swing_high_sl,
+            'tp_price_long':    tp_long_price,
+            'tp_price_short':   tp_short_price,
 
-            # Limit Order - Absolute price (optinal, None=Market)
-            'limit_long': None,
-            'limit_short': None,
+            'limit_long':       limit_long_price,
+            'limit_short':      limit_short_price,
 
-            # Break Even
-            'be_pos_val_long': atr * 1.5,
-            'be_pos_val_short': atr * 1.5,
-            'be_neg_val_long': None,
-            'be_neg_val_short': None,
+            'trail_long':       trail_long_dist,
+            'trail_short':      trail_short_dist,
+
+            'be_trigger_long':  be_long_dist,
+            'be_trigger_short': be_short_dist,
         }
 
 

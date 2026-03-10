@@ -43,6 +43,8 @@ class ExecutionSettings:
     trade_pnl_resolution: str='daily'
 
     print_logs: bool=True
+    slippage: float=0.0
+    comission: float=0.0
 
 
 @dataclass
