@@ -1082,8 +1082,8 @@ if __name__ == "__main__":
         exit_tf_short = bull & bull.shift(1)
 
         # Preço da ordem pendente
-        limit_long_price  = df['low']
-        limit_short_price = df['high']
+        limit_long_price  = df['high']
+        limit_short_price = df['low']
 
         # SL absoluto: swing dos últimos 3 candles
         swing_low_sl  = pl.min_horizontal(df['low'],  df['low'].shift(1),  df['low'].shift(2))
