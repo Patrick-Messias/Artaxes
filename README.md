@@ -5,6 +5,6 @@
 060326 - New branch created to rework redundant indicador data being transfered to cpp and changing JSON to MessagePack for data transfer
 070326 - Develop new indicator handling and MessagePack to transfer data py-cpp, planning on simplifying signals on python to make more beginner \
 friendly, now cpp only reads ready lists of bool.
-
+110326 - Consolidating and optimizing signal generation method
 
 
