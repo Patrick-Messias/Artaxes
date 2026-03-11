@@ -1105,6 +1105,21 @@ if __name__ == "__main__":
         be_long_dist  = sl_long_dist  * 1.0
         be_short_dist = sl_short_dist * 1.0
 
+        
+        if entry_long is not None: entry_long = entry_long.shift(1)
+        if entry_short is not None: entry_short = entry_short.shift(1)
+        if exit_tf_long is not None: exit_tf_long = exit_tf_long.shift(1)
+        if exit_tf_short is not None: exit_tf_short = exit_tf_short.shift(1)
+        if swing_low_sl is not None: swing_low_sl = swing_low_sl.shift(1)
+        if swing_high_sl is not None: swing_high_sl = swing_high_sl.shift(1)
+        if tp_long_price is not None: tp_long_price = tp_long_price.shift(1)
+        if tp_short_price is not None: tp_short_price = tp_short_price.shift(1)
+        if limit_long_price is not None: limit_long_price = limit_long_price.shift(1)
+        if limit_short_price is not None: limit_short_price = limit_short_price.shift(1)
+        if trail_long_dist is not None: trail_long_dist = trail_long_dist.shift(1)
+        if trail_short_dist is not None: trail_short_dist = trail_short_dist.shift(1)
+        if be_long_dist is not None: be_long_dist = be_long_dist.shift(1)
+        if be_short_dist is not None: be_short_dist = be_short_dist.shift(1)
         return {
             'entry_long':       entry_long,
             'entry_short':      entry_short,
@@ -1129,6 +1144,14 @@ if __name__ == "__main__":
 
     # XXX 1. Recriar ponte py - cpp - py
     # 2. Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
+
+
+    MANTER PY SIGNAL -> CPP EXEC, Próximo passos:
+    - Colocar em backtest verificador se be, trail existe, caso não exista então obviamente não iterar 
+    - Adicionar opção de sl/tp serem valores fixos ou valores a serem -+ do entry, para otimizar
+    - Otimizar mais outras coisas em cpp 
+
+
     # - Adicionar lado
     # - Sistema pra recriar trades Open Close pnl com trades do WFM ou já pegar direto?
     # - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
