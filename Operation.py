@@ -375,8 +375,6 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Execution Functions || ===================================================================== ||
 
-
-
     def _run_cpp_operation(self, asset_batch: dict):
         try:
             # Configuração do Caminho da DLL
@@ -1150,6 +1148,12 @@ if __name__ == "__main__":
     # - Otimizar mais outras coisas em cpp 
     # - Maior gargalo deve ser cpp manter em memória todos os parsets, indicadores, assets e realizar o/
     #   backtest, talvez ter um sistema de batch em cpp? tira de memória, salva e chama por partes?
+
+    # Otimizações Feitas:
+    # - Removido cópia de data para backtest, agora backtest recebe base_data e sim_data
+    # - Separado conversão JSON uma vez e guardar em cache cpp para não precisar converter a cada backtest
+    # - Simulação só aponta para os indicadores e sinais que a simulação precisa, não mais a base inteira em cpp
+    # - 
     
 
 
