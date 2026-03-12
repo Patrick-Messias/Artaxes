@@ -1001,26 +1001,22 @@ if __name__ == "__main__":
         name='EURUSD',
         type='currency_pair',
         market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex'
-    )
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
     gbpusd = Asset(
         name='GBPUSD',
         type='currency_pair',
         market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex'
-    )
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
     usdjpy = Asset(
         name='USDJPY',
         type='currency_pair',
         market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex'
-    )
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
     winfut = Asset(
         name='WIN$',
         type='futures',
         market='b3',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados'
-    )
+        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados')
 
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
@@ -1043,9 +1039,9 @@ if __name__ == "__main__":
             'exit_nb_short': range(0, 0+1, 3),
             
             'sl_perc': range(2, 8+1, 3), # 3
-            'tp_perc': range(3, 8+1, 5), 
+            'tp_perc': range(4, 8+1, 4), 
             'rr': range(2, 2+1, 2), 
-            'param1': range(21, 85+1, 21), #50
+            'param1': range(21, 63+1, 21), #50
             'param2': range(8, 24+1, 8), # 3
             'param3': ['sma'] #, 'ema', 'ema'
         }
@@ -1146,10 +1142,17 @@ if __name__ == "__main__":
     # 2. Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
 
 
-    MANTER PY SIGNAL -> CPP EXEC, Próximo passos:
-    - Colocar em backtest verificador se be, trail existe, caso não exista então obviamente não iterar 
-    - Adicionar opção de sl/tp serem valores fixos ou valores a serem -+ do entry, para otimizar
-    - Otimizar mais outras coisas em cpp 
+
+
+    # MANTER PY SIGNAL -> CPP EXEC, Próximo passos:
+    # - Colocar em backtest verificador se be, trail existe, caso não exista então obviamente não iterar 
+    # - Adicionar opção de sl/tp serem valores fixos ou valores a serem -+ do entry, para otimizar
+    # - Otimizar mais outras coisas em cpp 
+    # - Maior gargalo deve ser cpp manter em memória todos os parsets, indicadores, assets e realizar o/
+    #   backtest, talvez ter um sistema de batch em cpp? tira de memória, salva e chama por partes?
+    
+
+
 
 
     # - Adicionar lado

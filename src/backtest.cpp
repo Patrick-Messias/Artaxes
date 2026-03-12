@@ -65,7 +65,8 @@ static std::string check_instant_exit(bool is_long, double fill,
 
 
 SimulationOutput Backtest::run_simulation(const std::string& header,
-                                          const std::map<std::string, std::vector<double>>& data,
+                                          const std::map<std::string, std::vector<double>>& base_data,
+                                          const std::map<std::string, std::vector<double>>& sim_data,
                                           const std::vector<std::string>& datetime,
                                           const nlohmann::json& sim,
                                           const nlohmann::json& exec_settings,
@@ -78,8 +79,10 @@ SimulationOutput Backtest::run_simulation(const std::string& header,
     double temp_cumulative_pnl = 0.0;
 
     auto get_vec_ptr = [&](const std::string& key) -> const double* {
-        auto it = data.find(key);
-        if (it != data.end() && !it->second.empty()) return it->second.data();
+        auto it_sim = sim_data.find(key);
+        if (it_sim != sim_data.end() && !it_sim->second.empty()) return it_sim->second.data();
+        auto it_base = base_data.find(key);
+        if (it_base != base_data.end() && !it_base->second.empty()) return it_base->second.data();
         return nullptr;
     };
 
