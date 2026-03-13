@@ -115,15 +115,15 @@ class Operation(BaseClass):
         pass
 
     # || ===================================================================== || II - Data Processing || ===================================================================== ||
-    
+
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
 
         for model_name, model_obj in models.items():
-            strats = model_obj.strat
-            assets = model_obj.assets
-            model_tf = model_obj.execution_timeframe
+            strats    = model_obj.strat
+            assets    = model_obj.assets
+            model_tf  = model_obj.execution_timeframe
             self._results_map[self.name]['models'][model_name] = {'strats': {}}
 
             for strat_name, strat_obj in strats.items():
@@ -135,23 +135,19 @@ class Operation(BaseClass):
                     if not asset_class: continue
 
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
-                    base_asset_df = asset_class.data_get(model_tf)
+                    base_asset_df  = asset_class.data_get(model_tf)
+                    exec_set_raw   = asdict(strat_obj.execution_settings)
+                    exec_set_mod   = self.prepare_time_params(exec_set_raw)
+                    n_ps           = len(param_sets)
 
-                    exec_set_raw = asdict(strat_obj.execution_settings)
-                    exec_set_mod = self.prepare_time_params(exec_set_raw)
+                    ind_cache:   dict[str, dict] = {}
+                    ps_ind_keys: dict[str, list] = {}
+                    sig_cache:   dict[str, dict] = {}
 
-                    n_ps = len(param_sets)
-
-                    # ── Caches locais ──────────────────────────────────────────────
-                    ind_cache: dict[str, dict]   = {}  # unique_key → {col_name: list}
-                    ps_ind_keys: dict[str, list] = {}  # ps_name → [unique_keys]
-                    sig_cache: dict[str, dict]   = {}  # sig_hash → {col_name: list}
-
-                    # ── Fase 1: Indicadores e Sinais ───────────────────────────────
+                    # ── Fase 1: Indicadores e Sinais ───────────────────────────
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_keys[ps_name] = []
 
-                        # Indicadores
                         for ind_key, ind_obj in strat_obj.indicators.items():
                             eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                             ind_p_hash = self.param_suffix(eff_params)
@@ -159,7 +155,7 @@ class Operation(BaseClass):
 
                             if unique_key not in ind_cache:
                                 print(f"   > Calculating indicator >>> {ind_key} >>> {unique_key}")
-                                temp_ind_df = self._calculate_indicator(
+                                temp_ind_df   = self._calculate_indicator(
                                     model_timeframe=model_tf,
                                     ind_name=ind_key,
                                     ind_obj=ind_obj,
@@ -175,7 +171,6 @@ class Operation(BaseClass):
 
                             ps_ind_keys[ps_name].append(unique_key)
 
-                        # Sinais
                         sig_hash = self.param_suffix(ps_dict)
                         if sig_hash not in sig_cache:
                             df_full = base_asset_df.clone()
@@ -185,23 +180,48 @@ class Operation(BaseClass):
 
                             sig_result = strat_obj.signals(df_full, ps_dict)
                             sig_cache[sig_hash] = {}
+
                             for sig_name, sig_val in sig_result.items():
                                 if sig_val is None:
+                                    continue
+                                if isinstance(sig_val, str):
+                                    # Referência direta a coluna existente (ohlc ou pool)
+                                    sig_cache[sig_hash][sig_name] = sig_val
                                     continue
                                 if isinstance(sig_val, pl.Expr):
                                     sig_val = df_full.select(sig_val).to_series()
                                 if isinstance(sig_val, pl.Series):
-                                    sig_cache[sig_hash][sig_name] = sig_val.cast(pl.Float64).fill_null(0.0).to_list()
+                                    dtype = sig_val.dtype
+                                    if dtype == pl.Boolean or dtype == pl.UInt8:
+                                        # Sinal binário entry/exit
+                                        sig_cache[sig_hash][sig_name] = (
+                                            sig_val.cast(pl.Boolean).fill_null(False)
+                                            .to_numpy().astype(np.uint8)
+                                        )
+                                    else:
+                                        # Array de preço derivado (sl, tp, trail, be, limit, qualquer f64)
+                                        sig_cache[sig_hash][sig_name] = (
+                                            sig_val.cast(pl.Float64).fill_null(0.0)
+                                            .to_numpy().astype(np.float64)
+                                        )
+                                elif isinstance(sig_val, np.ndarray):
+                                    if sig_val.dtype == np.uint8 or sig_val.dtype == bool:
+                                        sig_cache[sig_hash][sig_name] = sig_val.astype(np.uint8)
+                                    else:
+                                        sig_cache[sig_hash][sig_name] = sig_val.astype(np.float64)
                                 elif isinstance(sig_val, list):
-                                    sig_cache[sig_hash][sig_name] = sig_val
+                                    # list → tenta inferir pelo primeiro elemento não-None
+                                    sample = next((v for v in sig_val if v is not None), 0)
+                                    if isinstance(sample, bool):
+                                        sig_cache[sig_hash][sig_name] = np.asarray(sig_val, dtype=np.uint8)
+                                    else:
+                                        sig_cache[sig_hash][sig_name] = np.asarray(sig_val, dtype=np.float64)
                         else:
                             print(f"   > Using cache signals >>> hash: {sig_hash}")
 
-                    # ── Fase 2: Indicators Pool ────────────────────────────────────
-                    # Cada unique_key vai UMA vez no pool — C++ referencia por chave
-                    # pool_key = "{unique_key}__{col_name}"  ex: "EURUSD_M15_atr_window-8__atr"
-                    indicators_pool: dict = {}
-                    ps_ind_col_keys: dict[str, list] = {}  # ps_name → [pool_keys]
+                    # ── Fase 2: Indicators Pool ────────────────────────────────
+                    indicators_pool:  dict = {}
+                    ps_ind_col_keys:  dict[str, list] = {}
 
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_col_keys[ps_name] = []
@@ -212,41 +232,58 @@ class Operation(BaseClass):
                                     indicators_pool[pool_key] = values
                                 ps_ind_col_keys[ps_name].append(pool_key)
 
-                    # ── Fase 3: Shared Signals ─────────────────────────────────────
-                    # Coluna shared = mesmos valores em todos os sig_hashes
-                    all_col_names: set[str] = set()
-                    for col_map in sig_cache.values():
-                        all_col_names.update(col_map.keys())
+                    # ── Fase 3: Arrays de preço derivados → pool ──────────────
+                    # pl.Series float retornadas pelo strat_signals entram no pool
+                    # com key "sig__{sig_hash}__{sig_name}" (única por param_set).
+                    # Strings apontam para coluna já existente (ohlc ou pool) → signal_ref.
+                    # Arrays uint8 → signal_array (entry/exit binários).
+                    ohlc_col_names = set(base_asset_df.columns)
 
-                    shared_signals: dict = {}
-                    for col_name in all_col_names:
-                        first_vals = None
-                        all_same = True
-                        for col_map in sig_cache.values():
-                            vals = col_map.get(col_name)
-                            if vals is None or not isinstance(vals, list):
-                                all_same = False; break
-                            if first_vals is None:
-                                first_vals = vals
-                            elif vals is not first_vals:
-                                n = len(vals)
-                                probe = [0, n//4, n//2, 3*n//4, n-1]
-                                if any(vals[p] != first_vals[p] for p in probe if p < n):
-                                    all_same = False; break
-                        if all_same and first_vals is not None:
-                            shared_signals[col_name] = first_vals
+                    ps_signal_refs:   dict[str, dict] = {ps: {} for ps in param_sets}
+                    ps_signal_arrays: dict[str, dict] = {ps: {} for ps in param_sets}
 
-                    print(f"   > Pool: {len(indicators_pool)} ind cols únicas | "
-                        f"Signals: {len(shared_signals)}/{len(all_col_names)} shared")
+                    for ps_name, ps_dict in param_sets.items():
+                        sig_hash = self.param_suffix(ps_dict)
+                        for sig_name, sig_val in sig_cache[sig_hash].items():
+                            if isinstance(sig_val, str):
+                                # Ref direta: usuário declarou 'sl_price_long': 'low'
+                                ps_signal_refs[ps_name][sig_name] = sig_val
+                            elif isinstance(sig_val, np.ndarray):
+                                if sig_val.dtype == np.uint8:
+                                    ps_signal_arrays[ps_name][sig_name] = sig_val
+                                else:
+                                    # Array float derivado → pool
+                                    pool_key = f"sig__{sig_hash}__{sig_name}"
+                                    if pool_key not in indicators_pool:
+                                        indicators_pool[pool_key] = sig_val
+                                    ps_signal_refs[ps_name][sig_name] = pool_key
 
-                    # ── Fase 4: Monta asset_batch ──────────────────────────────────
+                    # ── Fase 4: Shared signal arrays ───────────────────────────
+                    all_sig_names: set = set()
+                    for d in ps_signal_arrays.values(): all_sig_names.update(d.keys())
+
+                    shared_signal_arrays: dict = {}
+                    for sig_name in all_sig_names:
+                        arrs = [ps_signal_arrays[ps].get(sig_name) for ps in param_sets
+                                if ps_signal_arrays[ps].get(sig_name) is not None]
+                        if len(arrs) == len(param_sets):
+                            first = arrs[0]
+                            if all(a is first or np.array_equal(a, first) for a in arrs[1:]):
+                                shared_signal_arrays[sig_name] = first
+                                for ps in param_sets:
+                                    ps_signal_arrays[ps].pop(sig_name, None)
+
+                    print(f"   > Pool: {len(indicators_pool)} cols | "
+                          f"Shared bin: {len(shared_signal_arrays)} | Param_sets: {n_ps}")
+
+                    # ── Fase 5: Monta asset_batch ──────────────────────────────
                     asset_batch = {
-                        "asset_header":    f"{model_name}_{strat_name}_{asset_name}",
-                        "data":            base_asset_df.to_dict(as_series=False),
-                        "execution_settings": exec_set_mod,
-                        "indicators_pool": indicators_pool,   # pool único, sem duplicatas
-                        "shared_signals":  shared_signals,
-                        "simulations":     []
+                        "asset_header":         f"{model_name}_{strat_name}_{asset_name}",
+                        "data":                 base_asset_df.to_dict(as_series=False),
+                        "execution_settings":   exec_set_mod,
+                        "indicators_pool":      indicators_pool,
+                        "shared_signal_arrays": shared_signal_arrays,
+                        "simulations":          [],
                     }
 
                     for ps_name, ps_dict in param_sets.items():
@@ -254,20 +291,15 @@ class Operation(BaseClass):
                             'param_set_dict': ps_dict,
                             'trades': []
                         }
-
-                        # Sinais exclusivos (colunas que variam entre param_sets)
-                        ps_sig = sig_cache[self.param_suffix(ps_dict)]
-                        exclusive_sig = {col: vals for col, vals in ps_sig.items()
-                                        if col not in shared_signals}
-
                         asset_batch["simulations"].append({
                             "id":             ps_name,
                             "params":         ps_dict,
-                            "indicator_keys": ps_ind_col_keys[ps_name],  # só strings, sem dados
-                            "signal_data":    exclusive_sig,
+                            "indicator_keys": ps_ind_col_keys[ps_name],
+                            "signal_arrays":  ps_signal_arrays[ps_name],
+                            "signal_refs":    ps_signal_refs[ps_name],
                         })
 
-                    # ── Fase 5: Envio para C++ ─────────────────────────────────────
+                    # ── Fase 6: Envio para C++ ─────────────────────────────────
                     print(f"   > Processing {asset_name}: {n_ps} simulations...")
                     full_output = self._run_cpp_operation(asset_batch)
                     self._save_trades(full_output, model_name, strat_name, asset_name)
@@ -382,11 +414,9 @@ class Operation(BaseClass):
                 sys.path.append(path_to_dll)
             import engine_cpp  # type: ignore
 
-            # ── 1. DataFrame OHLC ─────────────────────────────────────────────
             df = pl.DataFrame(asset_batch['data']) if isinstance(asset_batch['data'], dict) \
                  else asset_batch['data'].clone()
 
-            # ── 2. datetime → int64 YYYYMMDDHHMMSS ───────────────────────────
             if df.schema.get('datetime') != pl.Int64:
                 dt_int = (
                     df['datetime'].cast(pl.Datetime)
@@ -398,135 +428,95 @@ class Operation(BaseClass):
             else:
                 dt_int = df['datetime'].to_numpy().astype(np.int64)
 
-            # ── 3. OHLC numpy ─────────────────────────────────────────────────
             ohlc_arrays = {
                 col: df[col].to_numpy().astype(np.float64)
                 for col in ['open', 'high', 'low', 'close'] if col in df.columns
             }
 
-            # ── 4. Indicators pool numpy ──────────────────────────────────────
-            ind_pool_arrays = {
-                key: np.asarray(vals, dtype=np.float64)
-                for key, vals in asset_batch.get('indicators_pool', {}).items()
+            ind_pool_arrays = {}
+            for key, vals in asset_batch.get('indicators_pool', {}).items():
+                if isinstance(vals, np.ndarray):
+                    ind_pool_arrays[key] = vals.astype(np.float64)
+                elif isinstance(vals, pl.Series):
+                    ind_pool_arrays[key] = vals.cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
+                else:
+                    ind_pool_arrays[key] = np.asarray(vals, dtype=np.float64)
+
+            shared_sig_arrays = {
+                name: arr.astype(np.uint8) if arr.dtype != np.uint8 else arr
+                for name, arr in asset_batch.get('shared_signal_arrays', {}).items()
             }
 
-            # ── 5. Injeta shared_signals em cada sim antes de passar ao C++ ──
-            # shared_signals contém sinais iguais entre todos os param_sets
-            # (ex: exit_long, sl_price_long, tp_price_long) — o C++ só lê
-            # signal_data de cada sim, então os dois precisam chegar juntos
-            shared_signals = asset_batch.get('shared_signals', {})
             sim_params = []
             for sim in asset_batch.get('simulations', []):
-                exclusive = sim.get('signal_data', {})
-                # exclusive sobrescreve shared em caso de conflito de chave
-                merged = {**shared_signals, **exclusive}
+                sig_arrays = {}
+                for name, arr in sim.get('signal_arrays', {}).items():
+                    sig_arrays[name] = arr.astype(np.uint8) if arr.dtype != np.uint8 else arr
                 sim_params.append({
-                    **{k: v for k, v in sim.items() if k != 'signal_data'},
-                    'signal_data': merged,
+                    "id":            sim.get("id", ""),
+                    "params":        sim.get("params", {}),
+                    "signal_arrays": sig_arrays,
+                    "signal_refs":   sim.get("signal_refs", {}),
                 })
 
-            exec_settings = asset_batch.get('execution_settings', {})
-            header        = asset_batch.get('asset_header', 'Unknown')
+            ps_names = [s.get("id", "") for s in asset_batch.get("simulations", [])]
 
-            # ── 6. Chamada zero-copy ──────────────────────────────────────────
             raw_output = engine_cpp.execute(
-                header,
+                asset_batch.get('asset_header', 'Unknown'),
                 ohlc_arrays,
                 dt_int,
                 ind_pool_arrays,
+                shared_sig_arrays,
                 sim_params,
-                exec_settings,
+                asset_batch.get('execution_settings', {}),
             )
 
             if not raw_output:
-                return {"simulations": [], "wfm_data": []}
+                return {"simulations": [], "wfm_data": [], "ps_names": []}
 
             return {
                 "simulations": raw_output.get("simulations", []),
-                "wfm_data":    raw_output.get("wfm_data", []),
+                "wfm_data":    raw_output.get("wfm_data",    []),
+                "ps_names":    ps_names,
             }
 
         except Exception as e:
             print(f'< Error in Python-C++ Bridge: {e}')
             import traceback; traceback.print_exc()
-            return {"simulations": [], "wfm_data": []}
+            return {"simulations": [], "wfm_data": [], "ps_names": []}
 
     def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
         if not full_output: return
-
+ 
         simulations = full_output.get("simulations", [])
-        wfm_raw     = full_output.get("wfm_data", [])
-
-        # ── Trades ────────────────────────────────────────────────────────────
-        # raw_output["simulations"] é py::list de py::list de py::dict
-        # Não precisa de json.loads — já é Python nativo
-        for sim_trades in simulations:
-            for trade in sim_trades:
-                full_key  = trade.get("path", "")
-                idx_param = full_key.find("_param_set")
-                if idx_param == -1:
-                    print(f"DEBUG: path inesperado: {full_key}")
-                    continue
-                ps_name = full_key[idx_param + 1:]  # "param_set-21-..."
-                try:
-                    target = self._results_map[self.name]["models"][m_name] \
-                                              ["strats"][s_name]["assets"][a_name] \
-                                              ["param_sets"][ps_name]
-                    if target["trades"] is None: target["trades"] = []
+        wfm_raw = full_output.get("wfm_data", [])
+ 
+        # Process Trades
+        ps_names = full_output.get("ps_names", [])
+        for sim_idx, simulation_batch in enumerate(simulations):
+            ps_name = ps_names[sim_idx] if sim_idx < len(ps_names) else None
+            if not ps_name:
+                print(f"DEBUG: ps_name não encontrado para sim_idx={sim_idx}")
+                continue
+            try:
+                target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
+                if target["trades"] is None: target["trades"] = []
+                for trade in simulation_batch:
                     trade["asset"] = a_name
                     target["trades"].append(trade)
-                except KeyError as e:
-                    print(f"DEBUG: chave não encontrada: {e} | {m_name}->{s_name}->{a_name}->{ps_name}")
-
-        # ── WFM Daily Results ─────────────────────────────────────────────────
-        # wfm_raw é list[dict] com keys "ts", "pnl", "id"  (já Python nativo)
+            except KeyError as e:
+                print(f"DEBUG: Chave não encontrada: {e} | Caminho tentado: {m_name}->{s_name}->{a_name}->{ps_name}")
+ 
+        # Process WFM Daily Results
         if wfm_raw:
             try:
+                # Transforms cpp dict lists to Polars DataFrame pivots
                 df_matrix = self._process_wfm_to_polars(wfm_raw)
-                self._results_map[self.name]["models"][m_name]["strats"][s_name] \
-                                 ["assets"][a_name]["wfm_matrix_data"] = df_matrix
-                print(f"   > WFM Matrix: {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
+                map_asset_nome = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
+                map_asset_nome["wfm_matrix_data"] = df_matrix
+                print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
             except Exception as e:
-                print(f"   > WFM error {m_name}|{s_name}|{a_name}: {e}")
-
-
-
-    # def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
-    #     if not full_output: return
-
-    #     simulations = full_output.get("simulations", [])
-    #     wfm_raw = full_output.get("wfm_data", [])
-
-    #     # Process Trades
-    #     for simulation_batch in simulations:
-    #         for trade in simulation_batch:
-    #             full_key = trade.get("path", "")
-    #             idx_param = full_key.find("_param_set")
-                
-    #             if idx_param == -1:
-    #                 print(f"DEBUG: Formato de path inesperado: {full_key}")
-    #                 continue
-    #             ps_name = full_key[idx_param+1:] # "param_set-21-..."
-
-    #             try: 
-    #                 target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
-    #                 if target["trades"] is None: target["trades"] = []
-    #                 trade["asset"] = a_name 
-    #                 target["trades"].append(trade)
-                    
-    #             except KeyError as e:
-    #                 print(f"DEBUG: Chave não encontrada: {e} | Caminho tentado: {m_name}->{s_name}->{a_name}->{ps_name}")
-
-    #     # Process WFM Daily Results
-    #     if wfm_raw:
-    #         try:
-    #             # Transforms cpp dict lists to Polars DataFrame pivots
-    #             df_matrix = self._process_wfm_to_polars(wfm_raw)
-    #             map_asset_nome = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
-    #             map_asset_nome["wfm_matrix_data"] = df_matrix
-    #             print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
-    #         except Exception as e:
-    #             print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
+                print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
 
 
 
@@ -1102,11 +1092,13 @@ if __name__ == "__main__":
     }
 
     def strat_signals(df: pl.DataFrame, params: dict) -> dict:
+        # Can use columns df['high'] or str 'high' to point
+
         atr = df['atr']
         ema = df['ema']
 
-        bull = df['close'] > df['open']
-        bear = df['close'] < df['open']
+        bull = df['close'] < df['open']
+        bear = df['close'] > df['open']
 
         entry_long  = bull & bull.shift(1) & bull.shift(2) & (ema < ema.shift(1))
         entry_short = bear & bear.shift(1) & bear.shift(2) & (ema > ema.shift(1))
@@ -1115,8 +1107,8 @@ if __name__ == "__main__":
         exit_tf_short = bull & bull.shift(1)
 
         # Preço da ordem pendente
-        limit_long_price  = df['high']
-        limit_short_price = df['low']
+        limit_long_price  = df['high'] # "high"
+        limit_short_price = df['low'] # "low"
 
         # SL absoluto: swing dos últimos 3 candles
         swing_low_sl  = pl.min_horizontal(df['low'],  df['low'].shift(1),  df['low'].shift(2))
@@ -1131,28 +1123,29 @@ if __name__ == "__main__":
         tp_short_price = limit_short_price - sl_short_dist * params['rr']
 
         # Trailing: 0.5R
-        trail_long_dist  = sl_long_dist  * 0.5
-        trail_short_dist = sl_short_dist * 0.5
+        trail_long_dist  = None #sl_long_dist  * 0.5
+        trail_short_dist = None #sl_short_dist * 0.5
 
         # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
-        be_long_dist  = sl_long_dist  * 1.0
-        be_short_dist = sl_short_dist * 1.0
+        be_long_dist  = None #sl_long_dist  * 1.0
+        be_short_dist = None #sl_short_dist * 1.0
 
         
-        if entry_long is not None: entry_long = entry_long.shift(1)
-        if entry_short is not None: entry_short = entry_short.shift(1)
-        if exit_tf_long is not None: exit_tf_long = exit_tf_long.shift(1)
-        if exit_tf_short is not None: exit_tf_short = exit_tf_short.shift(1)
-        if swing_low_sl is not None: swing_low_sl = swing_low_sl.shift(1)
-        if swing_high_sl is not None: swing_high_sl = swing_high_sl.shift(1)
-        if tp_long_price is not None: tp_long_price = tp_long_price.shift(1)
-        if tp_short_price is not None: tp_short_price = tp_short_price.shift(1)
-        if limit_long_price is not None: limit_long_price = limit_long_price.shift(1)
-        if limit_short_price is not None: limit_short_price = limit_short_price.shift(1)
-        if trail_long_dist is not None: trail_long_dist = trail_long_dist.shift(1)
-        if trail_short_dist is not None: trail_short_dist = trail_short_dist.shift(1)
-        if be_long_dist is not None: be_long_dist = be_long_dist.shift(1)
-        if be_short_dist is not None: be_short_dist = be_short_dist.shift(1)
+        if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
+        if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
+        if exit_tf_long is not None and not isinstance(exit_tf_long, str): exit_tf_long = exit_tf_long.shift(1)
+        if exit_tf_short is not None and not isinstance(exit_tf_short, str): exit_tf_short = exit_tf_short.shift(1)
+        if swing_low_sl is not None and not isinstance(swing_low_sl, str): swing_low_sl = swing_low_sl.shift(1)
+        if swing_high_sl is not None and not isinstance(swing_high_sl, str): swing_high_sl = swing_high_sl.shift(1)
+        if tp_long_price is not None and not isinstance(tp_long_price, str): tp_long_price = tp_long_price.shift(1)
+        if tp_short_price is not None and not isinstance(tp_short_price, str): tp_short_price = tp_short_price.shift(1)
+        
+        if limit_long_price is not None and not isinstance(limit_long_price, str): limit_long_price = limit_long_price.shift(1)
+        if limit_short_price is not None and not isinstance(limit_short_price, str): limit_short_price = limit_short_price.shift(1)
+        if trail_long_dist is not None and not isinstance(trail_long_dist, str): trail_long_dist = trail_long_dist.shift(1)
+        if trail_short_dist is not None and not isinstance(trail_short_dist, str): trail_short_dist = trail_short_dist.shift(1)
+        if be_long_dist is not None and not isinstance(be_long_dist, str): be_long_dist = be_long_dist.shift(1)
+        if be_short_dist is not None and not isinstance(be_short_dist, str): be_short_dist = be_short_dist.shift(1)
         return {
             'entry_long':       entry_long,
             'entry_short':      entry_short,
@@ -1192,12 +1185,15 @@ if __name__ == "__main__":
     # - Removido cópia de data para backtest, agora backtest recebe base_data e sim_data
     # - Separado conversão JSON uma vez e guardar em cache cpp para não precisar converter a cada backtest
     # - Simulação só aponta para os indicadores e sinais que a simulação precisa, não mais a base inteira em cpp
+    
     # - replaced msgpack to py::array_t 
     # - bar_dates/times/days computed only 1x in Engine
     # - trade_to_pydict direct without nlohmann on cpp-py 
     
-
-
+    # - Signals optimization
+    # - Bool (Entry/Exit_TF)
+    # - Signal Refs (TP/SL/Trail/Limit/BreakEven) only points to OHLC+Indicators present during each parset backtest 
+    # - Making shure still can freely calculate new columns in signal generation
 
 
     # - Adicionar lado

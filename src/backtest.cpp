@@ -43,7 +43,9 @@ static std::string check_instant_exit(bool is_long, double,
 
 SimulationOutput Backtest::run_simulation(
     const std::string&      header,
-    const SimView&          sim_view,
+    const FastPool&         fast_pool,
+    const SignalView&       signal_view,
+    const SignalRefs&       signal_refs,
     size_t                  n_bars,
     const std::vector<int>& bar_dates,
     const std::vector<int>& bar_times,
@@ -61,9 +63,21 @@ SimulationOutput Backtest::run_simulation(
     trades.reserve(512);
     daily_results_matrix.reserve(4096);
 
-    auto get_ptr = [&](const std::string& key) -> const double* {
-        auto it = sim_view.find(key);
-        return (it != sim_view.end()) ? it->second : nullptr;
+    // Preço: OHLC, indicators, derived signal arrays (f64 no fast_pool)
+    auto get_price_ptr = [&](const std::string& key) -> const double* {
+        auto it = fast_pool.find(key);
+        return (it != fast_pool.end()) ? it->second : nullptr;
+    };
+    // Sinal de preço via ref: resolve o nome da coluna e busca no fast_pool
+    auto get_ref_ptr = [&](const std::string& sig_name) -> const double* {
+        auto rit = signal_refs.find(sig_name);
+        if (rit == signal_refs.end()) return nullptr;
+        return get_price_ptr(rit->second);
+    };
+    // Binário: entry/exit uint8 no signal_view
+    auto get_signal_ptr = [&](const std::string& key) -> const uint8_t* {
+        auto it = signal_view.find(key);
+        return (it != signal_view.end()) ? it->second : nullptr;
     };
 
     // bar_times[i] = HHMMSS → minutos
@@ -73,31 +87,31 @@ SimulationOutput Backtest::run_simulation(
     };
 
     try {
-        json params = sim.value("params", json::object());
+        const json& params = sim;  // sim já é sp.params directamente
 
-        const double* open  = get_ptr("open");
-        const double* high  = get_ptr("high");
-        const double* low   = get_ptr("low");
-        const double* close = get_ptr("close");
+        const double* open  = get_price_ptr("open");
+        const double* high  = get_price_ptr("high");
+        const double* low   = get_price_ptr("low");
+        const double* close = get_price_ptr("close");
 
-        const double* sig_entry_long     = get_ptr("entry_long");
-        const double* sig_entry_short    = get_ptr("entry_short");
-        const double* sig_exit_long      = get_ptr("exit_long");
-        const double* sig_exit_short     = get_ptr("exit_short");
-        const double* sig_limit_long     = get_ptr("limit_long");
-        const double* sig_limit_short    = get_ptr("limit_short");
-        const double* sig_sl_price_long  = get_ptr("sl_price_long");
-        const double* sig_sl_price_short = get_ptr("sl_price_short");
-        const double* sig_sl_long        = get_ptr("sl_long");
-        const double* sig_sl_short       = get_ptr("sl_short");
-        const double* sig_tp_price_long  = get_ptr("tp_price_long");
-        const double* sig_tp_price_short = get_ptr("tp_price_short");
-        const double* sig_tp_long        = get_ptr("tp_long");
-        const double* sig_tp_short       = get_ptr("tp_short");
-        const double* sig_trail_long     = get_ptr("trail_long");
-        const double* sig_trail_short    = get_ptr("trail_short");
-        const double* sig_be_long        = get_ptr("be_trigger_long");
-        const double* sig_be_short       = get_ptr("be_trigger_short");
+        const uint8_t* sig_entry_long    = get_signal_ptr("entry_long");
+        const uint8_t* sig_entry_short   = get_signal_ptr("entry_short");
+        const uint8_t* sig_exit_long     = get_signal_ptr("exit_long");
+        const uint8_t* sig_exit_short    = get_signal_ptr("exit_short");
+        const double*  sig_limit_long    = get_ref_ptr("limit_long");
+        const double*  sig_limit_short   = get_ref_ptr("limit_short");
+        const double*  sig_sl_price_long = get_ref_ptr("sl_price_long");
+        const double*  sig_sl_price_short= get_ref_ptr("sl_price_short");
+        const double*  sig_sl_long       = get_ref_ptr("sl_long");
+        const double*  sig_sl_short      = get_ref_ptr("sl_short");
+        const double*  sig_tp_price_long = get_ref_ptr("tp_price_long");
+        const double*  sig_tp_price_short= get_ref_ptr("tp_price_short");
+        const double*  sig_tp_long       = get_ref_ptr("tp_long");
+        const double*  sig_tp_short      = get_ref_ptr("tp_short");
+        const double*  sig_trail_long    = get_ref_ptr("trail_long");
+        const double*  sig_trail_short   = get_ref_ptr("trail_short");
+        const double*  sig_be_long       = get_ref_ptr("be_trigger_long");
+        const double*  sig_be_short      = get_ref_ptr("be_trigger_short");
 
         auto resolve_sl = [&](bool is_long, double fill, int idx) -> double {
             const double* p = is_long ? sig_sl_price_long : sig_sl_price_short;
@@ -140,7 +154,7 @@ SimulationOutput Backtest::run_simulation(
 
         size_t lus = header.find_last_of('_');
         std::string asset_name = (lus != std::string::npos) ? header.substr(lus+1) : header;
-        std::string trade_path = header + "_" + sim["id"].get<std::string>();
+        std::string trade_path = header + "_ps" + std::to_string(ps_id);
 
         std::vector<int> close_days = exec_settings.value("day_of_week_close_and_stop_trade", std::vector<int>{});
 
@@ -208,11 +222,6 @@ SimulationOutput Backtest::run_simulation(
                 double csl = t.stop_loss.value_or(0.0);
                 if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
             }
-            if (print_logs)
-                std::cout << "[ENTRY] " << (is_long?"L":"S") << " " 
-                          << " | In: " << std::fixed << std::setprecision(5) << fill
-                          << " SL: " << std::setprecision(4) << sl 
-                          << " TP: " << std::setprecision(4) << tp << std::endl;
         };
 
         auto update_trailing = [&](Trade& t, bool is_long, double ref, size_t idx) {
@@ -235,10 +244,10 @@ SimulationOutput Backtest::run_simulation(
             bool dt_final     = (currentTime >= timeTF);
             if (day_switched) { day_trades_long = 0; day_trades_short = 0; }
 
-            bool signal_long   = sig_entry_long  && sig_entry_long[i]  > 0.5;
-            bool signal_short  = sig_entry_short && sig_entry_short[i] > 0.5;
-            bool do_exit_long  = sig_exit_long   && sig_exit_long[i]   > 0.5;
-            bool do_exit_short = sig_exit_short  && sig_exit_short[i]  > 0.5;
+            bool signal_long   = sig_entry_long  && sig_entry_long[i]  != 0;
+            bool signal_short  = sig_entry_short && sig_entry_short[i] != 0;
+            bool do_exit_long  = sig_exit_long   && sig_exit_long[i]   != 0;
+            bool do_exit_short = sig_exit_short  && sig_exit_short[i]  != 0;
 
             // ── 1. EXIT LOGIC ─────────────────────────────────────────────────
             {
