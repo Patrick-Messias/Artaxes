@@ -5,6 +5,7 @@
 #include <numeric>
 #include <vector>
 #include <iostream>
+#include <chrono>
 
 using json = nlohmann::json;
 
@@ -20,48 +21,42 @@ EngineResult Operation::run(
     const json&                                             exec_settings
 ) {
     const size_t n_sims = sim_params.size();
-
     std::vector<SimulationOutput> outputs(n_sims);
     std::vector<int> indexes((int)n_sims);
     std::iota(indexes.begin(), indexes.end(), 0);
 
+    auto t0 = std::chrono::high_resolution_clock::now();
+
     std::for_each(std::execution::par, indexes.begin(), indexes.end(), [&](int ps_id) {
         const SimParams& sp = sim_params[ps_id];
 
-        // ── signal_view: shared + exclusivos desta sim ────────────────────────
         Backtest::SignalView signal_view;
         signal_view.reserve(shared_signal_arrays.size() + sp.signal_array_bufs.size());
-
-        for (const auto& [k, ptr] : shared_signal_arrays)
-            signal_view[k] = ptr;
-
-        // Exclusivos sobrescrevem shared se houver conflito
-        for (const auto& [k, buf] : sp.signal_array_bufs)
-            signal_view[k] = buf.data();
+        for (const auto& [k, ptr] : shared_signal_arrays) signal_view[k] = ptr;
+        for (const auto& [k, buf] : sp.signal_array_bufs)  signal_view[k] = buf.data();
 
         outputs[ps_id] = Backtest::run_simulation(
-            header,
-            fast_pool,
-            signal_view,
-            sp.signal_refs,
-            n_bars,
-            bar_dates, bar_times, bar_days,
-            sp.params,
-            exec_settings,
-            ps_id
+            header, fast_pool, signal_view, sp.signal_refs,
+            n_bars, bar_dates, bar_times, bar_days,
+            sp.params, exec_settings, ps_id
         );
     });
 
     EngineResult result;
     result.simulations.reserve(n_sims);
-    for (size_t ps_id = 0; ps_id < n_sims; ++ps_id) {
-        json trades_arr = json::array();
-        for (const auto& t : outputs[ps_id].trades)
-            trades_arr.push_back(trades_to_json({t})[0]);
-        result.simulations.push_back(std::move(trades_arr));
 
-        for (const auto& dr : outputs[ps_id].daily_vec)
-            result.wfm_data.push_back({{"ts", dr.ts}, {"pnl", dr.pnl}, {"id", dr.ps_id}});
+    auto t1 = std::chrono::high_resolution_clock::now();
+
+    for (size_t i = 0; i < n_sims; ++i) {
+        result.simulations.push_back(std::move(outputs[i].trades));
+        for (const auto& dr : outputs[i].daily_vec)
+            result.wfm_data.push_back(dr);  // cópia direta, sem json
     }
+
+    auto t2 = std::chrono::high_resolution_clock::now();
+    std::cerr << "   > [PERF] CPP-OP - parallel=" 
+            << std::chrono::duration<double>(t1-t0).count() << "s | export="
+            << std::chrono::duration<double>(t2-t1).count() << "s\n";
+
     return result;
 }

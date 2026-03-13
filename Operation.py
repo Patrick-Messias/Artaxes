@@ -414,6 +414,9 @@ class Operation(BaseClass):
                 sys.path.append(path_to_dll)
             import engine_cpp  # type: ignore
 
+            import time
+            t0 = time.perf_counter()
+
             df = pl.DataFrame(asset_batch['data']) if isinstance(asset_batch['data'], dict) \
                  else asset_batch['data'].clone()
 
@@ -460,7 +463,7 @@ class Operation(BaseClass):
                 })
 
             ps_names = [s.get("id", "") for s in asset_batch.get("simulations", [])]
-
+            t1 = time.perf_counter()
             raw_output = engine_cpp.execute(
                 asset_batch.get('asset_header', 'Unknown'),
                 ohlc_arrays,
@@ -470,10 +473,10 @@ class Operation(BaseClass):
                 sim_params,
                 asset_batch.get('execution_settings', {}),
             )
-
+            t2 = time.perf_counter()
             if not raw_output:
                 return {"simulations": [], "wfm_data": [], "ps_names": []}
-
+            print(f"   > [PERF] prep={t1-t0:.3f}s | cpp={t2-t1:.3f}s")
             return {
                 "simulations": raw_output.get("simulations", []),
                 "wfm_data":    raw_output.get("wfm_data",    []),
@@ -530,7 +533,7 @@ class Operation(BaseClass):
 
         # Pivot with SUM agg to avoid duplicate error
         matrix = df.pivot(
-            on="id",
+            on="ps_id",
             index="ts",
             values="pnl",
             aggregate_function="sum"
@@ -742,6 +745,7 @@ class Operation(BaseClass):
     def _print_metrics(self, key: str, trades: list):
         pass
 
+    # Saves Model-Strat-Asset-Parset/WF results
     def _save_and_clean(self):
         pass
 
@@ -1003,10 +1007,15 @@ class Operation(BaseClass):
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
+        
+        import time
+        t0 = time.perf_counter()
+
         self._operation()
         #self._report_pnl_summary()
         #self._plot_pnl_curves()
-        
+        t1 = time.perf_counter()
+        print(f"   > [PERF] operation->run_walkforward={t1-t0:.3f}s")
         self._run_walkforward()
 
         # III - Operation Portfolio Simulation, Operation Analysis and Metrics
@@ -1123,12 +1132,12 @@ if __name__ == "__main__":
         tp_short_price = limit_short_price - sl_short_dist * params['rr']
 
         # Trailing: 0.5R
-        trail_long_dist  = None #sl_long_dist  * 0.5
-        trail_short_dist = None #sl_short_dist * 0.5
+        trail_long_dist  = sl_long_dist  * 0.5
+        trail_short_dist = sl_short_dist * 0.5
 
         # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
-        be_long_dist  = None #sl_long_dist  * 1.0
-        be_short_dist = None #sl_short_dist * 1.0
+        be_long_dist  = sl_long_dist  * 1.0
+        be_short_dist = sl_short_dist * 1.0
 
         
         if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
@@ -1194,6 +1203,13 @@ if __name__ == "__main__":
     # - Bool (Entry/Exit_TF)
     # - Signal Refs (TP/SL/Trail/Limit/BreakEven) only points to OHLC+Indicators present during each parset backtest 
     # - Making shure still can freely calculate new columns in signal generation
+
+    # - daily_results_matrix reallocs eliminated from the biggest vector of the loop
+    # - Trade without std::optinal, entry_datetime/exit_datetime with char[20]
+    # - Trade -> py::dict direct with bindings.cpp
+    # - operation.cpp without trades_to_json, trades go directly as vector<Trade>, zero serialization
+    # - thread_local_rng in generate_id
+    # - unordered_set for closed_days, lookup O(1) instead of std::find O(n)
 
 
     # - Adicionar lado
