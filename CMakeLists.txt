@@ -4,7 +4,6 @@ project(backtest_engine LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Configuração do Python
 set(PYTHON_HOME "C:/Program Files/Python311")
 set(Python3_ROOT_DIR "${PYTHON_HOME}")
 set(Python3_EXECUTABLE "${PYTHON_HOME}/python.exe")
@@ -16,7 +15,6 @@ find_package(pybind11 REQUIRED)
 find_package(nlohmann_json REQUIRED)
 find_package(TBB REQUIRED)
 
-# Define o módulo
 pybind11_add_module(engine_cpp
     src/bindings.cpp
     src/engine.cpp
@@ -24,19 +22,12 @@ pybind11_add_module(engine_cpp
     src/backtest.cpp
 )
 
-target_include_directories(engine_cpp PRIVATE 
-    src
-    "${CMAKE_SOURCE_DIR}/msgpack-cpp/include"
-)
+target_include_directories(engine_cpp PRIVATE src)
 
-target_link_libraries(engine_cpp PRIVATE 
+target_link_libraries(engine_cpp PRIVATE
+    pybind11::module
     nlohmann_json::nlohmann_json
     TBB::tbb
-    Python3::Module
-)
-
-target_compile_definitions(engine_cpp PRIVATE
-    MSGPACK_NO_BOOST
 )
 
 if(MSVC)

@@ -1,117 +1,58 @@
 #include "engine.h"
 #include "operation.h"
-#include <nlohmann/json.hpp>
 #include <iostream>
-#include <string>
-#include <iomanip>
 
-using json = nlohmann::json;
-
-std::string Engine::run(const std::string& payload_json) {
-    if (payload_json.empty()) return "[]";
-    return run_from_json(json::parse(payload_json));
+// Zeller's congruence — dia da semana sem mktime/string
+// Retorna 0=Dom, 1=Seg … 6=Sáb
+static int weekday_from_ymd(int y, int m, int d) {
+    static const int t[] = {0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4};
+    if (m < 3) y--;
+    return (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7;
 }
 
-std::string Engine::run_from_json(const json& payload) {
+EngineResult Engine::execute(
+    const std::string&                                header,
+    const std::unordered_map<std::string, const double*>& ohlc_arrays,
+    size_t                                            n_bars,
+    const std::vector<int64_t>&                       datetime_int,
+    const std::unordered_map<std::string, const double*>& indicators_pool,
+    const json&                                       sim_params,
+    const json&                                       exec_settings
+) {
     try {
-        std::string header = payload["asset_header"];
-        auto datetime = payload["data"]["datetime"].get<std::vector<std::string>>();
-        auto sim_params = payload["simulations"];
-        auto exec_settings = payload["execution_settings"];
-        json ind_pool    = payload.value("indicators_pool", json::object());
-        json shared_sigs = payload.value("shared_signals",  json::object());
-
-        std::map<std::string, std::vector<double>> data_map;
-
-        for (auto& el : payload["data"].items()) {
-            std::string col_name = el.key();
-            if (col_name == "datetime") continue;
-            try {
-                data_map[col_name] = el.value().get<std::vector<double>>();
-            } catch (const std::exception& e) {
-                std::cerr << " > ERROR na coluna '" << col_name << "': " << e.what() << std::endl;
-            }
+        // ── Pre-computa datas UMA VEZ para todas as simulações ────────────────
+        std::vector<int> bar_dates(n_bars), bar_times(n_bars), bar_days(n_bars);
+        for (size_t i = 0; i < n_bars; ++i) {
+            int64_t val  = datetime_int[i];
+            int64_t dpart = val / 1000000LL;   // YYYYMMDD
+            int64_t tpart = val % 1000000LL;   // HHMMSS
+            bar_dates[i] = (int)dpart;
+            bar_times[i] = (int)tpart;
+            int y = (int)(dpart / 10000);
+            int m = (int)((dpart % 10000) / 100);
+            int d = (int)(dpart % 100);
+            bar_days[i]  = weekday_from_ymd(y, m, d);
         }
 
-        json results = Operation::run(
-            header, data_map, datetime,
-            sim_params, exec_settings,
-            ind_pool, shared_sigs
-        );
-        return results.dump();
+        // ── Monta fast_pool ───────────────────────────────────────────────────
+        std::unordered_map<std::string, const double*> fast_pool;
+        fast_pool.reserve(ohlc_arrays.size() + indicators_pool.size() + 32);
+
+        for (const auto& [key, ptr] : ohlc_arrays)
+            fast_pool[key] = ptr;
+
+        for (const auto& [pool_key, ptr] : indicators_pool) {
+            size_t pos = pool_key.rfind("__");
+            std::string col = (pos == std::string::npos) ? pool_key : pool_key.substr(pos + 2);
+            fast_pool[col] = ptr;
+        }
+        
+        return Operation::run(header, fast_pool, n_bars,
+                              bar_dates, bar_times, bar_days,
+                              sim_params, exec_settings);
 
     } catch (const std::exception& e) {
-        std::cerr << "[C++ Engine Error]: " << e.what() << std::endl;
-        return "[]";
+        std::cerr << "[Engine::execute error]: " << e.what() << std::endl;
+        return {};
     }
 }
-
-/*
-std::string Engine::run(const std::string& payload_json) {
-    try {
-        if (payload_json.empty()) return "[]";
-
-        json payload = json::parse(payload_json);
-
-        std::string header = payload["asset_header"];
-        auto datetime = payload["data"]["datetime"].get<std::vector<std::string>>();
-        auto sim_params = payload["simulations"];
-        auto exec_settings = payload["execution_settings"];
-
-        std::map<std::string, std::vector<double>> data_map;
-        
-        std::cout << "\n[C++ DEBUG] --- INSPECIONANDO PAYLOAD RECEBIDO ---" << std::endl;
-        std::cout << " > Colunas detectadas no JSON: ";
-        for (auto it = payload["data"].begin(); it != payload["data"].end(); ++it) {
-            std::cout << "[" << it.key() << "] ";
-        }
-        std::cout << "\n" << std::endl;
-
-        for (auto& el : payload["data"].items()) {
-            std::string col_name = el.key();
-            if (col_name == "datetime") continue;
-
-            try {
-                std::vector<double> values = el.value().get<std::vector<double>>();
-                data_map[col_name] = values;
-
-                // Print dos índices 50 a 60
-                std::cout << " > Inspecionando coluna '" << col_name << "' (indices 50-60):" << std::endl;
-                if (values.size() > 60) {
-                    std::cout << "   Values: ";
-                    for (int i = 50; i <= 60; ++i) {
-                        std::cout << std::fixed << std::setprecision(5) << values[i] << (i == 60 ? "" : ", ");
-                    }
-                    std::cout << std::endl;
-                } else {
-                    std::cout << "   [AVISO] Coluna muito curta para amostra 50-60. Tamanho: " << values.size() << std::endl;
-                }
-
-            } catch (const std::exception& e) {
-                std::cerr << " > ERROR na coluna '" << col_name << "': " << e.what() << std::endl;
-            }
-        }
-
-        // Verificação específica para MA nas simulações
-        std::cout << "\n[C++ DEBUG] Verificando 'indicator_data' na primeira simulacao:" << std::endl;
-        if (!sim_params.empty() && sim_params[0].contains("indicator_data")) {
-            for (auto& el : sim_params[0]["indicator_data"].items()) {
-                std::cout << " > Indicador extra detectado: [" << el.key() << "]" << std::endl;
-            }
-        } else {
-            std::cout << " > [AVISO] 'indicator_data' nao encontrado ou vazio nas simulacoes." << std::endl;
-        }
-
-        std::cout << "\n[C++ DEBUG] Payload processado. Chamando Operation::run...\n" << std::endl;
-        
-        json results = Operation::run(header, data_map, datetime, sim_params, exec_settings);
-        return results.dump();
-
-    } catch (const std::exception& e) {
-        std::cerr << "[C++ Engine Error]: " << e.what() << std::endl;
-        return "[]";
-    }
-}
-
-
-*/

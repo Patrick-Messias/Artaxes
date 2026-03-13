@@ -377,119 +377,158 @@ class Operation(BaseClass):
 
     def _run_cpp_operation(self, asset_batch: dict):
         try:
-            # Configuração do Caminho da DLL
             path_to_dll = r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\build\Release"
-            if path_to_dll not in sys.path: 
+            if path_to_dll not in sys.path:
                 sys.path.append(path_to_dll)
-            
-            import engine_cpp, msgpack # type: ignore
+            import engine_cpp  # type: ignore
 
-            # 1. PREPARAÇÃO DO DATAFRAME (Convertemos aqui para garantir tipos corretos)
-            # Se o 'data' no asset_batch já for um dict vindo do to_dict(), transformamos em DF para tratar
-            if isinstance(asset_batch['data'], dict):
-                df = pl.DataFrame(asset_batch['data'])
+            # ── 1. DataFrame OHLC ─────────────────────────────────────────────
+            df = pl.DataFrame(asset_batch['data']) if isinstance(asset_batch['data'], dict) \
+                 else asset_batch['data'].clone()
+
+            # ── 2. datetime → int64 YYYYMMDDHHMMSS ───────────────────────────
+            if df.schema.get('datetime') != pl.Int64:
+                dt_int = (
+                    df['datetime'].cast(pl.Datetime)
+                    .dt.strftime('%Y%m%d%H%M%S')
+                    .cast(pl.Int64)
+                    .to_numpy()
+                    .astype(np.int64)
+                )
             else:
-                df = asset_batch['data'].clone()
+                dt_int = df['datetime'].to_numpy().astype(np.int64)
 
-            # Mantemos apenas datetime + colunas numéricas (Float ou Int)
-            # Isso remove 'ativo', 'date' e 'time' que causaram o erro 302
-            df = df.select([
-                pl.col("datetime"),
-                pl.col(pl.Float64),
-                pl.col(pl.Int64),
-                pl.col(pl.Float32)
-            ])
-                
-            # Datetime treatment
-            if 'datetime' in df.columns and df.schema['datetime'] != pl.Utf8:
-                df = df.with_columns(pl.col('datetime').dt.to_string('%Y-%m-%d %H:%M:%S'))
-
-            # Mumerical treatment (Cast to Float64) ---
-            numeric_cols = [name for name, dtype in df.schema.items() if dtype.is_numeric()]
-            if numeric_cols:
-                df = df.with_columns([pl.col(c).cast(pl.Float64).fill_null(0.0) for c in numeric_cols])
-
-            # 2. Payload final setup (key names align with Operation::run in cpp)
-            final_payload = {
-                "asset_header": asset_batch.get('asset_header', 'Unknown'),
-                "data": df.to_dict(as_series=False),
-                "execution_settings": asset_batch.get('execution_settings', {}),
-                "shared_indicators": asset_batch.get('shared_indicators', {}),
-                "shared_signals":    asset_batch.get('shared_signals', {}),
-                "simulations": asset_batch.get('simulations', [])
+            # ── 3. OHLC numpy ─────────────────────────────────────────────────
+            ohlc_arrays = {
+                col: df[col].to_numpy().astype(np.float64)
+                for col in ['open', 'high', 'low', 'close'] if col in df.columns
             }
 
-            # 3. Serialization
-            def msgpack_default(obj):
-                if isinstance(obj, (datetime.datetime, datetime.date)):
-                    return obj.isoformat()
-                if hasattr(obj, 'to_dict'):
-                    return obj.to_dict()
-                return str(obj)
-            
-            packed = msgpack.packb(final_payload, default=msgpack_default, use_bin_type=True)
-            
-            # 4. Calls cpp
-            raw_output = engine_cpp.run_msgpack(packed)
+            # ── 4. Indicators pool numpy ──────────────────────────────────────
+            ind_pool_arrays = {
+                key: np.asarray(vals, dtype=np.float64)
+                for key, vals in asset_batch.get('indicators_pool', {}).items()
+            }
 
-            # Makes shure is str before json.loads
-            if isinstance(raw_output, bytes):
-                raw_output = raw_output.decode('utf-8')
-            
-            # 5. PARSE DO RESULTADO
-            if not raw_output or raw_output in ("[]", "{}"):
+            # ── 5. Injeta shared_signals em cada sim antes de passar ao C++ ──
+            # shared_signals contém sinais iguais entre todos os param_sets
+            # (ex: exit_long, sl_price_long, tp_price_long) — o C++ só lê
+            # signal_data de cada sim, então os dois precisam chegar juntos
+            shared_signals = asset_batch.get('shared_signals', {})
+            sim_params = []
+            for sim in asset_batch.get('simulations', []):
+                exclusive = sim.get('signal_data', {})
+                # exclusive sobrescreve shared em caso de conflito de chave
+                merged = {**shared_signals, **exclusive}
+                sim_params.append({
+                    **{k: v for k, v in sim.items() if k != 'signal_data'},
+                    'signal_data': merged,
+                })
+
+            exec_settings = asset_batch.get('execution_settings', {})
+            header        = asset_batch.get('asset_header', 'Unknown')
+
+            # ── 6. Chamada zero-copy ──────────────────────────────────────────
+            raw_output = engine_cpp.execute(
+                header,
+                ohlc_arrays,
+                dt_int,
+                ind_pool_arrays,
+                sim_params,
+                exec_settings,
+            )
+
+            if not raw_output:
                 return {"simulations": [], "wfm_data": []}
-                
-            # Como o C++ retornou uma string, precisamos de json.loads para voltar a ser lista/dict
-            if isinstance(raw_output, str):
-                parsed = json.loads(raw_output)
-                return {
-                    "simulations": parsed.get("simulations", []),
-                    "wfm_data": parsed.get("wfm_data", [])
-                }
-            
-            return raw_output
+
+            return {
+                "simulations": raw_output.get("simulations", []),
+                "wfm_data":    raw_output.get("wfm_data", []),
+            }
 
         except Exception as e:
             print(f'< Error in Python-C++ Bridge: {e}')
+            import traceback; traceback.print_exc()
             return {"simulations": [], "wfm_data": []}
 
     def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
         if not full_output: return
 
         simulations = full_output.get("simulations", [])
-        wfm_raw = full_output.get("wfm_data", [])
+        wfm_raw     = full_output.get("wfm_data", [])
 
-        # Process Trades
-        for simulation_batch in simulations:
-            for trade in simulation_batch:
-                full_key = trade.get("path", "")
+        # ── Trades ────────────────────────────────────────────────────────────
+        # raw_output["simulations"] é py::list de py::list de py::dict
+        # Não precisa de json.loads — já é Python nativo
+        for sim_trades in simulations:
+            for trade in sim_trades:
+                full_key  = trade.get("path", "")
                 idx_param = full_key.find("_param_set")
-                
                 if idx_param == -1:
-                    print(f"DEBUG: Formato de path inesperado: {full_key}")
+                    print(f"DEBUG: path inesperado: {full_key}")
                     continue
-                ps_name = full_key[idx_param+1:] # "param_set-21-..."
-
-                try: 
-                    target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
+                ps_name = full_key[idx_param + 1:]  # "param_set-21-..."
+                try:
+                    target = self._results_map[self.name]["models"][m_name] \
+                                              ["strats"][s_name]["assets"][a_name] \
+                                              ["param_sets"][ps_name]
                     if target["trades"] is None: target["trades"] = []
-                    trade["asset"] = a_name 
+                    trade["asset"] = a_name
                     target["trades"].append(trade)
-                    
                 except KeyError as e:
-                    print(f"DEBUG: Chave não encontrada: {e} | Caminho tentado: {m_name}->{s_name}->{a_name}->{ps_name}")
+                    print(f"DEBUG: chave não encontrada: {e} | {m_name}->{s_name}->{a_name}->{ps_name}")
 
-        # Process WFM Daily Results
+        # ── WFM Daily Results ─────────────────────────────────────────────────
+        # wfm_raw é list[dict] com keys "ts", "pnl", "id"  (já Python nativo)
         if wfm_raw:
             try:
-                # Transforms cpp dict lists to Polars DataFrame pivots
                 df_matrix = self._process_wfm_to_polars(wfm_raw)
-                map_asset_nome = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
-                map_asset_nome["wfm_matrix_data"] = df_matrix
-                print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
+                self._results_map[self.name]["models"][m_name]["strats"][s_name] \
+                                 ["assets"][a_name]["wfm_matrix_data"] = df_matrix
+                print(f"   > WFM Matrix: {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
             except Exception as e:
-                print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
+                print(f"   > WFM error {m_name}|{s_name}|{a_name}: {e}")
+
+
+
+    # def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
+    #     if not full_output: return
+
+    #     simulations = full_output.get("simulations", [])
+    #     wfm_raw = full_output.get("wfm_data", [])
+
+    #     # Process Trades
+    #     for simulation_batch in simulations:
+    #         for trade in simulation_batch:
+    #             full_key = trade.get("path", "")
+    #             idx_param = full_key.find("_param_set")
+                
+    #             if idx_param == -1:
+    #                 print(f"DEBUG: Formato de path inesperado: {full_key}")
+    #                 continue
+    #             ps_name = full_key[idx_param+1:] # "param_set-21-..."
+
+    #             try: 
+    #                 target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
+    #                 if target["trades"] is None: target["trades"] = []
+    #                 trade["asset"] = a_name 
+    #                 target["trades"].append(trade)
+                    
+    #             except KeyError as e:
+    #                 print(f"DEBUG: Chave não encontrada: {e} | Caminho tentado: {m_name}->{s_name}->{a_name}->{ps_name}")
+
+    #     # Process WFM Daily Results
+    #     if wfm_raw:
+    #         try:
+    #             # Transforms cpp dict lists to Polars DataFrame pivots
+    #             df_matrix = self._process_wfm_to_polars(wfm_raw)
+    #             map_asset_nome = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
+    #             map_asset_nome["wfm_matrix_data"] = df_matrix
+    #             print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
+    #         except Exception as e:
+    #             print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
+
+
 
     def _process_wfm_to_polars(self, wfm_raw):
         df = pl.DataFrame(wfm_raw)
@@ -1153,7 +1192,9 @@ if __name__ == "__main__":
     # - Removido cópia de data para backtest, agora backtest recebe base_data e sim_data
     # - Separado conversão JSON uma vez e guardar em cache cpp para não precisar converter a cada backtest
     # - Simulação só aponta para os indicadores e sinais que a simulação precisa, não mais a base inteira em cpp
-    # - 
+    # - replaced msgpack to py::array_t 
+    # - bar_dates/times/days computed only 1x in Engine
+    # - trade_to_pydict direct without nlohmann on cpp-py 
     
 
 
@@ -1185,7 +1226,8 @@ if __name__ == "__main__":
                                                  order_type='market', limit_order_base_calc_ref_price='open', offset=0.0, 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
-                                                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', print_logs=False),
+                                                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
+                                                 print_logs=False),
             mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=ind,

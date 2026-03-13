@@ -1,24 +1,22 @@
-#ifndef OPERATION_H
-#define OPERATION_H
-
-#include <nlohmann/json.hpp>
-#include <vector>
+#pragma once
 #include <string>
-#include <map> // Essencial para o std::map
-#include "backtest.h"
+#include <vector>
+#include <unordered_map>
+#include <nlohmann/json.hpp>
+#include "engine.h"
 
 using json = nlohmann::json;
 
 class Operation {
-public: // Static so that Engine will call without initiating a class
-    static json run(const std::string& header, 
-                    const std::map<std::string, std::vector<double>>& data,
-                    const std::vector<std::string>& datetime,
-                    const nlohmann::json& sim_params,
-                    const nlohmann::json& exec_settings,
-                    const nlohmann::json& shared_inds,
-                    const nlohmann::json& payload_shared_sigs
-                    );
+public:
+    static EngineResult run(
+        const std::string&                                    header,
+        const std::unordered_map<std::string, const double*>& fast_pool,
+        size_t                                                n_bars,
+        const std::vector<int>&                               bar_dates,
+        const std::vector<int>&                               bar_times,
+        const std::vector<int>&                               bar_days,
+        const json&                                           sim_params,
+        const json&                                           exec_settings
+    );
 };
-
-#endif
