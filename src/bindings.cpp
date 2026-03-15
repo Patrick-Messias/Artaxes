@@ -4,12 +4,14 @@
 #include <nlohmann/json.hpp>
 #include "engine.h"
 #include "Trade.h"
+#include "Utils.h"
+
+#include <iostream>
 
 namespace py = pybind11;
 using json = nlohmann::json;
 
-// ── Conversores leves ─────────────────────────────────────────────────────────
-
+// ── py_to_json ────────────────────────────────────────────────────────────────
 static json py_to_json(const py::object& obj) {
     if (obj.is_none())                    return nullptr;
     if (py::isinstance<py::bool_>(obj))   return obj.cast<bool>();
@@ -32,60 +34,111 @@ static json py_to_json(const py::object& obj) {
     return nullptr;
 }
 
-// Trade → py::dict direto, sem nlohmann intermediário
-static py::dict trade_to_pydict(const Trade& t) {
-    py::dict d;
-    d["id"]             = py::str(t.id);
-    d["asset"]          = py::str(t.asset);
-    d["path"]           = py::str(t.path);
-    d["status"]         = py::str(t.status);
-    d["entry_datetime"] = py::str(t.entry_datetime);
-    d["entry_price"]    = py::float_(t.entry_price);
-    d["lot_size"]       = py::float_(t.lot_size);
-    d["stop_loss"]      = t.stop_loss  > 0.0 ? py::object(py::float_(t.stop_loss))  : py::none();
-    d["take_profit"]    = t.take_profit> 0.0 ? py::object(py::float_(t.take_profit)): py::none();
-    d["mfe"]            = py::float_(t.mfe);
-    d["mae"]            = py::float_(t.mae);
-    d["bars_held"]      = py::int_(t.bars_held);
-    if (t.closed) {
-        d["exit_price"]    = py::float_(t.exit_price);
-        d["exit_datetime"] = py::str(t.exit_datetime);
-        d["exit_reason"]   = py::str(t.exit_reason);
-        d["profit"]        = py::float_(t.profit);
-        d["profit_r"]      = py::float_(t.profit_r);
-    } else {
-        d["exit_price"]    = py::none();
-        d["exit_datetime"] = py::none();
-        d["exit_reason"]   = py::none();
-        d["profit"]        = py::none();
-        d["profit_r"]      = py::none();
-    }
-    return d;
-}
-
-//DailyRow -> py::dict
-static py::dict dailyrow_to_pydict(const DailyResult& d) {
-    py::dict p;
-    p["ts"]    = py::int_(d.ts);
-    p["pnl"]   = py::float_(d.pnl);
-    p["ps_id"] = py::int_(d.ps_id);
-    return p;
-}
-
+// ── EngineResult → py::dict columnar ─────────────────────────────────────────
 static py::dict engine_result_to_pydict(const EngineResult& res) {
-    py::list all_sims;
-    for (const auto& sim_trades : res.simulations) {
-        py::list sim_list;
-        for (const auto& t : sim_trades)
-            sim_list.append(trade_to_pydict(t));
-        all_sims.append(sim_list);
+
+    const size_t n_sims = res.simulations.size();
+    size_t total_trades = 0;
+    for (const auto& s : res.simulations) total_trades += s.size();
+    const size_t n_wfm  = res.wfm_data.size();
+
+    // ── Trades columnar ───────────────────────────────────────────────────────
+    auto a_sim_offsets  = py::array_t<int32_t>(n_sims + 1);
+    auto a_entry_price  = py::array_t<double>(total_trades);
+    auto a_exit_price   = py::array_t<double>(total_trades);
+    auto a_lot_size     = py::array_t<double>(total_trades);
+    auto a_stop_loss    = py::array_t<double>(total_trades);
+    auto a_take_profit  = py::array_t<double>(total_trades);
+    auto a_profit       = py::array_t<double>(total_trades);
+    auto a_profit_r     = py::array_t<double>(total_trades);
+    auto a_mfe          = py::array_t<double>(total_trades);
+    auto a_mae          = py::array_t<double>(total_trades);
+    auto a_bars_held    = py::array_t<int32_t>(total_trades);
+    auto a_closed       = py::array_t<uint8_t>(total_trades);
+
+    py::list l_id(total_trades);
+    py::list l_entry_dt(total_trades);
+    py::list l_exit_dt(total_trades);
+    py::list l_exit_reason(total_trades);
+    py::list l_status(total_trades);
+
+    auto* off           = a_sim_offsets.mutable_data();
+    auto* p_entry_price = a_entry_price.mutable_data();
+    auto* p_exit_price  = a_exit_price.mutable_data();
+    auto* p_lot_size    = a_lot_size.mutable_data();
+    auto* p_stop_loss   = a_stop_loss.mutable_data();
+    auto* p_take_profit = a_take_profit.mutable_data();
+    auto* p_profit      = a_profit.mutable_data();
+    auto* p_profit_r    = a_profit_r.mutable_data();
+    auto* p_mfe         = a_mfe.mutable_data();
+    auto* p_mae         = a_mae.mutable_data();
+    auto* p_bars_held   = a_bars_held.mutable_data();
+    auto* p_closed      = a_closed.mutable_data();
+
+    size_t idx = 0;
+    for (size_t si = 0; si < n_sims; ++si) {
+        off[si] = (int32_t)idx;
+        for (const auto& t : res.simulations[si]) {
+            p_entry_price[idx] = t.entry_price;
+            p_exit_price[idx]  = t.exit_price;
+            p_lot_size[idx]    = t.lot_size;
+            p_stop_loss[idx]   = t.stop_loss;
+            p_take_profit[idx] = t.take_profit;
+            p_profit[idx]      = t.profit;
+            p_profit_r[idx]    = t.profit_r;
+            p_mfe[idx]         = t.mfe;
+            p_mae[idx]         = t.mae;
+            p_bars_held[idx]   = t.bars_held;
+            p_closed[idx]      = t.closed ? 1 : 0;
+            l_id[idx]          = py::str(t.id);
+            l_entry_dt[idx]    = py::str(t.entry_datetime);
+            l_exit_dt[idx]     = t.closed ? py::object(py::str(t.exit_datetime)) : py::none();
+            l_exit_reason[idx] = t.closed ? py::object(py::str(t.exit_reason))   : py::none();
+            l_status[idx]      = py::str(t.status);
+            ++idx;
+        }
     }
-    py::list wfm;
-    for (const auto& row : res.wfm_data)
-        wfm.append(dailyrow_to_pydict(row));
+    off[n_sims] = (int32_t)idx;
+
+    py::dict trades_col;
+    trades_col["sim_offsets"]    = a_sim_offsets;
+    trades_col["entry_price"]    = a_entry_price;
+    trades_col["exit_price"]     = a_exit_price;
+    trades_col["lot_size"]       = a_lot_size;
+    trades_col["stop_loss"]      = a_stop_loss;
+    trades_col["take_profit"]    = a_take_profit;
+    trades_col["profit"]         = a_profit;
+    trades_col["profit_r"]       = a_profit_r;
+    trades_col["mfe"]            = a_mfe;
+    trades_col["mae"]            = a_mae;
+    trades_col["bars_held"]      = a_bars_held;
+    trades_col["closed"]         = a_closed;
+    trades_col["id"]             = l_id;
+    trades_col["entry_datetime"] = l_entry_dt;
+    trades_col["exit_datetime"]  = l_exit_dt;
+    trades_col["exit_reason"]    = l_exit_reason;
+    trades_col["status"]         = l_status;
+
+    // ── WFM columnar ──────────────────────────────────────────────────────────
+    auto a_wfm_ts    = py::array_t<int64_t>(n_wfm);
+    auto a_wfm_pnl   = py::array_t<double>(n_wfm);
+    auto a_wfm_ps_id = py::array_t<int32_t>(n_wfm);
+    auto* p_ts    = a_wfm_ts.mutable_data();
+    auto* p_pnl   = a_wfm_pnl.mutable_data();
+    auto* p_ps_id = a_wfm_ps_id.mutable_data();
+    for (size_t i = 0; i < n_wfm; ++i) {
+        p_ts[i]    = res.wfm_data[i].ts;
+        p_pnl[i]   = res.wfm_data[i].pnl;
+        p_ps_id[i] = res.wfm_data[i].ps_id;
+    }
+    py::dict wfm_col;
+    wfm_col["ts"]    = a_wfm_ts;
+    wfm_col["pnl"]   = a_wfm_pnl;
+    wfm_col["ps_id"] = a_wfm_ps_id;
+
     py::dict out;
-    out["simulations"] = all_sims;
-    out["wfm_data"]    = wfm;
+    out["trades_columnar"] = trades_col;
+    out["wfm_columnar"]    = wfm_col;
     return out;
 }
 

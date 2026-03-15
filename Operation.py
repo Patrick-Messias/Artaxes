@@ -414,9 +414,6 @@ class Operation(BaseClass):
                 sys.path.append(path_to_dll)
             import engine_cpp  # type: ignore
 
-            import time
-            t0 = time.perf_counter()
-
             df = pl.DataFrame(asset_batch['data']) if isinstance(asset_batch['data'], dict) \
                  else asset_batch['data'].clone()
 
@@ -463,7 +460,6 @@ class Operation(BaseClass):
                 })
 
             ps_names = [s.get("id", "") for s in asset_batch.get("simulations", [])]
-            t1 = time.perf_counter()
             raw_output = engine_cpp.execute(
                 asset_batch.get('asset_header', 'Unknown'),
                 ohlc_arrays,
@@ -473,65 +469,92 @@ class Operation(BaseClass):
                 sim_params,
                 asset_batch.get('execution_settings', {}),
             )
-            t2 = time.perf_counter()
             if not raw_output:
-                return {"simulations": [], "wfm_data": [], "ps_names": []}
-            print(f"   > [PERF] prep={t1-t0:.3f}s | cpp={t2-t1:.3f}s")
+                return {"trades_columnar": None, "wfm_columnar": None, "ps_names": []}
+
             return {
-                "simulations": raw_output.get("simulations", []),
-                "wfm_data":    raw_output.get("wfm_data",    []),
-                "ps_names":    ps_names,
+                "trades_columnar": raw_output.get("trades_columnar"),
+                "wfm_columnar":    raw_output.get("wfm_columnar"),
+                "ps_names":        ps_names,
             }
 
         except Exception as e:
             print(f'< Error in Python-C++ Bridge: {e}')
             import traceback; traceback.print_exc()
-            return {"simulations": [], "wfm_data": [], "ps_names": []}
+            return {"trades_columnar": None, "wfm_columnar": None, "ps_names": []}
+
 
     def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
         if not full_output: return
  
-        simulations = full_output.get("simulations", [])
-        wfm_raw = full_output.get("wfm_data", [])
+        tc       = full_output.get("trades_columnar")
+        wfm_col  = full_output.get("wfm_columnar")
+        ps_names = full_output.get("ps_names", []) 
  
-        # Process Trades
-        ps_names = full_output.get("ps_names", [])
-        for sim_idx, simulation_batch in enumerate(simulations):
-            ps_name = ps_names[sim_idx] if sim_idx < len(ps_names) else None
-            if not ps_name:
-                print(f"DEBUG: ps_name não encontrado para sim_idx={sim_idx}")
-                continue
-            try:
-                target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
-                if target["trades"] is None: target["trades"] = []
-                for trade in simulation_batch:
-                    trade["asset"] = a_name
-                    target["trades"].append(trade)
-            except KeyError as e:
-                print(f"DEBUG: Chave não encontrada: {e} | Caminho tentado: {m_name}->{s_name}->{a_name}->{ps_name}")
- 
-        # Process WFM Daily Results
-        if wfm_raw:
+        # Trades: columnar -> list[dict] by simulation via polars
+        if tc:
+            offsets = tc["sim_offsets"] # np.int32 [n_sims+1]
+
+            # Builds DataFrame flat of all trades at unce
+            df_all = pl.DataFrame({
+                "entry_price":   tc["entry_price"],
+                "exit_price":    tc["exit_price"],
+                "lot_size":      tc["lot_size"],
+                "stop_loss":     tc["stop_loss"],
+                "take_profit":   tc["take_profit"],
+                "profit":        tc["profit"],
+                "profit_r":      tc["profit_r"],
+                "mfe":           tc["mfe"],
+                "mae":           tc["mae"],
+                "bars_held":     tc["bars_held"],
+                "closed":        tc["closed"],
+                "id":            tc["id"],
+                "entry_datetime":tc["entry_datetime"],
+                "exit_datetime": tc["exit_datetime"],
+                "exit_reason":   tc["exit_reason"],
+                "status":        tc["status"],
+            })
+
+            for sim_idx, ps_name in enumerate(ps_names):
+                if not ps_name: continue
+                try:
+                    target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
+                    s = int(offsets[sim_idx])
+                    e = int(offsets[sim_idx + 1])
+
+                    if s==e:
+                        target["trades"]=[]
+                        continue
+                    sim_df = df_all.slice(s, e-s).with_columns(
+                        pl.lit(a_name).alias("asset")
+                    )
+                    target["trades"] = sim_df.to_dicts()
+                except KeyError as ex:
+                    print(f"DEBUG: key not found: {ex} | {m_name}->{s_name}->{a_name}->{ps_name}")
+
+        # Process WFM Daily Results, columnar -> _process_wfm_to_polars
+        if wfm_col is not None and len(wfm_col.get("ts", [])) > 0:
             try:
                 # Transforms cpp dict lists to Polars DataFrame pivots
-                df_matrix = self._process_wfm_to_polars(wfm_raw)
-                map_asset_nome = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
-                map_asset_nome["wfm_matrix_data"] = df_matrix
+                df_matrix = self._process_wfm_to_polars(wfm_col, ps_names)
+                self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["wfm_matrix_data"] = df_matrix
                 print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
             except Exception as e:
                 print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
 
 
 
-    def _process_wfm_to_polars(self, wfm_raw):
-        df = pl.DataFrame(wfm_raw)
+    def _process_wfm_to_polars(self, wfm_col: dict, ps_names: list = None):
+        df = pl.DataFrame({
+            "ts":    pl.Series(wfm_col["ts"],    dtype=pl.Int64),
+            "pnl":   pl.Series(wfm_col["pnl"],   dtype=pl.Float64),
+            "ps_id": pl.Series(wfm_col["ps_id"], dtype=pl.Int32),
+        })
 
-        # Converts saved timestamp YYYYMMDDHHMMSS to Datetime
         df = df.with_columns(
             pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S")
         )
 
-        # Pivot with SUM agg to avoid duplicate error
         matrix = df.pivot(
             on="ps_id",
             index="ts",
@@ -540,9 +563,24 @@ class Operation(BaseClass):
         ).sort("ts").fill_null(0.0)
         
         # Rename columns to ps_0, ps_1, ..., ps_{col}.
-        matrix = matrix.rename({
-            col: f"ps_{col}" for col in matrix.columns if col != "ts"
-        })
+        # matrix = matrix.rename({
+        #     col: f"ps_{col}" for col in matrix.columns if col != "ts"
+        # })
+
+        # Renames whole ps_id -> ps_name real if available
+        if ps_names:
+            # ps_id inteiro → "ps_{ps_name}" ex: 0 → "ps_param_set-21-8-sma-2"
+            rename_map = {
+                str(i): f"ps_{ps_names[i]}"
+                for i in range(len(ps_names))
+                if str(i) in matrix.columns
+            }
+            if rename_map:
+                matrix = matrix.rename(rename_map)
+        else:
+            matrix = matrix.rename({
+                col: f"ps_{col}" for col in matrix.columns if col != "ts"
+            })
 
         return matrix
 
@@ -1015,7 +1053,7 @@ class Operation(BaseClass):
         #self._report_pnl_summary()
         #self._plot_pnl_curves()
         t1 = time.perf_counter()
-        print(f"   > [PERF] operation->run_walkforward={t1-t0:.3f}s")
+        print(f"   > [PERF] in operation: {t1-t0:.3f}s")
         self._run_walkforward()
 
         # III - Operation Portfolio Simulation, Operation Analysis and Metrics
@@ -1132,12 +1170,12 @@ if __name__ == "__main__":
         tp_short_price = limit_short_price - sl_short_dist * params['rr']
 
         # Trailing: 0.5R
-        trail_long_dist  = sl_long_dist  * 0.5
-        trail_short_dist = sl_short_dist * 0.5
+        trail_long_dist  = None# sl_long_dist  * 0.5
+        trail_short_dist = None# sl_short_dist * 0.5
 
         # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
-        be_long_dist  = sl_long_dist  * 1.0
-        be_short_dist = sl_short_dist * 1.0
+        be_long_dist  = None# sl_long_dist  * 1.0
+        be_short_dist = None# sl_short_dist * 1.0
 
         
         if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
@@ -1190,11 +1228,11 @@ if __name__ == "__main__":
     # - Maior gargalo deve ser cpp manter em memória todos os parsets, indicadores, assets e realizar o/
     #   backtest, talvez ter um sistema de batch em cpp? tira de memória, salva e chama por partes?
 
-    # Otimizações Feitas:
-    # - Removido cópia de data para backtest, agora backtest recebe base_data e sim_data
-    # - Separado conversão JSON uma vez e guardar em cache cpp para não precisar converter a cada backtest
-    # - Simulação só aponta para os indicadores e sinais que a simulação precisa, não mais a base inteira em cpp
-    
+    # Optimizations Done:
+    # - Removed copy of data for backtest in cpp, now backtest receives base_data and sim_data
+    # - Separate conversion of JSON only one time and saves in cpp cache so it doesn't conver for each backtest
+    # - Simuation only points to signals and indicators of which that simulation needs 
+
     # - replaced msgpack to py::array_t 
     # - bar_dates/times/days computed only 1x in Engine
     # - trade_to_pydict direct without nlohmann on cpp-py 
@@ -1211,16 +1249,21 @@ if __name__ == "__main__":
     # - thread_local_rng in generate_id
     # - unordered_set for closed_days, lookup O(1) instead of std::find O(n)
 
+    # - in engine_result_to_pydict instead of list[dict] by trade, returns numpy array by column
 
-    # - Adicionar lado
+
+    # - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides
     # - Sistema pra recriar trades Open Close pnl com trades do WFM ou já pegar direto?
     # - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
     #   talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
+    
     # 3. Dev Roadmap png/list
     # 4. Desenvolver sistema de slippage, lot, comission, offset, etc
-    # 5. Plot with list of all model-strat-asset-parset results and wfm results
-    # 6. Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
-    # 7. Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
+    # 5. Criar base de dados SQL com sistema de batch para armazenar e gerenciar dados 
+
+    # 6. Plot with list of all model-strat-asset-parset results and wfm results
+    # 7. Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
+    # 8. Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
     # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
 
     AT15 = Strat(
