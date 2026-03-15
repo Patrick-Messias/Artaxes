@@ -165,7 +165,10 @@ class Operation(BaseClass):
                                     datetime_candle_references=asset_class.datetime_candle_references
                                 )
                                 novas_colunas = [c for c in temp_ind_df.columns if c not in base_asset_df.columns]
-                                ind_cache[unique_key] = {c: temp_ind_df[c].to_list() for c in novas_colunas}
+                                ind_cache[unique_key] = {
+                                    c: temp_ind_df[c].cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
+                                    for c in novas_colunas
+                                }
                             else:
                                 print(f"   > Using cache indicator >>> {ind_key} >>> {unique_key}")
 
@@ -435,10 +438,10 @@ class Operation(BaseClass):
 
             ind_pool_arrays = {}
             for key, vals in asset_batch.get('indicators_pool', {}).items():
-                if isinstance(vals, np.ndarray):
+                if isinstance(vals, np.ndarray) and vals.dtype == np.float64:
+                    ind_pool_arrays[key] = vals
+                elif isinstance(vals, np.ndarray):
                     ind_pool_arrays[key] = vals.astype(np.float64)
-                elif isinstance(vals, pl.Series):
-                    ind_pool_arrays[key] = vals.cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
                 else:
                     ind_pool_arrays[key] = np.asarray(vals, dtype=np.float64)
 
@@ -486,6 +489,9 @@ class Operation(BaseClass):
 
     def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
         if not full_output: return
+
+        import time
+        t0 = time.perf_counter()
  
         tc       = full_output.get("trades_columnar")
         wfm_col  = full_output.get("wfm_columnar")
@@ -493,8 +499,6 @@ class Operation(BaseClass):
  
         # Trades: columnar -> list[dict] by simulation via polars
         if tc:
-            offsets = tc["sim_offsets"] # np.int32 [n_sims+1]
-
             # Builds DataFrame flat of all trades at unce
             df_all = pl.DataFrame({
                 "entry_price":   tc["entry_price"],
@@ -513,7 +517,10 @@ class Operation(BaseClass):
                 "exit_datetime": tc["exit_datetime"],
                 "exit_reason":   tc["exit_reason"],
                 "status":        tc["status"],
-            })
+            }).with_columns(pl.lit(a_name).alias("asset"))
+
+            offsets = tc["sim_offsets"] # np.int32 [n_sims+1]
+            t1 = time.perf_counter()
 
             for sim_idx, ps_name in enumerate(ps_names):
                 if not ps_name: continue
@@ -522,26 +529,24 @@ class Operation(BaseClass):
                     s = int(offsets[sim_idx])
                     e = int(offsets[sim_idx + 1])
 
-                    if s==e:
-                        target["trades"]=[]
-                        continue
-                    sim_df = df_all.slice(s, e-s).with_columns(
-                        pl.lit(a_name).alias("asset")
-                    )
-                    target["trades"] = sim_df.to_dicts()
+                    # Saves pl.DataFrame directly without to_dicts()
+                    target["trades"] = df_all.slice(s, e-s) if e>s else pl.DataFrame() 
                 except KeyError as ex:
                     print(f"DEBUG: key not found: {ex} | {m_name}->{s_name}->{a_name}->{ps_name}")
+
+            t2 = time.perf_counter()
 
         # Process WFM Daily Results, columnar -> _process_wfm_to_polars
         if wfm_col is not None and len(wfm_col.get("ts", [])) > 0:
             try:
-                # Transforms cpp dict lists to Polars DataFrame pivots
+                t_w0 = time.perf_counter()
                 df_matrix = self._process_wfm_to_polars(wfm_col, ps_names)
                 self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["wfm_matrix_data"] = df_matrix
                 print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
+                t_w1 = time.perf_counter()
+                print(f"   > [SAVE] df_build={t1-t0:.3f}s | sim_slice={t2-t1:.3f}s | wfm={t_w1-t_w0:.3f}s")
             except Exception as e:
                 print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
-
 
 
     def _process_wfm_to_polars(self, wfm_col: dict, ps_names: list = None):
@@ -790,88 +795,56 @@ class Operation(BaseClass):
     # || ===================================================================== || Metrics Functions || ===================================================================== ||
 
     def _report_pnl_summary(self):
-        import builtins
-
         print("\n" + "="*95)
         print(f"{'Performance Summary - Operation: ' + self.name:^95}")
         print("="*95)
 
-        # Acessa o dicionário de modelos
         models = self._results_map.get(self.name, {}).get("models", {})
-        
         if not models:
             print("No models found in results map.")
             return
 
         for model_name, model_data in models.items():
             print(f"\nModel: {model_name}")
-            
             for strat_name, strat_data in model_data.get("strats", {}).items():
                 print(f"  └── Strat: {strat_name}")
-                
                 for asset_path, asset_data in strat_data.get("assets", {}).items():
-                    # EXTRAÇÃO: Pegamos apenas o final do path para exibição
-                    # Se asset_path for "MA Trend Following_AT15_EURUSD", display_name será "EURUSD"
                     display_name = asset_path.split('_')[-1]
-                    
                     print(f"      └── Asset: {display_name}")
-                    
+
                     for param_key, param_data in asset_data.get("param_sets", {}).items():
-                        trades = param_data.get("trades", [])
-                        
-                        if not trades:
+                        trades = param_data.get("trades")
+
+                        if trades is None or (isinstance(trades, pl.DataFrame) and trades.is_empty()) or \
+                           (isinstance(trades, list) and len(trades) == 0):
                             print(f"          └── {param_key}: No trades.")
                             continue
 
-                        # Função auxiliar para extrair valores (suporta dict ou objeto)
-                        def get_val(t, attr):
-                            return t.get(attr, 0) if isinstance(t, dict) else getattr(t, attr, 0)
+                        # Normaliza para pl.DataFrame
+                        if isinstance(trades, list):
+                            df = pl.DataFrame(trades)
+                        else:
+                            df = trades
 
-
-
-                        # for t in trades:
-                        #     # Garante que estamos pegando as listas
-                        #     pnls = t.get('daily_pnl', [])
-                        #     dts = t.get('daily_datetime', [])
-                        #     trade_id = t.get('id', 'N/A')
-
-                        #     print(f"\n--- Histórico Diário do Trade {trade_id} ---")
-                        #     if not pnls:
-                        #         print("Nenhum dado diário capturado.")
-                        #         continue
-
-                        #     for pnl, dt in zip(pnls, dts):
-                        #         # O C++ envia o PnL acumulado ou do dia; aqui printamos conforme recebido
-                        #         print(f"Data: {dt} | PnL: {float(pnl):.4f}%")
-
-
-
-
-                        # SEPARAÇÃO POR LADO (Baseado no sinal do lot_size)
-                        longs = [t for t in trades if get_val(t, 'lot_size') > 0]
-                        shorts = [t for t in trades if get_val(t, 'lot_size') < 0]
-
-                        def calc_metrics(trade_list):
-                            if not trade_list: 
+                        def calc_metrics(mask=None):
+                            sub = df.filter(mask) if mask is not None else df
+                            if sub.is_empty():
                                 return {"pnl": 0.0, "wr": 0.0, "cnt": 0, "avg": 0.0}
-                            
-                            #for t in trade_list: print(t)
-
-                            p_list = [get_val(t, 'profit') for t in trade_list]
-                            cnt = len(p_list)
-                            pnl_sum = sum(p_list)
-                            wins = len([p for p in p_list if p > 0])
-                            
+                            cnt     = len(sub)
+                            pnl_sum = sub["profit"].sum()
+                            wins    = (sub["profit"] > 0).sum()
                             return {
                                 "pnl": pnl_sum,
-                                "wr": (wins / cnt) * 100 if cnt > 0 else 0,
+                                "wr":  (wins / cnt) * 100,
                                 "cnt": cnt,
-                                "avg": pnl_sum / cnt if cnt > 0 else 0
+                                "avg": pnl_sum / cnt,
                             }
 
-                        m_all = calc_metrics(trades)
-                        m_long = calc_metrics(longs)
-                        m_short = calc_metrics(shorts)
+                        m_all   = calc_metrics()
+                        m_long  = calc_metrics(pl.col("lot_size") > 0)
+                        m_short = calc_metrics(pl.col("lot_size") < 0)
+                        best    = df["profit"].max()
+                        worst   = df["profit"].min()
 
                         print(f"          └── Param Set: {param_key}")
                         print(f"              {'-'*80}")
@@ -881,11 +854,6 @@ class Operation(BaseClass):
                         print(f"              {'PnL %':<15} | {m_all['pnl']:>14.2f}% | {m_long['pnl']:>14.2f}% | {m_short['pnl']:>14.2f}%")
                         print(f"              {'Winrate':<15} | {m_all['wr']:>14.2f}% | {m_long['wr']:>14.2f}% | {m_short['wr']:>14.2f}%")
                         print(f"              {'Avg Trade':<15} | {m_all['avg']:>14.4f}% | {m_long['avg']:>14.4f}% | {m_short['avg']:>14.4f}%")
-                        
-                        all_pnls = [get_val(t, 'profit') for t in trades]
-                        if all_pnls:
-                            best = builtins.max(all_pnls)
-                            worst = builtins.min(all_pnls)
                         print(f"              {'-'*80}")
                         print(f"              Best Trade: {best:.2f}%  |  Worst Trade: {worst:.2f}%\n")
 
@@ -893,29 +861,36 @@ class Operation(BaseClass):
 
     def _plot_pnl_curves(self, mode: str = 'param_sets'):
         import matplotlib.pyplot as plt
-        import polars as pl
 
         all_series = []
-        # Acessa os modelos dentro do results_map
         models = self._results_map.get(self.name, {}).get("models", {})
-        
+
         for m_name, m_data in models.items():
             for s_name, s_data in m_data.get("strats", {}).items():
                 for a_name, a_data in s_data.get("assets", {}).items():
                     for p_name, p_data in a_data.get("param_sets", {}).items():
-                        trades = p_data.get("trades", [])
-                        if not trades: continue
-                        
-                        # Criar DataFrame local
-                        # Garantimos que profit seja Float64 e datetime seja Datetime
-                        df_trades = pl.DataFrame(trades).select([
-                            pl.col("exit_datetime").str.to_datetime().alias("datetime"),
+                        trades = p_data.get("trades")
+                        if trades is None: continue
+
+                        if isinstance(trades, list):
+                            if not trades: continue
+                            df = pl.DataFrame(trades)
+                        else:
+                            if trades.is_empty(): continue
+                            df = trades
+
+                        # Filtra só trades fechados com exit_datetime
+                        df = df.filter(pl.col("exit_datetime").is_not_null())
+                        if df.is_empty(): continue
+
+                        df_trades = df.select([
+                            pl.col("exit_datetime").str.to_datetime("%Y%m%d %H%M%S").alias("datetime"),
                             pl.col("profit").cast(pl.Float64)
                         ])
-                        
-                        # Agrupa lucro por datetime
-                        df_trades = df_trades.group_by("datetime").agg(pl.col("profit").sum()).sort("datetime")
-                        
+                        df_trades = df_trades.group_by("datetime").agg(
+                            pl.col("profit").sum()
+                        ).sort("datetime")
+
                         serie_name = f"{s_name}_{a_name}_{p_name}" if mode == 'param_sets' else s_name
                         all_series.append(df_trades.rename({"profit": serie_name}))
 
@@ -923,42 +898,27 @@ class Operation(BaseClass):
             print("< Erro: Nenhum trade encontrado para plotagem.")
             return
 
-        # 1. Alinhamento usando how='full' (substituindo o depreciado 'outer')
-        consolidated = all_series[0]
-        for i in range(1, len(all_series)):
-            consolidated = consolidated.join(all_series[i], on="datetime", how="full", coalesce=True)
-
-        # 2. Ordenação e Tratamento de nulos
-        consolidated = consolidated.sort("datetime")
-
-        # 3. Identifica apenas as colunas de PnL (exclui a coluna datetime)
-        pnl_cols = [c for c in consolidated.columns if c != "datetime"]
-        
-        # CORREÇÃO DO ERRO: Cast explícito antes do fill_null e aplicação apenas nas colunas PnL
-        consolidated = consolidated.with_columns([
-            pl.col(c).cast(pl.Float64).fill_null(0.0).cum_sum().alias(c) 
-            for c in pnl_cols
+        # Alinhamento
+        from functools import reduce
+        combined = reduce(lambda a, b: a.join(b, on="datetime", how="full", coalesce=True), all_series)
+        combined = combined.sort("datetime").fill_null(0.0)
+        cum_cols = [c for c in combined.columns if c != "datetime"]
+        combined = combined.with_columns([
+            pl.col(c).cum_sum().alias(c) for c in cum_cols
         ])
 
-        # 4. Plotagem
-        plt.style.use('dark_background')
-        fig, ax = plt.subplots(figsize=(12, 6))
-
-        # Converte para pandas para o matplotlib
-        pdf = consolidated.to_pandas().set_index("datetime")
-        
-        # Preenchimento frontal (Forward Fill) para garantir as retas entre trades
-        pdf = pdf.ffill().fillna(0.0)
-
+        pdf = combined.to_pandas()
+        pdf.set_index("datetime", inplace=True)
+        plt.figure(figsize=(14, 6))
+        nums = 0
         for col in pdf.columns:
-            ax.plot(pdf.index, pdf[col], label=col, linewidth=1.5, alpha=0.8)
-
-        ax.set_title(f"Cumulative PnL Curves - Operation: {self.name}", fontsize=14, color='gold', pad=20)
-        ax.set_xlabel("Timeline", fontsize=10)
-        ax.set_ylabel("Cumulative Profit (%)", fontsize=10)
-        ax.legend(loc='upper left', fontsize='x-small', framealpha=0.2)
-        ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.3)
-        
+            nums +=1 
+            plt.plot(pdf.index, pdf[col], label=col, linewidth=0.8)
+        plt.title(f"PnL Curves — {self.name}")
+        plt.xlabel("Date")
+        plt.ylabel("Cumulative PnL %")
+        print(nums)
+        if nums < 41: plt.legend(fontsize=2, ncol=4)
         plt.tight_layout()
         plt.show()
 
@@ -1114,7 +1074,7 @@ if __name__ == "__main__":
             
             'sl_perc': range(2, 8+1, 3), # 3
             'tp_perc': range(4, 8+1, 4), 
-            'rr': range(2, 2+1, 2), 
+            'rr': range(2, 6+1, 2), 
             'param1': range(21, 63+1, 21), #50
             'param2': range(8, 24+1, 8), # 3
             'param3': ['sma'] #, 'ema', 'ema'
@@ -1170,12 +1130,12 @@ if __name__ == "__main__":
         tp_short_price = limit_short_price - sl_short_dist * params['rr']
 
         # Trailing: 0.5R
-        trail_long_dist  = None# sl_long_dist  * 0.5
-        trail_short_dist = None# sl_short_dist * 0.5
+        trail_long_dist  = sl_long_dist  * 0.5
+        trail_short_dist = sl_short_dist * 0.5
 
         # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
-        be_long_dist  = None# sl_long_dist  * 1.0
-        be_short_dist = None# sl_short_dist * 1.0
+        be_long_dist  = sl_long_dist  * 1.0
+        be_short_dist = sl_short_dist * 1.0
 
         
         if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
@@ -1250,6 +1210,12 @@ if __name__ == "__main__":
     # - unordered_set for closed_days, lookup O(1) instead of std::find O(n)
 
     # - in engine_result_to_pydict instead of list[dict] by trade, returns numpy array by column
+
+    # - _save_tradaes: sim_slice, instead of converting to list[dict], save pl.DataFrame directly by sim
+    # - _operation: keep int_pool_arrays as np.array
+    # - _report_pnl_summary and _plot_pnl_curves: works with DataFrame
+
+
 
 
     # - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides
