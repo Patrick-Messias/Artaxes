@@ -1,9 +1,8 @@
-from webbrowser import get
-
-import polars as pl, numpy as np, json, sys, uuid, copy, datetime, psutil, re, itertools
+import polars as pl, numpy as np, json, sys, uuid, math, datetime, psutil, re, itertools
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
+from webbrowser import get
 from typing import Union, Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict, is_dataclass
 from Model import ModelParams, Model
@@ -119,40 +118,42 @@ class Operation(BaseClass):
     def _operation(self):
         models = self._get_all_models()
         self._results_map[self.name] = {'models': {}}
-
+ 
         for model_name, model_obj in models.items():
             strats    = model_obj.strat
             assets    = model_obj.assets
             model_tf  = model_obj.execution_timeframe
             self._results_map[self.name]['models'][model_name] = {'strats': {}}
-
+ 
             for strat_name, strat_obj in strats.items():
                 param_sets = self._calculate_param_combinations(strat_obj.params)
                 self._results_map[self.name]['models'][model_name]['strats'][strat_name] = {'assets': {}}
-
+ 
                 for asset_name in assets:
                     asset_class = self.assets.get(asset_name)
                     if not asset_class: continue
-
+ 
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
                     base_asset_df  = asset_class.data_get(model_tf)
                     exec_set_raw   = asdict(strat_obj.execution_settings)
                     exec_set_mod   = self.prepare_time_params(exec_set_raw)
                     n_ps           = len(param_sets)
-
+ 
                     ind_cache:   dict[str, dict] = {}
                     ps_ind_keys: dict[str, list] = {}
                     sig_cache:   dict[str, dict] = {}
-
+ 
+                    import time
+                    _t = time.perf_counter()
                     # ── Fase 1: Indicadores e Sinais ───────────────────────────
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_keys[ps_name] = []
-
+ 
                         for ind_key, ind_obj in strat_obj.indicators.items():
                             eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                             ind_p_hash = self.param_suffix(eff_params)
                             unique_key = f"{asset_name}_{model_tf}_{ind_key}_{ind_p_hash}"
-
+ 
                             if unique_key not in ind_cache:
                                 print(f"   > Calculating indicator >>> {ind_key} >>> {unique_key}")
                                 temp_ind_df   = self._calculate_indicator(
@@ -169,21 +170,21 @@ class Operation(BaseClass):
                                     c: temp_ind_df[c].cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
                                     for c in novas_colunas
                                 }
-                            else:
-                                print(f"   > Using cache indicator >>> {ind_key} >>> {unique_key}")
-
+                            #else:
+                            #    print(f"   > Using cache indicator >>> {ind_key} >>> {unique_key}")
+ 
                             ps_ind_keys[ps_name].append(unique_key)
-
+ 
                         sig_hash = self.param_suffix(ps_dict)
                         if sig_hash not in sig_cache:
                             df_full = base_asset_df.clone()
                             for uk in ps_ind_keys[ps_name]:
                                 for col_name, values in ind_cache[uk].items():
                                     df_full = df_full.with_columns(pl.Series(col_name, values))
-
+ 
                             sig_result = strat_obj.signals(df_full, ps_dict)
                             sig_cache[sig_hash] = {}
-
+ 
                             for sig_name, sig_val in sig_result.items():
                                 if sig_val is None:
                                     continue
@@ -221,11 +222,12 @@ class Operation(BaseClass):
                                         sig_cache[sig_hash][sig_name] = np.asarray(sig_val, dtype=np.float64)
                         else:
                             print(f"   > Using cache signals >>> hash: {sig_hash}")
-
+                    print(f"   > [DEBUG] sig_cache unique hashes: {len(sig_cache)} / {n_ps} param_sets")
+                    print(f"   > [OP] fase1={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 2: Indicators Pool ────────────────────────────────
                     indicators_pool:  dict = {}
                     ps_ind_col_keys:  dict[str, list] = {}
-
+ 
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_col_keys[ps_name] = []
                         for uk in ps_ind_keys[ps_name]:
@@ -234,17 +236,17 @@ class Operation(BaseClass):
                                 if pool_key not in indicators_pool:
                                     indicators_pool[pool_key] = values
                                 ps_ind_col_keys[ps_name].append(pool_key)
-
+                    print(f"   > [OP] fase2={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 3: Arrays de preço derivados → pool ──────────────
                     # pl.Series float retornadas pelo strat_signals entram no pool
                     # com key "sig__{sig_hash}__{sig_name}" (única por param_set).
                     # Strings apontam para coluna já existente (ohlc ou pool) → signal_ref.
                     # Arrays uint8 → signal_array (entry/exit binários).
                     ohlc_col_names = set(base_asset_df.columns)
-
+ 
                     ps_signal_refs:   dict[str, dict] = {ps: {} for ps in param_sets}
                     ps_signal_arrays: dict[str, dict] = {ps: {} for ps in param_sets}
-
+ 
                     for ps_name, ps_dict in param_sets.items():
                         sig_hash = self.param_suffix(ps_dict)
                         for sig_name, sig_val in sig_cache[sig_hash].items():
@@ -260,11 +262,11 @@ class Operation(BaseClass):
                                     if pool_key not in indicators_pool:
                                         indicators_pool[pool_key] = sig_val
                                     ps_signal_refs[ps_name][sig_name] = pool_key
-
+                    print(f"   > [OP] fase3={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 4: Shared signal arrays ───────────────────────────
                     all_sig_names: set = set()
                     for d in ps_signal_arrays.values(): all_sig_names.update(d.keys())
-
+ 
                     shared_signal_arrays: dict = {}
                     for sig_name in all_sig_names:
                         arrs = [ps_signal_arrays[ps].get(sig_name) for ps in param_sets
@@ -275,10 +277,10 @@ class Operation(BaseClass):
                                 shared_signal_arrays[sig_name] = first
                                 for ps in param_sets:
                                     ps_signal_arrays[ps].pop(sig_name, None)
-
+ 
                     print(f"   > Pool: {len(indicators_pool)} cols | "
                           f"Shared bin: {len(shared_signal_arrays)} | Param_sets: {n_ps}")
-
+                    print(f"   > [OP] fase4={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 5: Monta asset_batch ──────────────────────────────
                     asset_batch = {
                         "asset_header":         f"{model_name}_{strat_name}_{asset_name}",
@@ -288,7 +290,7 @@ class Operation(BaseClass):
                         "shared_signal_arrays": shared_signal_arrays,
                         "simulations":          [],
                     }
-
+ 
                     for ps_name, ps_dict in param_sets.items():
                         self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets'][ps_name] = {
                             'param_set_dict': ps_dict,
@@ -301,12 +303,26 @@ class Operation(BaseClass):
                             "signal_arrays":  ps_signal_arrays[ps_name],
                             "signal_refs":    ps_signal_refs[ps_name],
                         })
-
+ 
+                    # Estimates batch size — hybrid CPU+RAM approach
+                    ps_size_mb = self._estimate_paramset_size_mb(base_asset_df) / max(n_ps, 1)
+                    batch_size = self._calculate_optimal_batch_size(
+                        avg_paramset_size_mb=ps_size_mb,
+                        safety_margin=0.6,  # RAM: use 40% available
+                        max_batch=n_ps,
+                        min_batch=1
+                    )
+                    all_sim   = list(asset_batch.pop("simulations"))
+                    n_batches = math.ceil(n_ps / batch_size)
+                    print(f"   > Batching: {n_ps} sims | batch_size={batch_size} | n_batches={n_batches}")
+ 
                     # ── Fase 6: Envio para C++ ─────────────────────────────────
-                    print(f"   > Processing {asset_name}: {n_ps} simulations...")
-                    full_output = self._run_cpp_operation(asset_batch)
-                    self._save_trades(full_output, model_name, strat_name, asset_name)
-
+                    for batch_start in range(0, n_ps, batch_size):
+                        batch_sims = all_sim[batch_start:batch_start + batch_size]
+                        asset_batch["simulations"] = batch_sims
+                        full_output = self._run_cpp_operation(asset_batch)
+                        self._save_trades(full_output, model_name, strat_name, asset_name)
+                    print(f"   > [OP] fase5_prep={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
         return True
     
     def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):        
@@ -596,15 +612,21 @@ class Operation(BaseClass):
     def _get_available_memory_mb(self):
         return psutil.virtual_memory().available / (1024 ** 2)
     
-    def _calculate_optimal_batch_size(self, avg_paramset_size_mb, safety_margin=0.97, max_batch=1000, min_batch=1):
+    def _calculate_optimal_batch_size(self, avg_paramset_size_mb, safety_margin=0.6, max_batch=1000, min_batch=1):
+        import os
         available_ram_mb = self._get_available_memory_mb()
-        usable_ram_mb = available_ram_mb * (1 - safety_margin)
-
-        if avg_paramset_size_mb <= 0: return min_batch
-
-        z = int(usable_ram_mb // avg_paramset_size_mb)
+        usable_ram_mb    = available_ram_mb * (1.0 - safety_margin)
+        n_cores          = os.cpu_count() or 4
+ 
+        # RAM-based limit
+        ram_limit = int(usable_ram_mb // avg_paramset_size_mb) if avg_paramset_size_mb > 0 else max_batch
+ 
+        # CPU cache-based: 2x cores keeps L3 saturated without thrashing
+        cache_limit = n_cores * 2
+ 
+        z = min(ram_limit, cache_limit)
         return max(min_batch, min(z, max_batch))
-
+ 
     def prepare_time_params(self, settings: dict) -> dict:
         """
         Converte strings 'HH:MM' para minutos totais desde a meia-noite.
@@ -620,7 +642,7 @@ class Operation(BaseClass):
                 return h * 60 + m
             except Exception:
                 return None
-
+ 
         # EI (Entry Initial): Default 0 (00:00)
         # EF (Entry Final): Default 1440 (24:00) - Não bloqueia novas entradas
         # TF (Time Finish): Default 1440 (24:00) - Não força fechamento
@@ -1069,8 +1091,8 @@ if __name__ == "__main__":
             'limit_opposite_order_closes_pending': False,
 
             'exit_nb_only_if_pnl_is': 0, 
-            'exit_nb_long': range(0, 0+1, 3),
-            'exit_nb_short': range(0, 0+1, 3),
+            'exit_nb_long': range(3, 10+1, 7),
+            'exit_nb_short': range(3, 10+1, 7),
             
             'sl_perc': range(2, 8+1, 3), # 3
             'tp_perc': range(4, 8+1, 4), 
@@ -1215,7 +1237,7 @@ if __name__ == "__main__":
     # - _operation: keep int_pool_arrays as np.array
     # - _report_pnl_summary and _plot_pnl_curves: works with DataFrame
 
-
+    # - Implementing batch system with current defs
 
 
     # - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides
