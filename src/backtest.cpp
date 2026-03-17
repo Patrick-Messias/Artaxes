@@ -230,7 +230,7 @@ SimulationOutput Backtest::run_simulation(
                           << " Out: " << exit_price
                           << " Net: " << std::setprecision(4) << net_pnl << "%" << std::endl;
             double prev_p = t.prev_day_price;
-            double dv = ((exit_price - prev_p) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+            double dv = ((exit_price - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
             daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]), dv, ps_id});
         };
 
@@ -489,7 +489,7 @@ SimulationOutput Backtest::run_simulation(
                     double entry  = trade.entry_price, curr_p = close[i];
                     bool is_long  = (trade.lot_size > 0);
                     double prev_p = trade.prev_day_price;
-                    double dv = ((curr_p-prev_p)/entry)*100.0*(is_long?1.0:-1.0);
+                    double dv = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
                     daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),dv,ps_id});
                     trade.prev_day_price = curr_p;
                 }

@@ -1231,33 +1231,21 @@ if __name__ == "__main__":
         }
 
 
-    # XXX 1. Recriar ponte py - cpp - py
-    # 2. Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
+    # XXX - Recriar ponte py - cpp - py
+    # XXX - Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
+    # XXX - Optimization 
 
-
-
-
-    # MANTER PY SIGNAL -> CPP EXEC, Próximo passos:
-    # - Colocar em backtest verificador se be, trail existe, caso não exista então obviamente não iterar 
-    # - Adicionar opção de sl/tp serem valores fixos ou valores a serem -+ do entry, para otimizar
-    # - Otimizar mais outras coisas em cpp 
-    # - Maior gargalo deve ser cpp manter em memória todos os parsets, indicadores, assets e realizar o/
-    #   backtest, talvez ter um sistema de batch em cpp? tira de memória, salva e chama por partes?
-
-
-
-    # - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides
-    # - Sistema pra recriar trades Open Close pnl com trades do WFM ou já pegar direto?
     # - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
-    #   talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
-    
-    # 3. Dev Roadmap png/list
-    # 4. Desenvolver sistema de slippage, lot, comission, offset, etc
-    # 5. Criar base de dados SQL com sistema de batch para armazenar e gerenciar dados 
+    #talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
+    # - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator
+    # - Desenvolver sistema de slippage, lot, comission, offset, etc; Tanto em py tanto cpp
 
-    # 6. Plot with list of all model-strat-asset-parset results and wfm results
-    # 7. Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
-    # 8. Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
+    # - Dev Roadmap png/list
+    # - Criar base de dados SQL com sistema de batch para armazenar e gerenciar dados 
+    # - Plot with list of all model-strat-asset-parset results and wfm results
+    
+    # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
+    # - Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
     # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
 
     AT15 = Strat(
