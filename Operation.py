@@ -142,10 +142,13 @@ class Operation(BaseClass):
                     ind_cache:   dict[str, dict] = {}
                     ps_ind_keys: dict[str, list] = {}
                     sig_cache:   dict[str, dict] = {}
+                    ps_sig_hash: dict[str, str] = {}
  
                     import time
                     _t = time.perf_counter()
                     # ── Fase 1: Indicadores e Sinais ───────────────────────────
+                    sig_key_params: list | None = None
+
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_keys[ps_name] = []
  
@@ -174,8 +177,14 @@ class Operation(BaseClass):
                             #    print(f"   > Using cache indicator >>> {ind_key} >>> {unique_key}")
  
                             ps_ind_keys[ps_name].append(unique_key)
- 
-                        sig_hash = self.param_suffix(ps_dict)
+
+                        # Determines the sig_hash for this param_set, if __sig_key_params is declared, use reducted hash
+                        if sig_key_params is not None:
+                            sig_hash = self.param_suffix({k: ps_dict[k] for k in sig_key_params if k in ps_dict})
+                        else:
+                            sig_hash = self.param_suffix(ps_dict)
+                        ps_sig_hash[ps_name] = sig_hash
+                        
                         if sig_hash not in sig_cache:
                             df_full = base_asset_df.clone()
                             for uk in ps_ind_keys[ps_name]:
@@ -185,11 +194,23 @@ class Operation(BaseClass):
                             sig_result = strat_obj.signals(df_full, ps_dict)
                             sig_cache[sig_hash] = {}
  
+                            # Detects __sig_key_params in first call
+                            if sig_key_params is None and '__sig_key_params' in sig_result:
+                                sig_key_params = sig_result['__sig_key_params']
+
+                                # Recalculates sig_hash with reduced params
+                                sig_hash = self.param_suffix({k: ps_dict[k] for k in sig_key_params if k in ps_dict})
+                                ps_sig_hash[ps_name] = sig_hash
+
+                                # Moves results to correct hash
+                                sig_result_copy = {k: v for k, v in sig_result.items() if k != '__sig_key_params'}
+                                sig_cache[sig_hash] = {}
+                                sig_result = sig_result_copy
+
                             for sig_name, sig_val in sig_result.items():
-                                if sig_val is None:
-                                    continue
+                                if sig_name == '__sig_key_params': continue
+                                if sig_val is None: continue
                                 if isinstance(sig_val, str):
-                                    # Referência direta a coluna existente (ohlc ou pool)
                                     sig_cache[sig_hash][sig_name] = sig_val
                                     continue
                                 if isinstance(sig_val, pl.Expr):
@@ -197,13 +218,11 @@ class Operation(BaseClass):
                                 if isinstance(sig_val, pl.Series):
                                     dtype = sig_val.dtype
                                     if dtype == pl.Boolean or dtype == pl.UInt8:
-                                        # Sinal binário entry/exit
                                         sig_cache[sig_hash][sig_name] = (
                                             sig_val.cast(pl.Boolean).fill_null(False)
                                             .to_numpy().astype(np.uint8)
                                         )
-                                    else:
-                                        # Array de preço derivado (sl, tp, trail, be, limit, qualquer f64)
+                                    else :
                                         sig_cache[sig_hash][sig_name] = (
                                             sig_val.cast(pl.Float64).fill_null(0.0)
                                             .to_numpy().astype(np.float64)
@@ -214,14 +233,13 @@ class Operation(BaseClass):
                                     else:
                                         sig_cache[sig_hash][sig_name] = sig_val.astype(np.float64)
                                 elif isinstance(sig_val, list):
-                                    # list → tenta inferir pelo primeiro elemento não-None
                                     sample = next((v for v in sig_val if v is not None), 0)
                                     if isinstance(sample, bool):
                                         sig_cache[sig_hash][sig_name] = np.asarray(sig_val, dtype=np.uint8)
                                     else:
-                                        sig_cache[sig_hash][sig_name] = np.asarray(sig_val, dtype=np.float64)
-                        else:
-                            print(f"   > Using cache signals >>> hash: {sig_hash}")
+                                        sig_cache[sig_hash][sig_name] = np.asarray(sig_val, dtype==np.float64)
+                        else: pass
+
                     print(f"   > [DEBUG] sig_cache unique hashes: {len(sig_cache)} / {n_ps} param_sets")
                     print(f"   > [OP] fase1={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 2: Indicators Pool ────────────────────────────────
@@ -243,21 +261,19 @@ class Operation(BaseClass):
                     # Strings apontam para coluna já existente (ohlc ou pool) → signal_ref.
                     # Arrays uint8 → signal_array (entry/exit binários).
                     ohlc_col_names = set(base_asset_df.columns)
- 
+
                     ps_signal_refs:   dict[str, dict] = {ps: {} for ps in param_sets}
                     ps_signal_arrays: dict[str, dict] = {ps: {} for ps in param_sets}
- 
+
                     for ps_name, ps_dict in param_sets.items():
-                        sig_hash = self.param_suffix(ps_dict)
+                        sig_hash = ps_sig_hash[ps_name]  # usa hash reduzido se disponível
                         for sig_name, sig_val in sig_cache[sig_hash].items():
                             if isinstance(sig_val, str):
-                                # Ref direta: usuário declarou 'sl_price_long': 'low'
                                 ps_signal_refs[ps_name][sig_name] = sig_val
                             elif isinstance(sig_val, np.ndarray):
                                 if sig_val.dtype == np.uint8:
                                     ps_signal_arrays[ps_name][sig_name] = sig_val
                                 else:
-                                    # Array float derivado → pool
                                     pool_key = f"sig__{sig_hash}__{sig_name}"
                                     if pool_key not in indicators_pool:
                                         indicators_pool[pool_key] = sig_val
@@ -317,11 +333,29 @@ class Operation(BaseClass):
                     print(f"   > Batching: {n_ps} sims | batch_size={batch_size} | n_batches={n_batches}")
  
                     # ── Fase 6: Envio para C++ ─────────────────────────────────
+                    all_ps_names = [s.get("id", "") for s in all_sim]
+                    wfm_accum = {"ts": [], "pnl": [], "ps_id": []}
                     for batch_start in range(0, n_ps, batch_size):
                         batch_sims = all_sim[batch_start:batch_start + batch_size]
                         asset_batch["simulations"] = batch_sims
                         full_output = self._run_cpp_operation(asset_batch)
-                        self._save_trades(full_output, model_name, strat_name, asset_name)
+                        self._save_trades(full_output, model_name, strat_name, asset_name,
+                                          wfm_accum=wfm_accum,
+                                          ps_id_offset=batch_start)
+                    
+                    # Single pivot after all batches
+                    if any(len(v) > 0 for v in wfm_accum.values()):
+                        try:
+                            wfm_col = {
+                                "ts": np.concatenate(wfm_accum["ts"]),
+                                "pnl": np.concatenate(wfm_accum["pnl"]),
+                                "ps_id": np.concatenate(wfm_accum['ps_id'])
+                            }
+                            df_matrix = self._process_wfm_to_polars(wfm_col, all_ps_names )
+                            self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["wfm_matrix_data"] = df_matrix
+                            print(f"   > WFM Matrix generated for {model_name} | {strat_name} | {asset_name}: {df_matrix.shape}")
+                        except Exception as e:
+                            print(f"   > Error generating WFM Matrix: {e}")
                     print(f"   > [OP] fase5_prep={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
         return True
     
@@ -503,7 +537,7 @@ class Operation(BaseClass):
             return {"trades_columnar": None, "wfm_columnar": None, "ps_names": []}
 
 
-    def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str):
+    def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str, wfm_accum: dict=None, ps_id_offset = None):
         if not full_output: return
 
         import time
@@ -553,16 +587,15 @@ class Operation(BaseClass):
             t2 = time.perf_counter()
 
         # Process WFM Daily Results, columnar -> _process_wfm_to_polars
-        if wfm_col is not None and len(wfm_col.get("ts", [])) > 0:
-            try:
-                t_w0 = time.perf_counter()
-                df_matrix = self._process_wfm_to_polars(wfm_col, ps_names)
-                self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["wfm_matrix_data"] = df_matrix
-                print(f"   > WFM Matrix generated for {m_name} | {s_name} | {a_name}: {df_matrix.shape}")
-                t_w1 = time.perf_counter()
-                print(f"   > [SAVE] df_build={t1-t0:.3f}s | sim_slice={t2-t1:.3f}s | wfm={t_w1-t_w0:.3f}s")
-            except Exception as e:
-                print(f"   > Error generating WFM Matrix for {m_name} | {s_name} | {a_name}: {e}")
+        if wfm_col is not None and wfm_accum is not None:
+            ts    = wfm_col.get("ts")
+            pnl   = wfm_col.get("pnl")
+            ps_id = wfm_col.get("ps_id")
+
+            if ts is not None and len(ts) > 0:
+                wfm_accum["ts"].append(ts)
+                wfm_accum["pnl"].append(pnl)
+                wfm_accum["ps_id"].append(ps_id + ps_id_offset) # Ajusta ps_id pelo offset do batch
 
 
     def _process_wfm_to_polars(self, wfm_col: dict, ps_names: list = None):
@@ -1094,10 +1127,10 @@ if __name__ == "__main__":
             'exit_nb_long': range(3, 10+1, 7),
             'exit_nb_short': range(3, 10+1, 7),
             
-            'sl_perc': range(2, 8+1, 3), # 3
-            'tp_perc': range(4, 8+1, 4), 
-            'rr': range(2, 6+1, 2), 
-            'param1': range(21, 63+1, 21), #50
+            'sl_perc': range(2, 10+1, 4), # 3
+            'tp_perc': range(2, 10+1, 4), 
+            'rr': range(2, 2+1, 2), 
+            'param1': range(21, 21+1, 21), #50
             'param2': range(8, 24+1, 8), # 3
             'param3': ['sma'] #, 'ema', 'ema'
         }
@@ -1112,7 +1145,7 @@ if __name__ == "__main__":
     # User imput Indicators
     ind = { 
         'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param2'),
-        'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
+        #'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         # 'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
         # 'max': PriorCote(asset=None, timeframe=model_execution_tf, price_col='high'),
@@ -1124,55 +1157,54 @@ if __name__ == "__main__":
         # Can use columns df['high'] or str 'high' to point
 
         atr = df['atr']
-        ema = df['ema']
+        #ema = df['ema']
 
         bull = df['close'] < df['open']
         bear = df['close'] > df['open']
 
-        entry_long  = bull & bull.shift(1) & bull.shift(2) & (ema < ema.shift(1))
-        entry_short = bear & bear.shift(1) & bear.shift(2) & (ema > ema.shift(1))
+        entry_long  = bull & bull.shift(1) & bull.shift(2) #& (ema < ema.shift(1))
+        entry_short = bear & bear.shift(1) & bear.shift(2) #& (ema > ema.shift(1))
 
         exit_tf_long  = bear & bear.shift(1)
         exit_tf_short = bull & bull.shift(1)
 
         # Preço da ordem pendente
-        limit_long_price  = df['high'] # "high"
-        limit_short_price = df['low'] # "low"
-
-        # SL absoluto: swing dos últimos 3 candles
-        swing_low_sl  = pl.min_horizontal(df['low'],  df['low'].shift(1),  df['low'].shift(2))
-        swing_high_sl = pl.max_horizontal(df['high'], df['high'].shift(1), df['high'].shift(2))
+        limit_long_price  = df['open'] #'high' #'high[1]' #
+        limit_short_price = df['open'] #'low' #'low[1]' #
 
         # Distâncias (definidas ANTES de serem usadas)
-        sl_long_dist  = (limit_long_price  - swing_low_sl).clip(lower_bound=0.0001)
-        sl_short_dist = (swing_high_sl - limit_short_price).clip(lower_bound=0.0001)
+        sl_long_price  = limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = limit_long_price + atr * params['sl_perc'] 
 
         # TP absoluto: 2R
-        tp_long_price  = limit_long_price  + sl_long_dist  * params['rr']
-        tp_short_price = limit_short_price - sl_short_dist * params['rr']
+        tp_long_price  = limit_long_price + atr  * params['tp_perc']
+        tp_short_price = limit_long_price - atr * params['tp_perc']
 
         # Trailing: 0.5R
-        trail_long_dist  = sl_long_dist  * 0.5
-        trail_short_dist = sl_short_dist * 0.5
+        trail_long_dist  = None #sl_long_dist  * 0.5
+        trail_short_dist = None #sl_short_dist * 0.5
 
         # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
-        be_long_dist  = sl_long_dist  * 1.0
-        be_short_dist = sl_short_dist * 1.0
+        be_long_dist  = None #sl_long_dist  * 1.0
+        be_short_dist = None #sl_short_dist * 1.0
 
         
         if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
         if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
         if exit_tf_long is not None and not isinstance(exit_tf_long, str): exit_tf_long = exit_tf_long.shift(1)
         if exit_tf_short is not None and not isinstance(exit_tf_short, str): exit_tf_short = exit_tf_short.shift(1)
-        if swing_low_sl is not None and not isinstance(swing_low_sl, str): swing_low_sl = swing_low_sl.shift(1)
-        if swing_high_sl is not None and not isinstance(swing_high_sl, str): swing_high_sl = swing_high_sl.shift(1)
+        
         if tp_long_price is not None and not isinstance(tp_long_price, str): tp_long_price = tp_long_price.shift(1)
         if tp_short_price is not None and not isinstance(tp_short_price, str): tp_short_price = tp_short_price.shift(1)
+        if sl_long_price is not None and not isinstance(sl_long_price, str): sl_long_price = sl_long_price.shift(1)
+        if sl_short_price is not None and not isinstance(sl_short_price, str): sl_short_price = sl_short_price.shift(1)
         
         if limit_long_price is not None and not isinstance(limit_long_price, str): limit_long_price = limit_long_price.shift(1)
         if limit_short_price is not None and not isinstance(limit_short_price, str): limit_short_price = limit_short_price.shift(1)
+        
         if trail_long_dist is not None and not isinstance(trail_long_dist, str): trail_long_dist = trail_long_dist.shift(1)
         if trail_short_dist is not None and not isinstance(trail_short_dist, str): trail_short_dist = trail_short_dist.shift(1)
+        
         if be_long_dist is not None and not isinstance(be_long_dist, str): be_long_dist = be_long_dist.shift(1)
         if be_short_dist is not None and not isinstance(be_short_dist, str): be_short_dist = be_short_dist.shift(1)
         return {
@@ -1181,8 +1213,8 @@ if __name__ == "__main__":
             'exit_long':        exit_tf_long,
             'exit_short':       exit_tf_short,
 
-            'sl_price_long':    swing_low_sl,
-            'sl_price_short':   swing_high_sl,
+            'sl_price_long':    sl_long_price,
+            'sl_price_short':   sl_short_price,
             'tp_price_long':    tp_long_price,
             'tp_price_short':   tp_short_price,
 
@@ -1194,6 +1226,8 @@ if __name__ == "__main__":
 
             'be_trigger_long':  be_long_dist,
             'be_trigger_short': be_short_dist,
+
+            '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
         }
 
 
@@ -1238,7 +1272,9 @@ if __name__ == "__main__":
     # - _report_pnl_summary and _plot_pnl_curves: works with DataFrame
 
     # - Implementing batch system with current defs
-
+    # - Reimplementing simple column call 'high' instead of full dataframe df['high']
+    # - wfm by cumm batch, instead of x wfm_columnar, just join into one pivot
+    # - Separating signals into groups that need params and those who do not
 
     # - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides
     # - Sistema pra recriar trades Open Close pnl com trades do WFM ou já pegar direto?

@@ -14,7 +14,6 @@ using json = nlohmann::json;
 double calculate_lot_size(double, bool is_long) { return is_long ? 1.0 : -1.0; }
 
 static std::string generate_id() {
-    // thread_local: sem contenção entre threads paralelas, sem heap alloc
     thread_local std::mt19937_64 rng{std::random_device{}()};
     char buf[17];
     std::snprintf(buf, sizeof(buf), "%016llx", (unsigned long long)rng());
@@ -42,6 +41,25 @@ static std::string check_instant_exit(bool is_long, double,
     return bullish ? (is_long ? "SL" : "TP") : (is_long ? "TP" : "SL");
 }
 
+// ── Parseia "col[offset]" ou "col" → {ptr, offset} ───────────────────────────
+// Exemplos: "high[1]" → {high_ptr, 1}
+//           "low[0]"  → {low_ptr,  0}
+//           "atr"     → {atr_ptr,  0}
+struct RefResult { const double* ptr; int offset; };
+
+static RefResult parse_ref(const std::string& ref,
+                            const std::unordered_map<std::string, const double*>& fast_pool) {
+    auto lb = ref.find('[');
+    if (lb == std::string::npos) {
+        auto it = fast_pool.find(ref);
+        return { (it != fast_pool.end()) ? it->second : nullptr, 0 };
+    }
+    std::string col    = ref.substr(0, lb);
+    int         offset = std::stoi(ref.substr(lb + 1, ref.find(']') - lb - 1));
+    auto it = fast_pool.find(col);
+    return { (it != fast_pool.end()) ? it->second : nullptr, offset };
+}
+
 SimulationOutput Backtest::run_simulation(
     const std::string&      header,
     const FastPool&         fast_pool,
@@ -62,70 +80,83 @@ SimulationOutput Backtest::run_simulation(
     double temp_cumulative_pnl = 0.0;
 
     trades.reserve(512);
-    daily_results_matrix.reserve(n_bars);  // upper bound: 1 entry per bar
+    daily_results_matrix.reserve(n_bars);
 
-    // Preço: OHLC, indicators, derived signal arrays (f64 no fast_pool)
+    // ── Lookups ───────────────────────────────────────────────────────────────
     auto get_price_ptr = [&](const std::string& key) -> const double* {
         auto it = fast_pool.find(key);
         return (it != fast_pool.end()) ? it->second : nullptr;
     };
-    // Sinal de preço via ref: resolve o nome da coluna e busca no fast_pool
-    auto get_ref_ptr = [&](const std::string& sig_name) -> const double* {
+
+    // Resolve signal_ref → {ptr, offset}, suporta "col[n]" e "col"
+    auto get_ref = [&](const std::string& sig_name) -> RefResult {
         auto rit = signal_refs.find(sig_name);
-        if (rit == signal_refs.end()) return nullptr;
-        return get_price_ptr(rit->second);
+        if (rit == signal_refs.end()) return {nullptr, 0};
+        return parse_ref(rit->second, fast_pool);
     };
-    // Binário: entry/exit uint8 no signal_view
+
+    // Acesso seguro com bounds check para offset
+    auto ref_val = [&](const RefResult& r, size_t i) -> double {
+        if (!r.ptr) return 0.0;
+        int idx = (int)i - r.offset;
+        return (idx >= 0) ? r.ptr[idx] : 0.0;
+    };
+    auto ref_valid = [&](const RefResult& r, size_t i) -> bool {
+        if (!r.ptr) return false;
+        return ((int)i - r.offset) >= 0;
+    };
+
     auto get_signal_ptr = [&](const std::string& key) -> const uint8_t* {
         auto it = signal_view.find(key);
         return (it != signal_view.end()) ? it->second : nullptr;
     };
 
-    // bar_times[i] = HHMMSS → minutos
     auto bar_minutes = [&](size_t i) -> int {
         int t = bar_times[i];
         return (t / 10000) * 60 + (t % 10000) / 100;
     };
 
     try {
-        const json& params = sim;  // sim já é sp.params directamente
+        const json& params = sim;
 
         const double* open  = get_price_ptr("open");
         const double* high  = get_price_ptr("high");
         const double* low   = get_price_ptr("low");
         const double* close = get_price_ptr("close");
 
-        const uint8_t* sig_entry_long    = get_signal_ptr("entry_long");
-        const uint8_t* sig_entry_short   = get_signal_ptr("entry_short");
-        const uint8_t* sig_exit_long     = get_signal_ptr("exit_long");
-        const uint8_t* sig_exit_short    = get_signal_ptr("exit_short");
-        const double*  sig_limit_long    = get_ref_ptr("limit_long");
-        const double*  sig_limit_short   = get_ref_ptr("limit_short");
-        const double*  sig_sl_price_long = get_ref_ptr("sl_price_long");
-        const double*  sig_sl_price_short= get_ref_ptr("sl_price_short");
-        const double*  sig_sl_long       = get_ref_ptr("sl_long");
-        const double*  sig_sl_short      = get_ref_ptr("sl_short");
-        const double*  sig_tp_price_long = get_ref_ptr("tp_price_long");
-        const double*  sig_tp_price_short= get_ref_ptr("tp_price_short");
-        const double*  sig_tp_long       = get_ref_ptr("tp_long");
-        const double*  sig_tp_short      = get_ref_ptr("tp_short");
-        const double*  sig_trail_long    = get_ref_ptr("trail_long");
-        const double*  sig_trail_short   = get_ref_ptr("trail_short");
-        const double*  sig_be_long       = get_ref_ptr("be_trigger_long");
-        const double*  sig_be_short      = get_ref_ptr("be_trigger_short");
+        const uint8_t* sig_entry_long  = get_signal_ptr("entry_long");
+        const uint8_t* sig_entry_short = get_signal_ptr("entry_short");
+        const uint8_t* sig_exit_long   = get_signal_ptr("exit_long");
+        const uint8_t* sig_exit_short  = get_signal_ptr("exit_short");
+
+        // Refs com suporte a offset — resolvidos uma vez antes do loop
+        RefResult ref_limit_long     = get_ref("limit_long");
+        RefResult ref_limit_short    = get_ref("limit_short");
+        RefResult ref_sl_price_long  = get_ref("sl_price_long");
+        RefResult ref_sl_price_short = get_ref("sl_price_short");
+        RefResult ref_sl_long        = get_ref("sl_long");
+        RefResult ref_sl_short       = get_ref("sl_short");
+        RefResult ref_tp_price_long  = get_ref("tp_price_long");
+        RefResult ref_tp_price_short = get_ref("tp_price_short");
+        RefResult ref_tp_long        = get_ref("tp_long");
+        RefResult ref_tp_short       = get_ref("tp_short");
+        RefResult ref_trail_long     = get_ref("trail_long");
+        RefResult ref_trail_short    = get_ref("trail_short");
+        RefResult ref_be_long        = get_ref("be_trigger_long");
+        RefResult ref_be_short       = get_ref("be_trigger_short");
 
         auto resolve_sl = [&](bool is_long, double fill, int idx) -> double {
-            const double* p = is_long ? sig_sl_price_long : sig_sl_price_short;
-            if (p && p[idx] > 0.0) return p[idx];
-            const double* d = is_long ? sig_sl_long : sig_sl_short;
-            if (d && d[idx] > 0.0) return is_long ? fill - d[idx] : fill + d[idx];
+            const RefResult& rp = is_long ? ref_sl_price_long : ref_sl_price_short;
+            if (ref_valid(rp, idx)) { double v = ref_val(rp, idx); if (v > 0.0) return v; }
+            const RefResult& rd = is_long ? ref_sl_long : ref_sl_short;
+            if (ref_valid(rd, idx)) { double v = ref_val(rd, idx); if (v > 0.0) return is_long ? fill - v : fill + v; }
             return 0.0;
         };
         auto resolve_tp = [&](bool is_long, double fill, int idx) -> double {
-            const double* p = is_long ? sig_tp_price_long : sig_tp_price_short;
-            if (p && p[idx] > 0.0) return p[idx];
-            const double* d = is_long ? sig_tp_long : sig_tp_short;
-            if (d && d[idx] > 0.0) return is_long ? fill + d[idx] : fill - d[idx];
+            const RefResult& rp = is_long ? ref_tp_price_long : ref_tp_price_short;
+            if (ref_valid(rp, idx)) { double v = ref_val(rp, idx); if (v > 0.0) return v; }
+            const RefResult& rd = is_long ? ref_tp_long : ref_tp_short;
+            if (ref_valid(rd, idx)) { double v = ref_val(rd, idx); if (v > 0.0) return is_long ? fill + v : fill - v; }
             return 0.0;
         };
 
@@ -151,7 +182,7 @@ SimulationOutput Backtest::run_simulation(
         bool hedge_enabled = exec_settings.value("hedge",     false);
         bool is_daytrade   = exec_settings.value("day_trade", false);
         std::string order_type     = exec_settings.at("order_type").get<std::string>();
-        std::string limit_base_ref = exec_settings.at("limit_order_base_calc_ref_price").get<std::string>();
+        //std::string limit_base_ref = exec_settings.at("limit_order_base_calc_ref_price").get<std::string>();
 
         size_t lus = header.find_last_of('_');
         std::string asset_name = (lus != std::string::npos) ? header.substr(lus+1) : header;
@@ -167,13 +198,11 @@ SimulationOutput Backtest::run_simulation(
         int timeTF = exec_settings.contains("timeTF") && !exec_settings["timeTF"].is_null()
                      ? (int)get_value_safe(exec_settings["timeTF"], params) : 1440;
 
-        // ── Helpers ───────────────────────────────────────────────────────────
         auto apply_exit_slip = [&](double price, const std::string& reason, bool is_long) {
             if (reason == "EF") return price;
             return is_long ? price - slippage : price + slippage;
         };
 
-        // Formata datetime string a partir dos inteiros pré-computados
         auto make_dt_str = [&](size_t i) -> std::string {
             char buf[20];
             std::snprintf(buf, sizeof(buf), "%08d %06d", bar_dates[i], bar_times[i]);
@@ -186,14 +215,14 @@ SimulationOutput Backtest::run_simulation(
             double exit_price = apply_exit_slip(raw_exit, reason, is_long);
             double net_pnl    = ((exit_price - entry) / entry) * 100.0
                                 * (is_long ? 1.0 : -1.0) - commission_rate * 100.0;
-            t.exit_price    = exit_price;
+            t.exit_price = exit_price;
             { auto _s = make_dt_str(bar_idx); std::memcpy(t.exit_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.exit_datetime))); }
-            t.exit_reason   = reason;
-            t.status        = "closed";
-            t.closed        = true;
-            t.mae           = t.max_adv_price;
-            t.mfe           = t.max_fav_price;
-            t.profit        = net_pnl;
+            t.exit_reason = reason;
+            t.status      = "closed";
+            t.closed      = true;
+            t.mae         = t.max_adv_price;
+            t.mfe         = t.max_fav_price;
+            t.profit      = net_pnl;
             temp_cumulative_pnl += net_pnl;
             if (print_logs)
                 std::cout << "[EXIT] " << (is_long?"L":"S") << " " << reason
@@ -220,18 +249,23 @@ SimulationOutput Backtest::run_simulation(
             double tp = resolve_tp(is_long, fill, (int)idx);
             if (sl > 0.0) t.stop_loss   = sl;
             if (tp > 0.0) t.take_profit = tp;
-            const double* trail = is_long ? sig_trail_long : sig_trail_short;
-            if (trail && trail[idx] > 0.0) {
-                double tsl = is_long ? fill - trail[idx] : fill + trail[idx];
-                double csl = t.stop_loss;
-                if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
+            const RefResult& tr = is_long ? ref_trail_long : ref_trail_short;
+            if (ref_valid(tr, idx)) {
+                double tv = ref_val(tr, idx);
+                if (tv > 0.0) {
+                    double tsl = is_long ? fill - tv : fill + tv;
+                    double csl = t.stop_loss;
+                    if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
+                }
             }
         };
 
         auto update_trailing = [&](Trade& t, bool is_long, double ref, size_t idx) {
-            const double* trail = is_long ? sig_trail_long : sig_trail_short;
-            if (!trail || trail[idx] <= 0.0) return;
-            double new_sl = is_long ? ref - trail[idx] : ref + trail[idx];
+            const RefResult& tr = is_long ? ref_trail_long : ref_trail_short;
+            if (!ref_valid(tr, idx)) return;
+            double tv = ref_val(tr, idx);
+            if (tv <= 0.0) return;
+            double new_sl = is_long ? ref - tv : ref + tv;
             double cur_sl = is_long ? t.stop_loss
                                     : (t.stop_loss > 0.0 ? t.stop_loss : std::numeric_limits<double>::max());
             if (is_long ? (new_sl > cur_sl) : (new_sl < cur_sl)) t.stop_loss = new_sl;
@@ -240,7 +274,6 @@ SimulationOutput Backtest::run_simulation(
         // ═════════════════════════════════════════════════════════════════════
         // MAIN LOOP
         // ═════════════════════════════════════════════════════════════════════
-
         for (size_t i = (size_t)backtest_start_idx; i < n_bars; ++i) {
             int  currentTime  = bar_minutes(i);
             bool is_last_bar  = (i == n_bars - 1);
@@ -268,18 +301,20 @@ SimulationOutput Backtest::run_simulation(
                         return (exit_nb_only_if_pnl > 0) ? p > 0 : p < 0;
                     }())                                                            reason = "NB";
                     else if (is_daytrade && (dt_final||day_switched||is_last_bar)) reason = "DT";
-                    else if (!close_days.empty() &&
-                             close_days.count(bar_days[i]))           reason = "WC";
+                    else if (!close_days.empty() && close_days.count(bar_days[i])) reason = "WC";
                     else if (is_last_bar)                                          reason = "EF";
 
                     // BE trigger
-                    const double* be = is_long ? sig_be_long : sig_be_short;
-                    if (be && be[i] > 0.0) {
-                        double ep = it->entry_price;
-                        if (is_long ? (open[i] >= ep + be[i]) : (open[i] <= ep - be[i])) {
-                            double csl = it->stop_loss;
-                            if (is_long ? (csl < ep) : (csl > ep || csl == 0.0))
-                                it->stop_loss = ep;
+                    const RefResult& be_r = is_long ? ref_be_long : ref_be_short;
+                    if (ref_valid(be_r, i)) {
+                        double be_v = ref_val(be_r, i);
+                        if (be_v > 0.0) {
+                            double ep = it->entry_price;
+                            if (is_long ? (open[i] >= ep + be_v) : (open[i] <= ep - be_v)) {
+                                double csl = it->stop_loss;
+                                if (is_long ? (csl < ep) : (csl > ep || csl == 0.0))
+                                    it->stop_loss = ep;
+                            }
                         }
                     }
                     update_trailing(*it, is_long, open[i], i);
@@ -343,8 +378,7 @@ SimulationOutput Backtest::run_simulation(
 
             // ── 3. NEW ENTRIES ────────────────────────────────────────────────
             {
-                bool day_blocked = (!close_days.empty() &&
-                    close_days.count(bar_days[i]));
+                bool day_blocked = (!close_days.empty() && close_days.count(bar_days[i]));
                 if (!day_blocked && is_daytrade)
                     day_blocked = (currentTime < timeEI || currentTime > timeEF);
 
@@ -368,8 +402,8 @@ SimulationOutput Backtest::run_simulation(
                             }
                             is_long ? ++day_trades_long : ++day_trades_short;
                         } else {
-                            const double* lim = is_long ? sig_limit_long : sig_limit_short;
-                            if (!lim || lim[i] <= 0.0) {
+                            const RefResult& lim_r = is_long ? ref_limit_long : ref_limit_short;
+                            if (!ref_valid(lim_r, i) || ref_val(lim_r, i) <= 0.0) {
                                 Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
                                 open_trade(t,open[i],i,is_long);
                                 daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0,ps_id});
@@ -377,14 +411,11 @@ SimulationOutput Backtest::run_simulation(
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
                             }
-                            double target = lim[i];
+                            double target  = ref_val(lim_r, i);
+                            double diff    = std::abs(open[i]-target)/open[i];
                             std::string pos_type;
-                            double diff = std::abs(open[i]-target)/open[i];
-                            if (is_long) {
-                                pos_type = (target <= open[i]) ? "L_BELOW" : "L_ABOVE";
-                            } else {
-                                pos_type = (target >= open[i]) ? "S_ABOVE" : "S_BELOW";
-                            }
+                            if (is_long)  pos_type = (target <= open[i]) ? "L_BELOW" : "L_ABOVE";
+                            else          pos_type = (target >= open[i]) ? "S_ABOVE" : "S_BELOW";
                             if (diff > limit_perc_treshold) return;
                             bool already_hit = (is_long && target<=open[i]) || (!is_long && target>=open[i]);
                             if (already_hit && gap_market_fallback) {
@@ -396,7 +427,8 @@ SimulationOutput Backtest::run_simulation(
                                 return;
                             }
                             Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
-                            t.entry_price=target; t.status="pending"; { auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
+                            t.entry_price=target; t.status="pending";
+                            { auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
                             t.bars_held=0; t.lot_size=is_long?1.0:-1.0; t.exit_reason=pos_type;
                             pending_orders.push_back(std::move(t));
                         }
@@ -468,7 +500,7 @@ SimulationOutput Backtest::run_simulation(
     }
 
     SimulationOutput output;
-    output.trades   = std::move(trades);
+    output.trades    = std::move(trades);
     output.daily_vec = std::move(daily_results_matrix);
     return output;
 }
