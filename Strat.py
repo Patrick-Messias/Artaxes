@@ -24,7 +24,8 @@ class ExecutionSettings:
     strat_max_num_pos_per_day: list[int]=field(default_factory=lambda: [-1,-1])
     order_type: str='limit'
     limit_order_base_calc_ref_price: str='open'
-    offset: float=0.0
+    slippage: float=0.0
+    comission: float=0.0
 
     day_trade: bool = False
     timeTI: Optional[list[int]] = None
@@ -43,8 +44,6 @@ class ExecutionSettings:
     trade_pnl_resolution: str='daily'
 
     print_logs: bool=True
-    slippage: float=0.0
-    comission: float=0.0
 
 
 @dataclass

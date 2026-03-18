@@ -334,7 +334,7 @@ class Operation(BaseClass):
  
                     # ── Fase 6: Envio para C++ ─────────────────────────────────
                     all_ps_names = [s.get("id", "") for s in all_sim]
-                    wfm_accum = {"ts": [], "pnl": [], "ps_id": []}
+                    wfm_accum = {"ts": [], "pnl": [], "lot_size": [], "ps_id": []}
                     for batch_start in range(0, n_ps, batch_size):
                         batch_sims = all_sim[batch_start:batch_start + batch_size]
                         asset_batch["simulations"] = batch_sims
@@ -349,6 +349,7 @@ class Operation(BaseClass):
                             wfm_col = {
                                 "ts": np.concatenate(wfm_accum["ts"]),
                                 "pnl": np.concatenate(wfm_accum["pnl"]),
+                                "lot_size": np.concatenate(wfm_accum["lot_size"]),
                                 "ps_id": np.concatenate(wfm_accum['ps_id'])
                             }
                             df_matrix = self._process_wfm_to_polars(wfm_col, all_ps_names )
@@ -447,7 +448,7 @@ class Operation(BaseClass):
         # 3. Selects all unique datetime from selected backtest trades
         # 4. Iterates over datetimes, ranks param_sets based on previous trades results with some metric (ex: equity, profit factor, etc)
         # 5. For each datetime checks for entries and exits on each strat/asset/param_set simulating a portfolio with real money management and trade management rules
-
+        #envelope theorem?
 
 
         if portfolio_backtests_dict == 'All': # Uses all backtests from _results_map, else if dict with paths, uses only those backtests 
@@ -590,11 +591,13 @@ class Operation(BaseClass):
         if wfm_col is not None and wfm_accum is not None:
             ts    = wfm_col.get("ts")
             pnl   = wfm_col.get("pnl")
+            lot_size   = wfm_col.get("lot_size")
             ps_id = wfm_col.get("ps_id")
 
             if ts is not None and len(ts) > 0:
                 wfm_accum["ts"].append(ts)
                 wfm_accum["pnl"].append(pnl)
+                wfm_accum["lot_size"].append(lot_size)
                 wfm_accum["ps_id"].append(ps_id + ps_id_offset) # Ajusta ps_id pelo offset do batch
 
 
@@ -602,6 +605,7 @@ class Operation(BaseClass):
         df = pl.DataFrame({
             "ts":    pl.Series(wfm_col["ts"],    dtype=pl.Int64),
             "pnl":   pl.Series(wfm_col["pnl"],   dtype=pl.Float64),
+            "lot_size":   pl.Series(wfm_col["lot_size"],   dtype=pl.Float64),
             "ps_id": pl.Series(wfm_col["ps_id"], dtype=pl.Int32),
         })
 
@@ -1235,17 +1239,28 @@ if __name__ == "__main__":
     # XXX - Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
     # XXX - Optimization 
 
-    # - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
+    # XXX - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
     #talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
-    # - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator
-    # - Desenvolver sistema de slippage, lot, comission, offset, etc; Tanto em py tanto cpp
+    # XXX - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator. Redundante salvar lado/asset/model/strat, se orientar pelo _results_map
+    # - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
+    # - Multi entry and lot strategy
 
-    # - Dev Roadmap png/list
-    # - Criar base de dados SQL com sistema de batch para armazenar e gerenciar dados 
-    # - Plot with list of all model-strat-asset-parset results and wfm results
+    # - Dev Roadmap png/list 
+    # - Organize _results_map with ps_id and param_set_key
+    # - Develop start_date - end_date for operation
+
+    # - Plot long list with small leters with selectable mode-strat-asset-parest/wf results
+    # - List above should show parset ps_id and param_set_key for all OS wfm results
+
+    # - Criar base de dados SQL com sistema de batch para armazenar e gerenciar dados
+    # - Realocar dados e settings do Assets para SQL?
     
     # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
     # - Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
+
+    # - Deselop SM selection system for Models/Strats/Assets
+    # - Develop Portfolio Simulator
+
     # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
 
     AT15 = Strat(
@@ -1260,7 +1275,8 @@ if __name__ == "__main__":
                 wf_selection_logic='highest_stable', wf_returns_mode='selected'
             ),
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
-                                                 order_type='market', limit_order_base_calc_ref_price='open', offset=0.0, 
+                                                 order_type='market', limit_order_base_calc_ref_price='open', 
+                                                 slippage=0.0, comission=0.0, 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
@@ -1300,19 +1316,7 @@ if __name__ == "__main__":
 
 
 
-"""
-- Implement all remaining Strat and Operation config minor methods
-- Optimize performance, test new backtest method?
 
-- Pente fino em cada método e operação
-- Sistema de Simulação de Portfolio com suporte de Modelos para filtro/seleção de Asset, Strat e Backtest (param_set)
-- Walkforward / WFM
-- Modulo de Summary, Plot e Analise de Resultados
-- Sistema de armazenamento de dados de Asset (substituir var local global_assets)
-- Support for tick data
-
-
-"""
 
 
 

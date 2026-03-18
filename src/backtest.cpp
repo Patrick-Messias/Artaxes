@@ -162,7 +162,7 @@ SimulationOutput Backtest::run_simulation(
 
         bool   print_logs          = exec_settings.value("print_logs", false);
         double slippage            = exec_settings.value("slippage",   0.0);
-        double commission_rate     = exec_settings.value("commission", 0.0);
+        double commission     = exec_settings.value("commission", 0.0);
         int    backtest_start_idx  = params.value("backtest_start_idx", 1);
         int    limit_order_expiry  = params.value("limit_order_exclusion_after_period", 1);
         double limit_perc_treshold = params.value("limit_order_perc_treshold_for_order_diff", 1.0);
@@ -214,7 +214,7 @@ SimulationOutput Backtest::run_simulation(
             double entry      = t.entry_price;
             double exit_price = apply_exit_slip(raw_exit, reason, is_long);
             double net_pnl    = ((exit_price - entry) / entry) * 100.0
-                                * (is_long ? 1.0 : -1.0) - commission_rate * 100.0;
+                                * (is_long ? 1.0 : -1.0) - commission * 100.0;
             t.exit_price = exit_price;
             { auto _s = make_dt_str(bar_idx); std::memcpy(t.exit_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.exit_datetime))); }
             t.exit_reason = reason;
@@ -231,7 +231,7 @@ SimulationOutput Backtest::run_simulation(
                           << " Net: " << std::setprecision(4) << net_pnl << "%" << std::endl;
             double prev_p = t.prev_day_price;
             double dv = ((exit_price - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
-            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]), dv, ps_id});
+            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]), dv, t.lot_size, ps_id});
         };
 
         auto open_trade = [&](Trade& t, double raw_fill, size_t idx, bool is_long) {
@@ -258,6 +258,7 @@ SimulationOutput Backtest::run_simulation(
                     if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
                 }
             }
+            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[idx], bar_times[idx]), 0.0, t.lot_size, ps_id});
         };
 
         auto update_trailing = [&](Trade& t, bool is_long, double ref, size_t idx) {
@@ -364,7 +365,7 @@ SimulationOutput Backtest::run_simulation(
                             close_trade(*p_it, (inst=="TP"?tp:sl), inst, i, is_long);
                             trades.push_back(std::move(*p_it));
                         } else {
-                            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]), 0.0, ps_id});
+                            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]), 0.0, p_it->lot_size, ps_id});
                             active_trades.push_back(std::move(*p_it));
                         }
                         p_it = pending_orders.erase(p_it);
@@ -397,7 +398,7 @@ SimulationOutput Backtest::run_simulation(
                                 close_trade(t,(inst=="TP"?tp:sl),inst,i,is_long);
                                 trades.push_back(std::move(t));
                             } else {
-                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0,ps_id});
+                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0, t.lot_size,ps_id});
                                 active_trades.push_back(std::move(t));
                             }
                             is_long ? ++day_trades_long : ++day_trades_short;
@@ -406,7 +407,7 @@ SimulationOutput Backtest::run_simulation(
                             if (!ref_valid(lim_r, i) || ref_val(lim_r, i) <= 0.0) {
                                 Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
                                 open_trade(t,open[i],i,is_long);
-                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0,ps_id});
+                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0, t.lot_size,ps_id});
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
@@ -421,7 +422,7 @@ SimulationOutput Backtest::run_simulation(
                             if (already_hit && gap_market_fallback) {
                                 Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
                                 open_trade(t,open[i],i,is_long);
-                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0,ps_id});
+                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0, t.lot_size,ps_id});
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
@@ -490,7 +491,7 @@ SimulationOutput Backtest::run_simulation(
                     bool is_long  = (trade.lot_size > 0);
                     double prev_p = trade.prev_day_price;
                     double dv = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
-                    daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),dv,ps_id});
+                    daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),dv, trade.lot_size,ps_id});
                     trade.prev_day_price = curr_p;
                 }
             }

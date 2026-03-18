@@ -75,17 +75,19 @@ inline int extract_minutes(const std::string& dt) {
 
 struct DailyResult {
     long long ts; // Format int 'YYYYMMDDHHMMSS', ex "2023-10-25 14:30:00" -> 20231025143000
-    double pnl;
+    double pnl; // Raw pct_change returns from asset
+    double lot_size; 
     int ps_id; // Instead of full str with params just use ids to reduce size and translate later in py
 };
 
 inline void to_json(nlohmann::json& j, const DailyResult& res) {
-    j = nlohmann::json{{"ts", res.ts}, {"pnl", res.pnl}, {"id", res.ps_id}};
+    j = nlohmann::json{{"ts", res.ts}, {"pnl", res.pnl}, {"lot_size", res.lot_size}, {"id", res.ps_id}};
 }
 
 inline void from_json(const nlohmann::json& j, DailyResult& res) {
     j.at("ts").get_to(res.ts);
     j.at("pnl").get_to(res.pnl);
+    j.at("lot_size").get_to(res.lot_size);
     j.at("id").get_to(res.ps_id);
 }
 

@@ -122,18 +122,22 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     // ── WFM columnar ──────────────────────────────────────────────────────────
     auto a_wfm_ts    = py::array_t<int64_t>(n_wfm);
     auto a_wfm_pnl   = py::array_t<double>(n_wfm);
+    auto a_wfm_lot_size = py::array_t<double>(n_wfm);
     auto a_wfm_ps_id = py::array_t<int32_t>(n_wfm);
     auto* p_ts    = a_wfm_ts.mutable_data();
     auto* p_pnl   = a_wfm_pnl.mutable_data();
+    auto* p_wfm_lot_size = a_wfm_lot_size.mutable_data();
     auto* p_ps_id = a_wfm_ps_id.mutable_data();
     for (size_t i = 0; i < n_wfm; ++i) {
         p_ts[i]    = res.wfm_data[i].ts;
         p_pnl[i]   = res.wfm_data[i].pnl;
+        p_wfm_lot_size[i] = res.wfm_data[i].lot_size;
         p_ps_id[i] = res.wfm_data[i].ps_id;
     }
     py::dict wfm_col;
     wfm_col["ts"]    = a_wfm_ts;
     wfm_col["pnl"]   = a_wfm_pnl;
+    wfm_col["lot_size"] = a_wfm_lot_size;
     wfm_col["ps_id"] = a_wfm_ps_id;
 
     py::dict out;
