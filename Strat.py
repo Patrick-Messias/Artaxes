@@ -25,7 +25,7 @@ class ExecutionSettings:
     order_type: str='limit'
     limit_order_base_calc_ref_price: str='open'
     slippage: float=0.0
-    comission: float=0.0
+    commission: float=0.0
 
     day_trade: bool = False
     timeTI: Optional[list[int]] = None
@@ -53,37 +53,10 @@ class StratParams():
 
     params: Dict = field(default_factory=dict) 
     execution_settings: ExecutionSettings = field(default_factory=ExecutionSettings)
-    mma_settings: MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+    strat_money_manager: StratMoneyManager=None #MoneyManagerParams = field(default_factory=MoneyManagerParams) # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
     indicators: Dict[str, Indicator] = field(default_factory=dict) 
 
     signals: Callable = None
-    # signal_rules: Dict = field(default_factory=lambda: {
-    #     'entry_long': None,
-    #     'entry_short': None,
-
-    #     'entry_long_limit_position': None,
-    #     'entry_short_limit_position': None,
-    #     'entry_long_limit_value': None,
-    #     'entry_short_limit_value': None,
-
-    #     'exit_tf_long': None,
-    #     'exit_tf_short': None,
-
-    #     'exit_sl_long_price': None,
-    #     'exit_sl_short_price': None,
-    #     'exit_tp_long_price': None,
-    #     'exit_tp_short_price': None,
-
-    #     'be_pos_long_signal': None,
-    #     'be_pos_short_signal': None,
-    #     'be_neg_long_signal': None,
-    #     'be_neg_short_signal': None,
-
-    #     'be_pos_long_value': None,
-    #     'be_pos_short_value': None,
-    #     'be_neg_long_value': None,
-    #     'be_neg_short_value': None,
-    # })
 
     strat_money_manager: Optional['StratMoneyManager'] = None
 
@@ -101,7 +74,7 @@ class Strat(BaseClass):
 
         self.params = strat_params.params
         self.execution_settings = strat_params.execution_settings
-        self.mma_settings = strat_params.mma_settings # If mma_rules=None then will use default or PMA or othe MMA define in Operation
+        self.strat_money_manager = strat_params.strat_money_manager # If mma_rules=None then will use default or PMA or othe MMA define in Operation
         self.indicators = strat_params.indicators
 
         self.signals = strat_params.signals

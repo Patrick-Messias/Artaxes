@@ -444,6 +444,7 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
     <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\src\engine.cpp" />
     <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\src\operation.cpp" />
     <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\src\backtest.cpp" />
+    <ClCompile Include="C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\src\money_manager.cpp" />
     <Natvis Include="C:\vcpkg\installed\x64-windows\share\nlohmann_json\nlohmann_json.natvis">
     </Natvis>
   </ItemGroup>

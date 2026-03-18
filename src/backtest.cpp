@@ -1,4 +1,5 @@
 #include "backtest.h"
+#include "money_manager.h"
 #include <unordered_set>
 #include "Trade.h"
 #include "Utils.h"
@@ -10,8 +11,6 @@
 #include <cstdio>
 
 using json = nlohmann::json;
-
-double calculate_lot_size(double, bool is_long) { return is_long ? 1.0 : -1.0; }
 
 static std::string generate_id() {
     thread_local std::mt19937_64 rng{std::random_device{}()};
@@ -42,9 +41,6 @@ static std::string check_instant_exit(bool is_long, double,
 }
 
 // ── Parseia "col[offset]" ou "col" → {ptr, offset} ───────────────────────────
-// Exemplos: "high[1]" → {high_ptr, 1}
-//           "low[0]"  → {low_ptr,  0}
-//           "atr"     → {atr_ptr,  0}
 struct RefResult { const double* ptr; int offset; };
 
 static RefResult parse_ref(const std::string& ref,
@@ -82,20 +78,23 @@ SimulationOutput Backtest::run_simulation(
     trades.reserve(512);
     daily_results_matrix.reserve(n_bars);
 
+    // ── Histórico de profits para kelly/var ───────────────────────────────────
+    // Acumula profits de trades fechados — MoneyManager::calculate() lê este vetor
+    std::vector<double> trade_profits;
+    trade_profits.reserve(512);
+
     // ── Lookups ───────────────────────────────────────────────────────────────
     auto get_price_ptr = [&](const std::string& key) -> const double* {
         auto it = fast_pool.find(key);
         return (it != fast_pool.end()) ? it->second : nullptr;
     };
 
-    // Resolve signal_ref → {ptr, offset}, suporta "col[n]" e "col"
     auto get_ref = [&](const std::string& sig_name) -> RefResult {
         auto rit = signal_refs.find(sig_name);
         if (rit == signal_refs.end()) return {nullptr, 0};
         return parse_ref(rit->second, fast_pool);
     };
 
-    // Acesso seguro com bounds check para offset
     auto ref_val = [&](const RefResult& r, size_t i) -> double {
         if (!r.ptr) return 0.0;
         int idx = (int)i - r.offset;
@@ -119,6 +118,11 @@ SimulationOutput Backtest::run_simulation(
     try {
         const json& params = sim;
 
+        // ── money_manager params — lidos uma vez antes do loop ────────────────
+        const json mm_params = params.contains("money_manager")
+            ? params["money_manager"]
+            : json(nullptr);
+
         const double* open  = get_price_ptr("open");
         const double* high  = get_price_ptr("high");
         const double* low   = get_price_ptr("low");
@@ -129,7 +133,7 @@ SimulationOutput Backtest::run_simulation(
         const uint8_t* sig_exit_long   = get_signal_ptr("exit_long");
         const uint8_t* sig_exit_short  = get_signal_ptr("exit_short");
 
-        // Refs com suporte a offset — resolvidos uma vez antes do loop
+        // Refs resolvidos uma vez antes do loop
         RefResult ref_limit_long     = get_ref("limit_long");
         RefResult ref_limit_short    = get_ref("limit_short");
         RefResult ref_sl_price_long  = get_ref("sl_price_long");
@@ -181,8 +185,7 @@ SimulationOutput Backtest::run_simulation(
 
         bool hedge_enabled = exec_settings.value("hedge",     false);
         bool is_daytrade   = exec_settings.value("day_trade", false);
-        std::string order_type     = exec_settings.at("order_type").get<std::string>();
-        //std::string limit_base_ref = exec_settings.at("limit_order_base_calc_ref_price").get<std::string>();
+        std::string order_type = exec_settings.at("order_type").get<std::string>();
 
         size_t lus = header.find_last_of('_');
         std::string asset_name = (lus != std::string::npos) ? header.substr(lus+1) : header;
@@ -213,9 +216,8 @@ SimulationOutput Backtest::run_simulation(
                                size_t bar_idx, bool is_long) {
             double entry      = t.entry_price;
             double exit_price = apply_exit_slip(raw_exit, reason, is_long);
-            double net_pnl    = ((exit_price - entry) / entry) * 100.0
-                                * (is_long ? 1.0 : -1.0) - commission * 100.0;
-            t.exit_price = exit_price;
+            double net_pnl    = (((exit_price - entry) - commission) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+            t.exit_price  = exit_price;
             { auto _s = make_dt_str(bar_idx); std::memcpy(t.exit_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.exit_datetime))); }
             t.exit_reason = reason;
             t.status      = "closed";
@@ -224,14 +226,24 @@ SimulationOutput Backtest::run_simulation(
             t.mfe         = t.max_fav_price;
             t.profit      = net_pnl;
             temp_cumulative_pnl += net_pnl;
+
+            // Acumula profit para kelly/var
+            trade_profits.push_back(net_pnl);
+
             if (print_logs)
                 std::cout << "[EXIT] " << (is_long?"L":"S") << " " << reason
                           << " | In: " << std::fixed << std::setprecision(5) << entry
                           << " Out: " << exit_price
                           << " Net: " << std::setprecision(4) << net_pnl << "%" << std::endl;
+
             double prev_p = t.prev_day_price;
-            double dv = ((exit_price - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
-            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]), dv, t.lot_size, ps_id});
+            double dv = (((exit_price - prev_p) - commission) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+            daily_results_matrix.push_back({
+                format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]),
+                dv,
+                std::abs(t.lot_size),  // lot_size vigente no fechamento
+                ps_id
+            });
         };
 
         auto open_trade = [&](Trade& t, double raw_fill, size_t idx, bool is_long) {
@@ -241,7 +253,11 @@ SimulationOutput Backtest::run_simulation(
             auto _s = make_dt_str(idx);
             std::memcpy(t.entry_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.entry_datetime)));
             t.bars_held      = 0;
-            t.lot_size       = calculate_lot_size(fill, is_long);
+
+            // ── MoneyManager calcula lot_size ─────────────────────────────────
+            LotResult lr = MoneyManager::calculate(mm_params, fill, is_long, idx, fast_pool, trade_profits, temp_cumulative_pnl);
+            t.lot_size   = lr.lot_size;  // positivo=long, negativo=short
+
             t.max_fav_price  = fill;
             t.max_adv_price  = fill;
             t.prev_day_price = fill;
@@ -258,7 +274,13 @@ SimulationOutput Backtest::run_simulation(
                     if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
                 }
             }
-            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[idx], bar_times[idx]), 0.0, t.lot_size, ps_id});
+            // Entrada no DailyResult com pnl=0.0 e lot_size real
+            daily_results_matrix.push_back({
+                format_datetime_to_int_from_parts(bar_dates[idx], bar_times[idx]),
+                0.0,
+                std::abs(t.lot_size),
+                ps_id
+            });
         };
 
         auto update_trailing = [&](Trade& t, bool is_long, double ref, size_t idx) {
@@ -365,7 +387,6 @@ SimulationOutput Backtest::run_simulation(
                             close_trade(*p_it, (inst=="TP"?tp:sl), inst, i, is_long);
                             trades.push_back(std::move(*p_it));
                         } else {
-                            daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]), 0.0, p_it->lot_size, ps_id});
                             active_trades.push_back(std::move(*p_it));
                         }
                         p_it = pending_orders.erase(p_it);
@@ -398,7 +419,6 @@ SimulationOutput Backtest::run_simulation(
                                 close_trade(t,(inst=="TP"?tp:sl),inst,i,is_long);
                                 trades.push_back(std::move(t));
                             } else {
-                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0, t.lot_size,ps_id});
                                 active_trades.push_back(std::move(t));
                             }
                             is_long ? ++day_trades_long : ++day_trades_short;
@@ -407,7 +427,6 @@ SimulationOutput Backtest::run_simulation(
                             if (!ref_valid(lim_r, i) || ref_val(lim_r, i) <= 0.0) {
                                 Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
                                 open_trade(t,open[i],i,is_long);
-                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0, t.lot_size,ps_id});
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
@@ -422,11 +441,12 @@ SimulationOutput Backtest::run_simulation(
                             if (already_hit && gap_market_fallback) {
                                 Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
                                 open_trade(t,open[i],i,is_long);
-                                daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),0.0, t.lot_size,ps_id});
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
                             }
+                            // Pending order — lot_size placeholder ±1.0
+                            // open_trade será chamado quando triggered, recalculando o lote
                             Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
                             t.entry_price=target; t.status="pending";
                             { auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
@@ -487,11 +507,16 @@ SimulationOutput Backtest::run_simulation(
             // ── 5. DAILY PnL UPDATE ───────────────────────────────────────────
             if (day_switched || dt_final || is_last_bar) {
                 for (auto& trade : active_trades) {
-                    double entry  = trade.entry_price, curr_p = close[i];
                     bool is_long  = (trade.lot_size > 0);
                     double prev_p = trade.prev_day_price;
+                    double curr_p = close[i];
                     double dv = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
-                    daily_results_matrix.push_back({format_datetime_to_int_from_parts(bar_dates[i],bar_times[i]),dv, trade.lot_size,ps_id});
+                    daily_results_matrix.push_back({
+                        format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
+                        dv,
+                        std::abs(trade.lot_size),  // lot_size vigente neste período
+                        ps_id
+                    });
                     trade.prev_day_price = curr_p;
                 }
             }

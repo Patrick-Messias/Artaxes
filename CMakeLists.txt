@@ -20,6 +20,7 @@ pybind11_add_module(engine_cpp
     src/engine.cpp
     src/operation.cpp
     src/backtest.cpp
+    src/money_manager.cpp
 )
 
 target_include_directories(engine_cpp PRIVATE src)

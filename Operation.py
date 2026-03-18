@@ -135,7 +135,12 @@ class Operation(BaseClass):
  
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
                     base_asset_df  = asset_class.data_get(model_tf)
-                    exec_set_raw   = asdict(strat_obj.execution_settings)
+
+                    # Updates Commission and Slippage with Asset's tick data
+                    tick = getattr(asset_class, "tick", 0.0)
+                    exec_set_raw = asdict(strat_obj.execution_settings)
+                    exec_set_raw["commission"] = exec_set_raw["commission"] * tick
+                    exec_set_raw["slippage"]   = exec_set_raw["slippage"]   * tick
                     exec_set_mod   = self.prepare_time_params(exec_set_raw)
                     n_ps           = len(param_sets)
  
@@ -260,13 +265,12 @@ class Operation(BaseClass):
                     # com key "sig__{sig_hash}__{sig_name}" (única por param_set).
                     # Strings apontam para coluna já existente (ohlc ou pool) → signal_ref.
                     # Arrays uint8 → signal_array (entry/exit binários).
-                    ohlc_col_names = set(base_asset_df.columns)
 
                     ps_signal_refs:   dict[str, dict] = {ps: {} for ps in param_sets}
                     ps_signal_arrays: dict[str, dict] = {ps: {} for ps in param_sets}
-
+ 
                     for ps_name, ps_dict in param_sets.items():
-                        sig_hash = ps_sig_hash[ps_name]  # usa hash reduzido se disponível
+                        sig_hash = ps_sig_hash[ps_name]
                         for sig_name, sig_val in sig_cache[sig_hash].items():
                             if isinstance(sig_val, str):
                                 ps_signal_refs[ps_name][sig_name] = sig_val
@@ -298,6 +302,27 @@ class Operation(BaseClass):
                           f"Shared bin: {len(shared_signal_arrays)} | Param_sets: {n_ps}")
                     print(f"   > [OP] fase4={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 5: Monta asset_batch ──────────────────────────────
+                    smm = strat_obj.strat_money_manager  # None → neutro
+ 
+                    # Injeta custom_lot_size no indicators_pool se definido no SMM
+                    # Funciona igual a um indicador — C++ lê via fast_pool no open_trade
+                    if smm is not None:
+                        if smm.compound_fract_series is not None:
+                            indicators_pool["compound_fract"] = (
+                                smm.compound_fract_series.cast(pl.Float64)
+                                .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
+                            )
+                        if smm.custom_lot_size_long is not None:
+                            indicators_pool["custom_lot_size_long"] = (
+                                smm.custom_lot_size_long.cast(pl.Float64)
+                                .fill_null(1.0).to_numpy().astype(np.float64)
+                            )
+                        if smm.custom_lot_size_short is not None:
+                            indicators_pool["custom_lot_size_short"] = (
+                                smm.custom_lot_size_short.cast(pl.Float64)
+                                .fill_null(1.0).to_numpy().astype(np.float64)
+                            )
+ 
                     asset_batch = {
                         "asset_header":         f"{model_name}_{strat_name}_{asset_name}",
                         "data":                 base_asset_df.to_dict(as_series=False),
@@ -312,26 +337,43 @@ class Operation(BaseClass):
                             'param_set_dict': ps_dict,
                             'trades': []
                         }
+ 
+                        # Serializa SMM → mm_params para C++
+                        # None → method="neutral" → lot=1.0
+                        mm_params = smm.to_sim_params() if smm is not None else {"method": "neutral"}
+ 
+                        # Injeta tick e tick_fin_val do asset — C++ usa para cálculos de lote
+                        mm_params["tick"]         = getattr(asset_class, "tick",         0.01)
+                        mm_params["tick_fin_val"] = getattr(asset_class, "tick_fin_val", 1.0)
+ 
+                        # Se method=signal (custom_lot_size), adiciona signal_refs por lado
+                        sim_signal_refs = dict(ps_signal_refs[ps_name])
+                        if mm_params.get("method") == "signal":
+                            if smm.custom_lot_size_long is not None:
+                                sim_signal_refs["lot_size_long"]  = "custom_lot_size_long"
+                            if smm.custom_lot_size_short is not None:
+                                sim_signal_refs["lot_size_short"] = "custom_lot_size_short"
+ 
                         asset_batch["simulations"].append({
                             "id":             ps_name,
-                            "params":         ps_dict,
+                            "params":         {**ps_dict, "money_manager": mm_params},
                             "indicator_keys": ps_ind_col_keys[ps_name],
                             "signal_arrays":  ps_signal_arrays[ps_name],
-                            "signal_refs":    ps_signal_refs[ps_name],
+                            "signal_refs":    sim_signal_refs,
                         })
  
                     # Estimates batch size — hybrid CPU+RAM approach
                     ps_size_mb = self._estimate_paramset_size_mb(base_asset_df) / max(n_ps, 1)
                     batch_size = self._calculate_optimal_batch_size(
                         avg_paramset_size_mb=ps_size_mb,
-                        safety_margin=0.6,  # RAM: use 40% available
+                        safety_margin=0.6,
                         max_batch=n_ps,
                         min_batch=1
                     )
                     all_sim   = list(asset_batch.pop("simulations"))
                     n_batches = math.ceil(n_ps / batch_size)
                     print(f"   > Batching: {n_ps} sims | batch_size={batch_size} | n_batches={n_batches}")
- 
+
                     # ── Fase 6: Envio para C++ ─────────────────────────────────
                     all_ps_names = [s.get("id", "") for s in all_sim]
                     wfm_accum = {"ts": [], "pnl": [], "lot_size": [], "ps_id": []}
@@ -352,9 +394,10 @@ class Operation(BaseClass):
                                 "lot_size": np.concatenate(wfm_accum["lot_size"]),
                                 "ps_id": np.concatenate(wfm_accum['ps_id'])
                             }
-                            df_matrix = self._process_wfm_to_polars(wfm_col, all_ps_names )
-                            self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["wfm_matrix_data"] = df_matrix
-                            print(f"   > WFM Matrix generated for {model_name} | {strat_name} | {asset_name}: {df_matrix.shape}")
+                            matrix_pnl, matrix_lot = self._process_wfm_to_polars(wfm_col, all_ps_names )
+                            self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["wfm_matrix_data"] = matrix_pnl
+                            self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["wfm_lot_data"] = matrix_lot
+                            print(f"   > WFM Matrix generated for {model_name} | {strat_name} | {asset_name}: {matrix_pnl.shape}")
                         except Exception as e:
                             print(f"   > Error generating WFM Matrix: {e}")
                     print(f"   > [OP] fase5_prep={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
@@ -597,50 +640,52 @@ class Operation(BaseClass):
             if ts is not None and len(ts) > 0:
                 wfm_accum["ts"].append(ts)
                 wfm_accum["pnl"].append(pnl)
-                wfm_accum["lot_size"].append(lot_size)
+                wfm_accum["lot_size"].append(lot_size) 
                 wfm_accum["ps_id"].append(ps_id + ps_id_offset) # Ajusta ps_id pelo offset do batch
 
 
     def _process_wfm_to_polars(self, wfm_col: dict, ps_names: list = None):
         df = pl.DataFrame({
-            "ts":    pl.Series(wfm_col["ts"],    dtype=pl.Int64),
-            "pnl":   pl.Series(wfm_col["pnl"],   dtype=pl.Float64),
-            "lot_size":   pl.Series(wfm_col["lot_size"],   dtype=pl.Float64),
-            "ps_id": pl.Series(wfm_col["ps_id"], dtype=pl.Int32),
+            "ts":       pl.Series(wfm_col["ts"],       dtype=pl.Int64),
+            "pnl":      pl.Series(wfm_col["pnl"],      dtype=pl.Float64),
+            "lot_size": pl.Series(wfm_col["lot_size"], dtype=pl.Float64),
+            "ps_id":    pl.Series(wfm_col["ps_id"],    dtype=pl.Int32),
         })
 
         df = df.with_columns(
-            pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S")
+            pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S"),
+            (pl.col("pnl") * pl.col("lot_size")).alias("pnl_weighted"),
         )
 
-        matrix = df.pivot(
-            on="ps_id",
-            index="ts",
-            values="pnl",
+        # Pivot pnl×lot → Walkforward
+        matrix_pnl = df.pivot(
+            on="ps_id", index="ts",
+            values="pnl_weighted",
             aggregate_function="sum"
         ).sort("ts").fill_null(0.0)
-        
-        # Rename columns to ps_0, ps_1, ..., ps_{col}.
-        # matrix = matrix.rename({
-        #     col: f"ps_{col}" for col in matrix.columns if col != "ts"
-        # })
 
-        # Renames whole ps_id -> ps_name real if available
-        if ps_names:
-            # ps_id inteiro → "ps_{ps_name}" ex: 0 → "ps_param_set-21-8-sma-2"
-            rename_map = {
-                str(i): f"ps_{ps_names[i]}"
-                for i in range(len(ps_names))
-                if str(i) in matrix.columns
-            }
-            if rename_map:
-                matrix = matrix.rename(rename_map)
-        else:
-            matrix = matrix.rename({
-                col: f"ps_{col}" for col in matrix.columns if col != "ts"
-            })
+        # Pivot lot_size → Portfolio Simulator
+        matrix_lot = df.pivot(
+            on="ps_id", index="ts",
+            values="lot_size",
+            aggregate_function="last"
+        ).sort("ts").fill_null(0.0)
 
-        return matrix
+        def rename_cols(m, suffix=""):
+            if ps_names:
+                rename_map = {str(i): f"ps_{ps_names[i]}{suffix}"
+                            for i in range(len(ps_names)) if str(i) in m.columns}
+            else:
+                rename_map = {col: f"ps_{col}{suffix}"
+                            for col in m.columns if col != "ts"}
+            return m.rename(rename_map) if rename_map else m
+
+        matrix_pnl = rename_cols(matrix_pnl)
+        matrix_lot = rename_cols(matrix_lot)
+
+        return matrix_pnl, matrix_lot
+    
+
 
     # Batch System Defs
     def _estimate_paramset_size_mb(self, df: pl.DataFrame):
@@ -999,7 +1044,7 @@ class Operation(BaseClass):
                     # Recovers param_set matrix from cache
                     asset_node = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
                     wfm_matrix = asset_node.get("wfm_matrix_data")
-
+                    
                     if wfm_matrix is None or wfm_matrix.is_empty():
                         print(f"      > [Skip] No WFM found for {a_name}")
                         continue
@@ -1233,7 +1278,9 @@ if __name__ == "__main__":
 
             '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
         }
-
+    sig_compound_fract = None
+    sig_lot_size_long = None
+    sig_lot_size_short = None
 
     # XXX - Recriar ponte py - cpp - py
     # XXX - Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
@@ -1243,12 +1290,29 @@ if __name__ == "__main__":
     #talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
     # XXX - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator. Redundante salvar lado/asset/model/strat, se orientar pelo _results_map
     # - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
+    """
+    WFM lot_size (DailyResult)
+    └── Backtest individual
+    └── SMM definido → lot_size real (regras próprias da strat)
+    └── SMM não definido → lot_size = 1.0
+
+    Walkforward Analysis
+    └── usa lot_size do DailyResult como está
+    → reflete a gestão real da strat isolada
+
+    Portfolio Simulator
+    └── recebe capital alocado de MMM/PMM
+    → sobrescreve lot_size com novo calc_lot_size(capital_alocado)
+    → mesmas regras do SMM, capital diferente
+    → resultado: WFM ajustado pro contexto do portfolio
+    """
+    
     # - Multi entry and lot strategy
 
-    # - Dev Roadmap png/list 
     # - Organize _results_map with ps_id and param_set_key
     # - Develop start_date - end_date for operation
 
+    # - Modernize Classes
     # - Plot long list with small leters with selectable mode-strat-asset-parest/wf results
     # - List above should show parset ps_id and param_set_key for all OS wfm results
 
@@ -1258,8 +1322,12 @@ if __name__ == "__main__":
     # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
     # - Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
 
+    # - Update position in backtest (for multiple entries) must have daily returns update with lot_size update
+
+    # - Dev Roadmap png/list 
     # - Deselop SM selection system for Models/Strats/Assets
     # - Develop Portfolio Simulator
+    # - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
 
     # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
 
@@ -1276,18 +1344,32 @@ if __name__ == "__main__":
             ),
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                                                  order_type='market', limit_order_base_calc_ref_price='open', 
-                                                 slippage=0.0, comission=0.0, 
+                                                 slippage=0.0, commission=0.0, # * Tick 
                                                  day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                                                  print_logs=False),
-            mma_settings=None, # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+            strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
+                sizing_method="fixed", dist_signal_ref=None, dist_fixed=None,
+                capital_method="fixed", compound_fract=1.0, compound_fract_series=sig_compound_fract,
+                custom_lot_size_long=sig_lot_size_long, custom_lot_size_short=sig_lot_size_short,
+                sizing_params={
+                    "fixed_lot":      1.0,  
+                    "risk_pct":       0.01, 
+                    "risk_pct_min":   0.001, 
+                    "risk_pct_max":   0.05,
+                    "pct":            0.02,
+                    "kelly_weight":   0.25, 
+                    "var_confidence": 0.95,
+                    "min_trades":     30,
+                }
+            )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=ind,
             signals=strat_signals
         )
     )
-    
+
     model_1 = Model(
         ModelParams(
             name='MA Trend Following',
