@@ -132,9 +132,45 @@ class Operation(BaseClass):
                 for asset_name in assets:
                     asset_class = self.assets.get(asset_name)
                     if not asset_class: continue
- 
-                    self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
                     base_asset_df  = asset_class.data_get(model_tf)
+                    
+                    # ── Fase 0: Data Filtering ───────────────────────────
+                    if self.date_start or self.date_end:
+                        dt_col = pl.col("datetime")
+
+                    if self.date_start:
+                        start_dt = pl.lit(self.date_start).str.to_datetime("%Y-%m-%d")
+                        base_asset_df = base_asset_df.filter(dt_col >= start_dt)
+                    if self.date_end:
+                        end_dt = pl.lit(self.date_end).str.to_datetime("%Y-%m-%d")
+                        base_asset_df = base_asset_df.filter(dt_col <= end_dt)
+
+                    if base_asset_df.is_empty():
+                        print(f"   ⚠️ WARNING: {asset_name} has no data in range "
+                            f"{self.date_start or 'start'} → {self.date_end or 'end'} — skipping.")
+                        continue
+
+                    # Verifies that the asset covers the full range from strat to end
+                    actual_start = base_asset_df["datetime"].min()
+                    actual_end = base_asset_df["datetime"].max()
+
+                    if self.date_start:
+                        expected_start = pl.Series([self.date_start]).str.to_datetime("%Y-%m-%d")[0]
+                        diff_days = (actual_start - expected_start).days if hasattr((actual_start - expected_start), 'days') else 0
+                        if abs(diff_days) > 5: # 5 day tolerance for small gaps like weekends
+                            print(f"   ⚠️ WARNING: {asset_name} data starts at {actual_start} "
+                                f"but requested start was {self.date_start} "
+                                f"({abs(diff_days)} days gap).")
+
+                    if self.date_end:
+                        expected_end = pl.Series([self.date_end]).str.to_datetime("%Y-%m-%d")[0]
+                        diff_days = (expected_end - actual_end).days if hasattr((expected_end - actual_end), 'days') else 0
+                        if diff_days > 5:
+                            print(f"   ⚠️ WARNING: {asset_name} data ends at {actual_end} "
+                                f"but requested end was {self.date_end} "
+                                f"({diff_days} days missing at end).")
+                            
+                    self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
 
                     # Updates Commission and Slippage with Asset's tick data
                     tick = getattr(asset_class, "tick", 0.0)
@@ -152,6 +188,7 @@ class Operation(BaseClass):
                     import time
                     _t = time.perf_counter()
                     # ── Fase 1: Indicadores e Sinais ───────────────────────────
+
                     sig_key_params: list | None = None
 
                     for ps_name, ps_dict in param_sets.items():
@@ -468,6 +505,12 @@ class Operation(BaseClass):
                 raise ValueError(f"Ativo {target_asset} não encontrado nos ativos globais.")
             
             df_source = source_asset_class.data_get(target_tf)
+
+            # Filters Assets Data
+            if self.date_start:
+                df_source = df_source.filter(pl.col("datetime") >= pl.lit(self.date_start).str.to_datetime("%Y-%m-%d"))
+            if self.date_end:
+                df_source = df_source.filter(pl.col("datetime") <= pl.lit(self.date_end).str.to_datetime("%Y-%m-%d"))
             
             # Cálculo Real (Chama a lógica matemática do indicador)
             calc_res = ind_obj.calculate(df_source, param_set_dict=param_set_dict, ind_name=ind_name)
@@ -1230,7 +1273,7 @@ if __name__ == "__main__":
     # User imput Indicators
     ind = { 
         'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param2'),
-        'var': VAR(asset=None, timeframe=model_execution_tf, window='param2', alpha=0.01, var_type='parametric', price_col='close')
+        'var': VAR(asset=None, timeframe=model_execution_tf, window='param2', alpha=0.01, var_type='parametric', price_col='close'),
         #'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         # 'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
@@ -1350,6 +1393,7 @@ if __name__ == "__main__":
     # - Develop start_date - end_date for operation
     # - Create SQL database for results
 
+    # - Divisão Backtest OOS simples em Monte Carlo
     # - Plot long list with small leters with selectable mode-strat-asset-parest/wf results
     # - List above should show parset ps_id and param_set_key for all OS wfm results
     # - Modernize Classes
@@ -1402,7 +1446,7 @@ if __name__ == "__main__":
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                                                  print_logs=False),
             strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="risk_per_trade", capital_method="compound", compound_fract=1.0, dist_fixed=None,
+                sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
                 sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
             )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
