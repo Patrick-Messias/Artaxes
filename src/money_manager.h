@@ -12,21 +12,21 @@ struct LotResult {
 };
 
 // ── MoneyManager C++ ──────────────────────────────────────────────────────────
-// Lê sim.params["money_manager"] e calcula lot_size no open_trade.
-//
 // sizing_method:
 //   "neutral"        → lot = 1.0
 //   "fixed"          → lot fixo em mm["fixed_lot"]
-//   "risk_per_trade" → (capital_base × risk_pct) / (dist_ticks × tick_fin_val)
-//   "pct_capital"    → (capital_base × pct) / (price × tick_fin_val)
+//   "risk_per_trade" → (capital × risk_pct) / (dist_ticks × tick_fin_val)
+//   "pct_capital"    → (capital × pct) / (price × tick_fin_val)
 //   "kelly"          → kelly fraction usando trade_profits acumulados
 //   "var"            → VaR usando trade_profits acumulados
 //   "signal"         → lot vem do fast_pool via mm["ref_long"/"ref_short"]
 //
 // capital_method:
-//   "fixed"          → capital_base = mm["capital"]  (constante)
-//   "compound_fract" → capital_base = capital + cumulative_profit × compound_fract
-//   "signal"         → compound_fract lido do fast_pool barra a barra
+//   "fixed"          → capital constante
+//   "compound_fract" → capital + (cumulative_profit% / 100 × capital) × fract
+//
+// Lot constraints (do asset — aplicados como camada final):
+//   mm["lot_min"], mm["lot_max"], mm["lot_step"]
 
 class MoneyManager {
 public:
@@ -45,8 +45,7 @@ private:
                                        size_t bar_idx, double cumulative_profit,
                                        const std::unordered_map<std::string, const double*>& fast_pool);
 
-    static double clamp_lot(double lot, double capital, double price,
-                            double tick_fin_val, double risk_pct_min, double risk_pct_max);
+    static double apply_lot_constraints(double lot, const json& mm_params);
 
     static double resolve_dist(const json& mm_params, double price, size_t bar_idx,
                                const std::unordered_map<std::string, const double*>& fast_pool);

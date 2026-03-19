@@ -247,6 +247,7 @@ class Operation(BaseClass):
 
                     print(f"   > [DEBUG] sig_cache unique hashes: {len(sig_cache)} / {n_ps} param_sets")
                     print(f"   > [OP] fase1={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
+
                     # ── Fase 2: Indicators Pool ────────────────────────────────
                     indicators_pool:  dict = {}
                     ps_ind_col_keys:  dict[str, list] = {}
@@ -260,6 +261,7 @@ class Operation(BaseClass):
                                     indicators_pool[pool_key] = values
                                 ps_ind_col_keys[ps_name].append(pool_key)
                     print(f"   > [OP] fase2={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
+                    
                     # ── Fase 3: Arrays de preço derivados → pool ──────────────
                     # pl.Series float retornadas pelo strat_signals entram no pool
                     # com key "sig__{sig_hash}__{sig_name}" (única por param_set).
@@ -298,14 +300,13 @@ class Operation(BaseClass):
  
                                     if pool_key not in indicators_pool:
                                         indicators_pool[pool_key] = sig_val
- 
+
                                     # compound_fract_series → pool com key "compound_fract" para C++
-                                    if sig_name == "compound_fract_series":
-                                        ps_signal_refs[ps_name]["compound_fract"] = pool_key
-                                    else:
-                                        ps_signal_refs[ps_name][sig_name] = pool_key
+                                    ref_name = "compound_fract" if sig_name == "compound_fract_series" else sig_name
+                                    ps_signal_refs[ps_name][ref_name] = pool_key
  
                     print(f"   > [OP] fase3={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
+
                     # ── Fase 4: Shared signal arrays ───────────────────────────
                     all_sig_names: set = set()
                     for d in ps_signal_arrays.values(): all_sig_names.update(d.keys())
@@ -367,6 +368,9 @@ class Operation(BaseClass):
                         mm_params = smm.to_sim_params() if smm is not None else {"method": "neutral"}
                         mm_params["tick"]         = getattr(asset_class, "tick",         0.01)
                         mm_params["tick_fin_val"] = getattr(asset_class, "tick_fin_val", 1.0)
+                        mm_params["lot_min"] = getattr(asset_class, "lot_min", 0.01)
+                        mm_params["lot_step"] = getattr(asset_class, "lot_step", getattr(asset_class, "lot_min", 0.01))
+                        mm_params["lot_max"] = getattr(asset_class, "lot_max", 10000)
  
                         # signal_refs por lado para sizing_method="signal"
                         sim_signal_refs = dict(ps_signal_refs[ps_name])
@@ -1265,7 +1269,11 @@ if __name__ == "__main__":
         var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
         lot_series = (pl.lit(0.01) / var).clip(0.1, 10.0)
 
-        sig_compound_fract = None
+
+        n = len(df)
+        compound_fract_vals = np.ones(n, dtype=np.float64)
+        compound_fract_vals[100:] = 0.05
+        sig_compound_fract = pl.Series("compound_fract_series", compound_fract_vals)
         
         if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
         if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
@@ -1325,6 +1333,25 @@ if __name__ == "__main__":
     #talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
     # XXX - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator. Redundante salvar lado/asset/model/strat, se orientar pelo _results_map
     # XXX - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
+
+    # - Corrigir bug compound_fract_series
+    # - Substituir dist_signal_ref e dist_fixed por uma serie opcional de quanto seria a distância para considerar o calculo, para caso precise e não tenha SL
+    
+    # - Develop start_date - end_date for operation
+    # - Create SQL database for results
+
+    # - Plot long list with small leters with selectable mode-strat-asset-parest/wf results
+    # - List above should show parset ps_id and param_set_key for all OS wfm results
+    # - Modernize Classes
+
+    # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
+    # - Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
+    # - Modify HTF-LTF function to work from LTF to HTF also
+
+    # - Dev Roadmap png/list 
+    # - Deselop SM selection system for Models/Strats/Assets
+    # - Develop Portfolio Simulator
+    # - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
     """
     WFM lot_size (DailyResult)
     └── Backtest individual
@@ -1342,27 +1369,8 @@ if __name__ == "__main__":
     → resultado: WFM ajustado pro contexto do portfolio
     """
     
-    # - Multi entry and lot strategy
-    # - Organize _results_map with ps_id and param_set_key
-    # - Develop start_date - end_date for operation
-
-    # - Modernize Classes
-    # - Plot long list with small leters with selectable mode-strat-asset-parest/wf results
-    # - List above should show parset ps_id and param_set_key for all OS wfm results
-
-    # - Criar base de dados SQL com sistema de batch para armazenar e gerenciar dados
-    # - Realocar dados e settings do Assets para SQL?
-    
-    # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
-    # - Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
-
+    # - Best leave for PS? Scale in/out of open trade, can use entry/exit signals or new specific signals, must be able to handle market or limit/stop orders, how will this handle in Portfolio Simulator?
     # - Update position in backtest (for multiple entries) must have daily returns update with lot_size update
-
-    # - Dev Roadmap png/list 
-    # - Deselop SM selection system for Models/Strats/Assets
-    # - Develop Portfolio Simulator
-    # - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
-
     # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
 
     AT15 = Strat(
@@ -1384,18 +1392,8 @@ if __name__ == "__main__":
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                                                  print_logs=False),
             strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="signal", dist_signal_ref=None, dist_fixed=None,
-                capital_method="compound", compound_fract=1.0,
-                sizing_params={
-                    "fixed_lot":      1.0,  
-                    "risk_pct":       0.01, 
-                    "risk_pct_min":   0.001, 
-                    "risk_pct_max":   0.05,
-                    "pct":            0.05,
-                    "kelly_weight":   0.25, 
-                    "var_confidence": 0.95,
-                    "min_trades":     30,
-                }
+                sizing_method="pct_capital", capital_method="signal", compound_fract=1.0, dist_signal_ref=None, dist_fixed=None,
+                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.05,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
             )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=ind,

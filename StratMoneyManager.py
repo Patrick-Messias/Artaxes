@@ -24,12 +24,11 @@ class StratMoneyManagerParams(MoneyManagerParams):
     # "signal"          → lot vem de custom_lot_size_long/short (pl.Series)   — Python → pool
 
     # ── Capital Management ───────────────────────────
-    capital_method: Literal["fixed", "compound", "signal"] = "fixed"
+    capital_method: Literal["fixed", "compound"] = "fixed"
     # "fixed"           → Always use initial capital, without compounding
     # "compound"        → Initial capital + (compound_fract=1.0 * profit)
-    # "signal"          → Compounds or not based on signals
     compound_fract: float = 1.0 # Used to adjust how much of profit is reinvested into new entries (!= lot_size)
-    compound_fract_series: Optional[pl.Series] = None 
+    compound_fract_series: Optional[pl.Series] = None # if is not None then uses this
 
     sizing_params: dict = field(default_factory=lambda: {
         "fixed_lot":      1.0,    # para "fixed"
@@ -135,7 +134,6 @@ class StratMoneyManager(MoneyManager):
             "capital_method": self.capital_method,
             "compound_fract": self.compound_fract,
             # compound_fract_series → injetado no indicators_pool como "compound_fract"
-            # C++ lê via fast_pool se capital_method="signal"
  
             "risk_pct":       p.get("risk_pct",       0.01),
             "risk_pct_min":   p.get("risk_pct_min",   0.001),
@@ -222,7 +220,6 @@ class StratMoneyManager(MoneyManager):
  
         "fixed"          → capital fixo, sem compounding
         "compound_fract" → capital += cumulative_profit × compound_fract
-        "signal"         → compound_fract vem do fast_pool no C++
                            no Portfolio Sim, usa compound_fract escalar
         """
         m = self.capital_method
@@ -230,7 +227,7 @@ class StratMoneyManager(MoneyManager):
         if m == "fixed":
             return capital
  
-        if m in ("compound_fract", "compound", "signal"):
+        if m in ("compound_fract", "compound"):
             fract = self.compound_fract
             return capital + cumulative_profit * fract
  

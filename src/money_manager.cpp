@@ -25,11 +25,8 @@ double MoneyManager::pool_val(
 }
 
 // ── apply_capital_method ──────────────────────────────────────────────────────
-// Retorna o capital base ajustado conforme capital_method
-//
 // "fixed"          → capital constante
-// "compound_fract" → capital + cumulative_profit × compound_fract (escalar)
-// "signal"         → capital + cumulative_profit × compound_fract lido do fast_pool
+// "compound_fract" → capital + profit_usd × fract  (escalar)
 double MoneyManager::apply_capital_method(
     const json&                                             mm_params,
     double                                                  price,
@@ -37,26 +34,37 @@ double MoneyManager::apply_capital_method(
     double                                                  cumulative_profit,
     const std::unordered_map<std::string, const double*>&   fast_pool)
 {
-    const double capital       = mm_params.value("capital",       100000.0);
-    const std::string cm       = mm_params.value("capital_method", "fixed");
+    const double capital = mm_params.value("capital",        100000.0);
+    const std::string cm = mm_params.value("capital_method", "fixed");
 
-    if (cm == "fixed") {
-        return capital;
-    }
+    if (cm == "fixed") return capital;
 
+    // compound — usa fract escalar ou série barra a barra se disponível
     double fract = mm_params.value("compound_fract", 1.0);
+    double series_val = pool_val("compound_fract", bar_idx, fast_pool);
+    if (series_val > 0.0) fract = series_val;  // série substitui escalar se presente
 
-    // "signal" → compound_fract varia barra a barra via fast_pool
-    if (cm == "signal") {
-        double val = pool_val("compound_fract", bar_idx, fast_pool);
-        if (val > 0.0) fract = val;
-    }
+    double profit_usd   = (cumulative_profit / 100.0) * capital;
+    double capital_base = capital + profit_usd * fract;
+    return std::max(capital_base, capital * 0.1);
+}
 
-    // "compound_fract" ou "signal" com fract resolvido
-    // capital_base = capital_inicial + lucro_acumulado × fract
-    // Nunca desce abaixo do capital inicial (proteção contra drawdown)
-    double capital_base = capital + cumulative_profit * fract;
-    return std::max(capital_base, capital * 0.1);  // mínimo 10% do capital inicial
+// ── apply_lot_constraints ─────────────────────────────────────────────────────
+// Aplica lot_min, lot_max e lot_step do asset como camada final
+// Equivalente ao que MT5 faz antes de enviar a ordem
+double MoneyManager::apply_lot_constraints(double lot, const json& mm_params)
+{
+    double lot_min  = mm_params.value("lot_min",  0.01);
+    double lot_max  = mm_params.value("lot_max",  10000.0);
+    double lot_step = mm_params.value("lot_step", lot_min);
+
+    if (lot_step <= 0.0) lot_step = lot_min;
+
+    // Arredonda para o lot_step mais próximo
+    double stepped = std::round(lot / lot_step) * lot_step;
+
+    // Aplica min/max
+    return std::max(lot_min, std::min(stepped, lot_max));
 }
 
 // ── resolve_dist ──────────────────────────────────────────────────────────────
@@ -79,16 +87,6 @@ double MoneyManager::resolve_dist(
         if (val > 0.0) return val;
     }
     return price * 0.001;
-}
-
-// ── clamp_lot ─────────────────────────────────────────────────────────────────
-double MoneyManager::clamp_lot(double lot, double capital, double price,
-                               double tick_fin_val, double risk_pct_min, double risk_pct_max)
-{
-    if (price <= 0.0 || tick_fin_val <= 0.0) return lot;
-    double lot_min = (capital * risk_pct_min) / (price * tick_fin_val);
-    double lot_max = (capital * risk_pct_max) / (price * tick_fin_val);
-    return std::max(lot_min, std::min(lot, lot_max));
 }
 
 // ── calc_kelly ────────────────────────────────────────────────────────────────
@@ -149,9 +147,8 @@ LotResult MoneyManager::calculate(
     const std::vector<double>&                              trade_profits,
     double                                                  cumulative_profit)
 {
-    if (mm_params.is_null() || !mm_params.is_object()) {
+    if (mm_params.is_null() || !mm_params.is_object())
         return { is_long ? 1.0 : -1.0, is_long };
-    }
 
     const std::string method = mm_params.value("method", "neutral");
 
@@ -160,8 +157,6 @@ LotResult MoneyManager::calculate(
     double tick_fin_val = mm_params.value("tick_fin_val", 1.0);
     double tick         = mm_params.value("tick",         0.01);
     double risk_pct     = mm_params.value("risk_pct",     0.01);
-    double risk_pct_min = mm_params.value("risk_pct_min", 0.001);
-    double risk_pct_max = mm_params.value("risk_pct_max", 0.05);
 
     double lot = 1.0;
 
@@ -174,30 +169,21 @@ LotResult MoneyManager::calculate(
     else if (method == "risk_per_trade") {
         double dist       = resolve_dist(mm_params, price, bar_idx, fast_pool);
         double dist_ticks = dist / tick;
-        if (dist_ticks <= 0.0) {
-            lot = 1.0;
-        } else {
-            double risk_usd = capital * risk_pct;
-            lot = risk_usd / (dist_ticks * tick_fin_val);
-            lot = clamp_lot(lot, capital, price, tick_fin_val, risk_pct_min, risk_pct_max);
+        if (dist_ticks > 0.0) {
+            lot = (capital * risk_pct) / (dist_ticks * tick_fin_val);
         }
     }
     else if (method == "pct_capital") {
+        // Sem clamp de risk — pct já controla diretamente o tamanho
         double pct = mm_params.value("pct", 0.02);
-        if (price <= 0.0 || tick_fin_val <= 0.0) {
-            lot = 1.0;
-        } else {
+        if (price > 0.0 && tick_fin_val > 0.0)
             lot = (capital * pct) / (price * tick_fin_val);
-            lot = clamp_lot(lot, capital, price, tick_fin_val, risk_pct_min, risk_pct_max);
-        }
     }
     else if (method == "kelly") {
         lot = calc_kelly(capital, price, tick_fin_val, trade_profits, mm_params);
-        lot = clamp_lot(lot, capital, price, tick_fin_val, risk_pct_min, risk_pct_max);
     }
     else if (method == "var") {
         lot = calc_var(capital, price, tick_fin_val, trade_profits, mm_params);
-        lot = clamp_lot(lot, capital, price, tick_fin_val, risk_pct_min, risk_pct_max);
     }
     else if (method == "signal") {
         std::string ref_key = is_long
@@ -210,6 +196,10 @@ LotResult MoneyManager::calculate(
         std::cerr << "[MoneyManager] Unknown method: " << method << " — using neutral\n";
         lot = 1.0;
     }
+
+    // Aplica constraints do asset (lot_min, lot_max, lot_step) como camada final
+    // Equivalente ao que MT5 faz antes de enviar a ordem
+    lot = apply_lot_constraints(lot, mm_params);
 
     return { is_long ? lot : -lot, is_long };
 }

@@ -151,12 +151,14 @@ class Asset(BaseClass):
         'futures': {
             'b3': {
                 'WIN$': {
-                    'tick': 1, 'tick_fin_val': 0.2, 'lot_value': 20000.0, 'min_lot': 1,
+                    'tick': 1, 'tick_fin_val': 0.2, 
+                    'lot_value': 20000.0, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000,
                     'leverage': 20, 'commissions': 0.5, 'slippage': 0.25, 'spread': 0.25,
                     'datetime_candle_references': 'open'
                 },
                 'WDO$': {
-                    'tick': 5, 'tick_fin_val': 5.0, 'lot_value': 40000.0, 'min_lot': 1,
+                    'tick': 5, 'tick_fin_val': 5.0, 
+                    'lot_value': 40000.0, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000,
                     'leverage': 20, 'commissions': 0.5, 'slippage': 0.25, 'spread': 0.25,
                     'datetime_candle_references': 'open'
                 }
@@ -165,15 +167,16 @@ class Asset(BaseClass):
         'currency_pair': {
             'forex': {
                 'generic': {
-                    'tick': 0.0001, 'tick_fin_val': 10, 'lot_value': 100000.0, 'min_lot': 0.01,
+                    'tick': 0.0001, 'tick_fin_val': 10, 
+                    'lot_value': 100000.0, 'min_lot': 0.01, 'lot_step': 0.01, 'lot_max': 10000,
                     'leverage': 100, 'commissions': 1.5, 'slippage': 0.75, 'spread': 0.75,
                     'datetime_candle_references': 'open'
                 }
             }
         },
         'stock': {
-            'NASDAQ': {'generic': {'tick': 0.01, 'tick_fin_val': 1, 'lot_value': 100, 'min_lot': 1, 'leverage': 1, 'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02, 'datetime_candle_references': 'open'}},
-            'NYSE': {'generic': {'tick': 0.01, 'tick_fin_val': 1, 'lot_value': 100, 'min_lot': 1, 'leverage': 1, 'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02, 'datetime_candle_references': 'open'}}
+            'NASDAQ': {'generic': {'tick': 0.01, 'tick_fin_val': 1, 'lot_value': 100, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000, 'leverage': 1, 'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02, 'datetime_candle_references': 'open'}},
+            'NYSE': {'generic': {'tick': 0.01, 'tick_fin_val': 1, 'lot_value': 100, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000, 'leverage': 1, 'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02, 'datetime_candle_references': 'open'}}
         }
     }
 
