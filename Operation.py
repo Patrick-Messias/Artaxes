@@ -1289,7 +1289,7 @@ if __name__ == "__main__":
     # XXX - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
     #talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
     # XXX - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator. Redundante salvar lado/asset/model/strat, se orientar pelo _results_map
-    # - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
+    # XXX - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
     """
     WFM lot_size (DailyResult)
     └── Backtest individual
@@ -1345,12 +1345,12 @@ if __name__ == "__main__":
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                                                  order_type='market', limit_order_base_calc_ref_price='open', 
                                                  slippage=0.0, commission=0.0, # * Tick 
-                                                 day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
+                                                 day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                                                  print_logs=False),
             strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="fixed", dist_signal_ref=None, dist_fixed=None,
+                sizing_method="risk_per_trade", dist_signal_ref=None, dist_fixed=None,
                 capital_method="fixed", compound_fract=1.0, compound_fract_series=sig_compound_fract,
                 custom_lot_size_long=sig_lot_size_long, custom_lot_size_short=sig_lot_size_short,
                 sizing_params={
@@ -1358,7 +1358,7 @@ if __name__ == "__main__":
                     "risk_pct":       0.01, 
                     "risk_pct_min":   0.001, 
                     "risk_pct_max":   0.05,
-                    "pct":            0.02,
+                    "pct":            0.05,
                     "kelly_weight":   0.25, 
                     "var_confidence": 0.95,
                     "min_trades":     30,
