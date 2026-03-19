@@ -166,8 +166,7 @@ class Asset(BaseClass):
         },
         'currency_pair': {
             'forex': {
-                'generic': {
-                    'tick': 0.0001, 'tick_fin_val': 10, 
+                'generic': {'tick': 0.0001, 'tick_fin_val': 10, 
                     'lot_value': 100000.0, 'min_lot': 0.01, 'lot_step': 0.01, 'lot_max': 10000,
                     'leverage': 100, 'commissions': 1.5, 'slippage': 0.75, 'spread': 0.75,
                     'datetime_candle_references': 'open'

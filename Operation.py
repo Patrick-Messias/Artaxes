@@ -277,7 +277,7 @@ class Operation(BaseClass):
                     #   "custom_lot_size_short" → lot_size short via sizing_method="signal"
                     #   "compound_fract"        → compound_fract via capital_method="signal"
  
-                    _FIXED_POOL_KEYS = {"custom_lot_size_long", "custom_lot_size_short", "compound_fract_series"}
+                    _FIXED_POOL_KEYS = {"custom_lot_size_long", "custom_lot_size_short", "compound_fract_series", "dist_signal_ref"}
  
                     ps_signal_refs:   dict[str, dict] = {ps: {} for ps in param_sets}
                     ps_signal_arrays: dict[str, dict] = {ps: {} for ps in param_sets}
@@ -293,10 +293,12 @@ class Operation(BaseClass):
                                 else:
                                     # Sinais com key fixa — não dependem de parâmetros
                                     # Calculados uma vez e reutilizados por todos os parsets
-                                    if sig_name in _FIXED_POOL_KEYS:
-                                        pool_key = sig_name  # key fixa sem hash
+                                    if sig_name == "compound_fract_series":
+                                        pool_key = "compound_fract"
+                                    elif sig_name == "dist_signal_ref":
+                                        pool_key = "dist_ref"      # ← key que o C++ procura
                                     else:
-                                        pool_key = f"sig__{sig_hash}__{sig_name}"
+                                        pool_key = sig_name if sig_name in _FIXED_POOL_KEYS else f"sig__{sig_hash}__{sig_name}"
  
                                     if pool_key not in indicators_pool:
                                         indicators_pool[pool_key] = sig_val
@@ -327,17 +329,24 @@ class Operation(BaseClass):
                     print(f"   > [OP] fase4={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 5: Monta asset_batch ──────────────────────────────
                     smm = strat_obj.strat_money_manager  # None → neutro
- 
-                    # compound_fract_series via SMM (alternativa a retornar no strat_signals)
-                    # Se definido no SMM diretamente, injeta no pool com prioridade
-                    if smm is not None and smm.compound_fract_series is not None:
-                        indicators_pool["compound_fract"] = (
-                            smm.compound_fract_series.cast(pl.Float64)
-                            .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
-                        )
- 
-                    # custom_lot_size via SMM (alternativa a retornar no strat_signals)
+
                     if smm is not None:
+                        # Injeta séries do SMM no indicators_pool
+                        # Alternativa a retornar no strat_signals — mesma pool_key fixa
+                        # compound_fract_series → substitui compound_fract escalar barra a barra
+                        if smm.compound_fract_series is not None:
+                            indicators_pool["compound_fract"] = (
+                                smm.compound_fract_series.cast(pl.Float64)
+                                .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
+                            )
+
+                        # dist_signal_ref → distância para risk_per_trade
+                        if smm.dist_signal_ref is not None:
+                            indicators_pool["dist_ref"] = (
+                                smm.dist_signal_ref.cast(pl.Float64)
+                                .fill_null(0.0).to_numpy().astype(np.float64)
+                            )
+                        # custom_lot_size → lot por lado para sizing_method="signal"
                         if smm.custom_lot_size_long is not None:
                             indicators_pool["custom_lot_size_long"] = (
                                 smm.custom_lot_size_long.cast(pl.Float64)
@@ -1269,11 +1278,12 @@ if __name__ == "__main__":
         var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
         lot_series = (pl.lit(0.01) / var).clip(0.1, 10.0)
 
-
         n = len(df)
         compound_fract_vals = np.ones(n, dtype=np.float64)
-        compound_fract_vals[100:] = 0.05
-        sig_compound_fract = pl.Series("compound_fract_series", compound_fract_vals)
+        compound_fract_vals[10000:] = 0.1
+        compound_fract_series = pl.Series("compound_fract_series", compound_fract_vals)
+        compound_fract_series = None
+        dist_signal_ref = None
         
         if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
         if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
@@ -1295,8 +1305,8 @@ if __name__ == "__main__":
         if be_short_dist is not None and not isinstance(be_short_dist, str): be_short_dist = be_short_dist.shift(1)
 
         if lot_series is not None and not isinstance(lot_series, str): lot_series = lot_series.shift(1)
-
-        if sig_compound_fract is not None and not isinstance(sig_compound_fract, str): sig_compound_fract = sig_compound_fract.shift(1)
+        if compound_fract_series is not None and not isinstance(compound_fract_series, str): compound_fract_series = compound_fract_series.shift(1)
+        if dist_signal_ref is not None and not isinstance(dist_signal_ref, str): dist_signal_ref = dist_signal_ref.shift(1)
         return {
             'entry_long':       entry_long,
             'entry_short':      entry_short,
@@ -1319,8 +1329,8 @@ if __name__ == "__main__":
 
             'custom_lot_size_long':  lot_series,
             'custom_lot_size_short': lot_series,
-
-            'compound_fract_series': sig_compound_fract,
+            'compound_fract_series': compound_fract_series,
+            'dist_signal_ref': dist_signal_ref,
 
             '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
         }
@@ -1334,8 +1344,8 @@ if __name__ == "__main__":
     # XXX - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator. Redundante salvar lado/asset/model/strat, se orientar pelo _results_map
     # XXX - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
 
-    # - Corrigir bug compound_fract_series
-    # - Substituir dist_signal_ref e dist_fixed por uma serie opcional de quanto seria a distância para considerar o calculo, para caso precise e não tenha SL
+    # XXX - Substituir dist_signal_ref e dist_fixed por uma serie opcional de quanto seria a distância para considerar o calculo, para caso precise e não tenha SL
+    # XXX - Corrigir bug compound_fract_series
     
     # - Develop start_date - end_date for operation
     # - Create SQL database for results
@@ -1392,8 +1402,8 @@ if __name__ == "__main__":
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                                                  print_logs=False),
             strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="pct_capital", capital_method="signal", compound_fract=1.0, dist_signal_ref=None, dist_fixed=None,
-                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.05,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
+                sizing_method="risk_per_trade", capital_method="compound", compound_fract=1.0, dist_fixed=None,
+                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
             )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=ind,

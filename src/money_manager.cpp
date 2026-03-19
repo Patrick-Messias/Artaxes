@@ -25,11 +25,11 @@ double MoneyManager::pool_val(
 }
 
 // ── apply_capital_method ──────────────────────────────────────────────────────
-// "fixed"          → capital constante
-// "compound_fract" → capital + profit_usd × fract  (escalar)
+// "fixed"    → capital constante
+// "compound" → capital + profit_usd × fract
+//              fract: escalar mm["compound_fract"] ou série fast_pool["compound_fract"]
 double MoneyManager::apply_capital_method(
     const json&                                             mm_params,
-    double                                                  price,
     size_t                                                  bar_idx,
     double                                                  cumulative_profit,
     const std::unordered_map<std::string, const double*>&   fast_pool)
@@ -39,54 +39,65 @@ double MoneyManager::apply_capital_method(
 
     if (cm == "fixed") return capital;
 
-    // compound — usa fract escalar ou série barra a barra se disponível
+    // compound — fract escalar ou série (série substitui escalar se presente)
     double fract = mm_params.value("compound_fract", 1.0);
-    double series_val = pool_val("compound_fract", bar_idx, fast_pool);
-    if (series_val > 0.0) fract = series_val;  // série substitui escalar se presente
+    double series_val = pool_val("compound_fract_series", bar_idx, fast_pool);
+    if (series_val > 0.0) fract = series_val;
 
+    // cumulative_profit em % → converte para $ usando capital inicial
     double profit_usd   = (cumulative_profit / 100.0) * capital;
     double capital_base = capital + profit_usd * fract;
+
+    // Nunca desce abaixo de 10% do capital inicial
     return std::max(capital_base, capital * 0.1);
 }
 
-// ── apply_lot_constraints ─────────────────────────────────────────────────────
-// Aplica lot_min, lot_max e lot_step do asset como camada final
-// Equivalente ao que MT5 faz antes de enviar a ordem
-double MoneyManager::apply_lot_constraints(double lot, const json& mm_params)
-{
-    double lot_min  = mm_params.value("lot_min",  0.01);
-    double lot_max  = mm_params.value("lot_max",  10000.0);
-    double lot_step = mm_params.value("lot_step", lot_min);
-
-    if (lot_step <= 0.0) lot_step = lot_min;
-
-    // Arredonda para o lot_step mais próximo
-    double stepped = std::round(lot / lot_step) * lot_step;
-
-    // Aplica min/max
-    return std::max(lot_min, std::min(stepped, lot_max));
-}
-
 // ── resolve_dist ──────────────────────────────────────────────────────────────
+// Prioridade: fast_pool["dist_ref"] → abs(entry - sl) → dist_fixed → tick
 double MoneyManager::resolve_dist(
     const json&                                             mm_params,
     double                                                  price,
+    double                                                  sl_price,
     size_t                                                  bar_idx,
     const std::unordered_map<std::string, const double*>&   fast_pool)
 {
-    if (mm_params.contains("dist_ref") && mm_params["dist_ref"].is_string()) {
-        double val = pool_val(mm_params["dist_ref"].get<std::string>(), bar_idx, fast_pool);
-        if (val > 0.0) return val;
+    // 1. Série calculada em Python (ATR, range, etc.)
+    double pool_dist = pool_val("dist_ref", bar_idx, fast_pool);
+    if (pool_dist > 0.0) return pool_dist;
+
+    // 2. SL do trade — distância natural do risco definida pelo usuário
+    if (sl_price > 0.0) {
+        double sl_dist = std::abs(price - sl_price);
+        if (sl_dist > 0.0) return sl_dist;
     }
+
+    // 3. Valor fixo em pontos
     if (mm_params.contains("dist_fixed") && mm_params["dist_fixed"].is_number()) {
         double val = mm_params["dist_fixed"].get<double>();
         if (val > 0.0) return val;
     }
+
+    // 4. Tick do asset — fallback mínimo
     if (mm_params.contains("tick") && mm_params["tick"].is_number()) {
         double val = mm_params["tick"].get<double>();
         if (val > 0.0) return val;
     }
+
     return price * 0.001;
+}
+
+// ── apply_lot_constraints ─────────────────────────────────────────────────────
+// Aplica min_lot, max_lot e lot_step — equivalente ao que MT5 faz antes de enviar ordem
+double MoneyManager::apply_lot_constraints(double lot, const json& mm_params)
+{
+    double min_lot  = mm_params.value("min_lot",  0.01);
+    double max_lot  = mm_params.value("max_lot",  10000.0);
+    double lot_step = mm_params.value("lot_step", min_lot);
+
+    if (lot_step <= 0.0) lot_step = min_lot;
+
+    double stepped = std::round(lot / lot_step) * lot_step;
+    return std::max(min_lot, std::min(stepped, max_lot));
 }
 
 // ── calc_kelly ────────────────────────────────────────────────────────────────
@@ -133,8 +144,7 @@ double MoneyManager::calc_var(double capital, double price, double tick_fin_val,
     if (var >= 0.0) return 1.0;
 
     double risk_pct = mm_params.value("risk_pct", 0.01);
-    double risk_usd = capital * risk_pct;
-    return risk_usd / (std::abs(var) * tick_fin_val);
+    return (capital * risk_pct) / (std::abs(var) * tick_fin_val);
 }
 
 // ── calculate ─────────────────────────────────────────────────────────────────
@@ -142,6 +152,7 @@ LotResult MoneyManager::calculate(
     const json&                                             mm_params,
     double                                                  price,
     bool                                                    is_long,
+    double                                                  sl_price,
     size_t                                                  bar_idx,
     const std::unordered_map<std::string, const double*>&   fast_pool,
     const std::vector<double>&                              trade_profits,
@@ -152,8 +163,7 @@ LotResult MoneyManager::calculate(
 
     const std::string method = mm_params.value("method", "neutral");
 
-    // Capital base ajustado pelo capital_method
-    double capital      = apply_capital_method(mm_params, price, bar_idx, cumulative_profit, fast_pool);
+    double capital      = apply_capital_method(mm_params, bar_idx, cumulative_profit, fast_pool);
     double tick_fin_val = mm_params.value("tick_fin_val", 1.0);
     double tick         = mm_params.value("tick",         0.01);
     double risk_pct     = mm_params.value("risk_pct",     0.01);
@@ -167,14 +177,12 @@ LotResult MoneyManager::calculate(
         lot = mm_params.value("fixed_lot", 1.0);
     }
     else if (method == "risk_per_trade") {
-        double dist       = resolve_dist(mm_params, price, bar_idx, fast_pool);
+        double dist       = resolve_dist(mm_params, price, sl_price, bar_idx, fast_pool);
         double dist_ticks = dist / tick;
-        if (dist_ticks > 0.0) {
+        if (dist_ticks > 0.0)
             lot = (capital * risk_pct) / (dist_ticks * tick_fin_val);
-        }
     }
     else if (method == "pct_capital") {
-        // Sem clamp de risk — pct já controla diretamente o tamanho
         double pct = mm_params.value("pct", 0.02);
         if (price > 0.0 && tick_fin_val > 0.0)
             lot = (capital * pct) / (price * tick_fin_val);
@@ -197,8 +205,7 @@ LotResult MoneyManager::calculate(
         lot = 1.0;
     }
 
-    // Aplica constraints do asset (lot_min, lot_max, lot_step) como camada final
-    // Equivalente ao que MT5 faz antes de enviar a ordem
+    // Constraints do asset — camada final (min_lot, max_lot, lot_step)
     lot = apply_lot_constraints(lot, mm_params);
 
     return { is_long ? lot : -lot, is_long };

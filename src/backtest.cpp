@@ -253,18 +253,26 @@ SimulationOutput Backtest::run_simulation(
             auto _s = make_dt_str(idx);
             std::memcpy(t.entry_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.entry_datetime)));
             t.bars_held      = 0;
-
-            // ── MoneyManager calcula lot_size ─────────────────────────────────
-            LotResult lr = MoneyManager::calculate(mm_params, fill, is_long, idx, fast_pool, trade_profits, temp_cumulative_pnl);
-            t.lot_size   = lr.lot_size;  // positivo=long, negativo=short
-
-            t.max_fav_price  = fill;
-            t.max_adv_price  = fill;
-            t.prev_day_price = fill;
+ 
+            // Resolve SL antes do MoneyManager — usado como dist para risk_per_trade
             double sl = resolve_sl(is_long, fill, (int)idx);
             double tp = resolve_tp(is_long, fill, (int)idx);
             if (sl > 0.0) t.stop_loss   = sl;
             if (tp > 0.0) t.take_profit = tp;
+ 
+            // MoneyManager calcula lot_size — sl já resolvido, passa como dist fallback
+            LotResult lr = MoneyManager::calculate(
+                mm_params, fill, is_long,
+                t.stop_loss,          // ← sl_price para dist fallback em risk_per_trade
+                idx, fast_pool, trade_profits, temp_cumulative_pnl
+            );
+            t.lot_size = lr.lot_size;
+ 
+            t.max_fav_price  = fill;
+            t.max_adv_price  = fill;
+            t.prev_day_price = fill;
+ 
+            // Trailing stop (após lot_size definido)
             const RefResult& tr = is_long ? ref_trail_long : ref_trail_short;
             if (ref_valid(tr, idx)) {
                 double tv = ref_val(tr, idx);
@@ -274,7 +282,7 @@ SimulationOutput Backtest::run_simulation(
                     if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
                 }
             }
-            // Entrada no DailyResult com pnl=0.0 e lot_size real
+ 
             daily_results_matrix.push_back({
                 format_datetime_to_int_from_parts(bar_dates[idx], bar_times[idx]),
                 0.0,
