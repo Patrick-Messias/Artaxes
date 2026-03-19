@@ -266,6 +266,17 @@ class Operation(BaseClass):
                     # Strings apontam para coluna já existente (ohlc ou pool) → signal_ref.
                     # Arrays uint8 → signal_array (entry/exit binários).
 
+                    # float arrays → indicators_pool com key única ou fixa
+                    # uint8 arrays → signal_arrays (entry/exit binários)
+                    # str          → signal_refs (ponteiros para pool existente)
+                    #
+                    # Keys fixas (não dependem de parâmetros — mesmo valor para todos ps):
+                    #   "custom_lot_size_long"  → lot_size long  via sizing_method="signal"
+                    #   "custom_lot_size_short" → lot_size short via sizing_method="signal"
+                    #   "compound_fract"        → compound_fract via capital_method="signal"
+ 
+                    _FIXED_POOL_KEYS = {"custom_lot_size_long", "custom_lot_size_short", "compound_fract_series"}
+ 
                     ps_signal_refs:   dict[str, dict] = {ps: {} for ps in param_sets}
                     ps_signal_arrays: dict[str, dict] = {ps: {} for ps in param_sets}
  
@@ -278,10 +289,22 @@ class Operation(BaseClass):
                                 if sig_val.dtype == np.uint8:
                                     ps_signal_arrays[ps_name][sig_name] = sig_val
                                 else:
-                                    pool_key = f"sig__{sig_hash}__{sig_name}"
+                                    # Sinais com key fixa — não dependem de parâmetros
+                                    # Calculados uma vez e reutilizados por todos os parsets
+                                    if sig_name in _FIXED_POOL_KEYS:
+                                        pool_key = sig_name  # key fixa sem hash
+                                    else:
+                                        pool_key = f"sig__{sig_hash}__{sig_name}"
+ 
                                     if pool_key not in indicators_pool:
                                         indicators_pool[pool_key] = sig_val
-                                    ps_signal_refs[ps_name][sig_name] = pool_key
+ 
+                                    # compound_fract_series → pool com key "compound_fract" para C++
+                                    if sig_name == "compound_fract_series":
+                                        ps_signal_refs[ps_name]["compound_fract"] = pool_key
+                                    else:
+                                        ps_signal_refs[ps_name][sig_name] = pool_key
+ 
                     print(f"   > [OP] fase3={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     # ── Fase 4: Shared signal arrays ───────────────────────────
                     all_sig_names: set = set()
@@ -304,14 +327,16 @@ class Operation(BaseClass):
                     # ── Fase 5: Monta asset_batch ──────────────────────────────
                     smm = strat_obj.strat_money_manager  # None → neutro
  
-                    # Injeta custom_lot_size no indicators_pool se definido no SMM
-                    # Funciona igual a um indicador — C++ lê via fast_pool no open_trade
+                    # compound_fract_series via SMM (alternativa a retornar no strat_signals)
+                    # Se definido no SMM diretamente, injeta no pool com prioridade
+                    if smm is not None and smm.compound_fract_series is not None:
+                        indicators_pool["compound_fract"] = (
+                            smm.compound_fract_series.cast(pl.Float64)
+                            .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
+                        )
+ 
+                    # custom_lot_size via SMM (alternativa a retornar no strat_signals)
                     if smm is not None:
-                        if smm.compound_fract_series is not None:
-                            indicators_pool["compound_fract"] = (
-                                smm.compound_fract_series.cast(pl.Float64)
-                                .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
-                            )
                         if smm.custom_lot_size_long is not None:
                             indicators_pool["custom_lot_size_long"] = (
                                 smm.custom_lot_size_long.cast(pl.Float64)
@@ -339,19 +364,16 @@ class Operation(BaseClass):
                         }
  
                         # Serializa SMM → mm_params para C++
-                        # None → method="neutral" → lot=1.0
                         mm_params = smm.to_sim_params() if smm is not None else {"method": "neutral"}
- 
-                        # Injeta tick e tick_fin_val do asset — C++ usa para cálculos de lote
                         mm_params["tick"]         = getattr(asset_class, "tick",         0.01)
                         mm_params["tick_fin_val"] = getattr(asset_class, "tick_fin_val", 1.0)
  
-                        # Se method=signal (custom_lot_size), adiciona signal_refs por lado
+                        # signal_refs por lado para sizing_method="signal"
                         sim_signal_refs = dict(ps_signal_refs[ps_name])
                         if mm_params.get("method") == "signal":
-                            if smm.custom_lot_size_long is not None:
+                            if "custom_lot_size_long" in indicators_pool:
                                 sim_signal_refs["lot_size_long"]  = "custom_lot_size_long"
-                            if smm.custom_lot_size_short is not None:
+                            if "custom_lot_size_short" in indicators_pool:
                                 sim_signal_refs["lot_size_short"] = "custom_lot_size_short"
  
                         asset_batch["simulations"].append({
@@ -362,7 +384,7 @@ class Operation(BaseClass):
                             "signal_refs":    sim_signal_refs,
                         })
  
-                    # Estimates batch size — hybrid CPU+RAM approach
+                    # Batch size — híbrido CPU+RAM
                     ps_size_mb = self._estimate_paramset_size_mb(base_asset_df) / max(n_ps, 1)
                     batch_size = self._calculate_optimal_batch_size(
                         avg_paramset_size_mb=ps_size_mb,
@@ -373,7 +395,7 @@ class Operation(BaseClass):
                     all_sim   = list(asset_batch.pop("simulations"))
                     n_batches = math.ceil(n_ps / batch_size)
                     print(f"   > Batching: {n_ps} sims | batch_size={batch_size} | n_batches={n_batches}")
-
+ 
                     # ── Fase 6: Envio para C++ ─────────────────────────────────
                     all_ps_names = [s.get("id", "") for s in all_sim]
                     wfm_accum = {"ts": [], "pnl": [], "lot_size": [], "ps_id": []}
@@ -384,19 +406,19 @@ class Operation(BaseClass):
                         self._save_trades(full_output, model_name, strat_name, asset_name,
                                           wfm_accum=wfm_accum,
                                           ps_id_offset=batch_start)
-                    
-                    # Single pivot after all batches
+ 
+                    # Pivot único após todos os batches
                     if any(len(v) > 0 for v in wfm_accum.values()):
                         try:
                             wfm_col = {
-                                "ts": np.concatenate(wfm_accum["ts"]),
-                                "pnl": np.concatenate(wfm_accum["pnl"]),
+                                "ts":       np.concatenate(wfm_accum["ts"]),
+                                "pnl":      np.concatenate(wfm_accum["pnl"]),
                                 "lot_size": np.concatenate(wfm_accum["lot_size"]),
-                                "ps_id": np.concatenate(wfm_accum['ps_id'])
+                                "ps_id":    np.concatenate(wfm_accum["ps_id"]),
                             }
-                            matrix_pnl, matrix_lot = self._process_wfm_to_polars(wfm_col, all_ps_names )
+                            matrix_pnl, matrix_lot = self._process_wfm_to_polars(wfm_col, all_ps_names)
                             self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["wfm_matrix_data"] = matrix_pnl
-                            self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["wfm_lot_data"] = matrix_lot
+                            self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name]["wfm_lot_data"]    = matrix_lot
                             print(f"   > WFM Matrix generated for {model_name} | {strat_name} | {asset_name}: {matrix_pnl.shape}")
                         except Exception as e:
                             print(f"   > Error generating WFM Matrix: {e}")
@@ -1186,6 +1208,7 @@ if __name__ == "__main__":
     }
 
     from MA import MA # type: ignore
+    from VAR import VAR # type: ignore
     from ATR_SL import ATR_SL # type: ignore
     from RawData import RawData # type: ignore
     from PriorCote import PriorCote # type: ignore
@@ -1194,6 +1217,7 @@ if __name__ == "__main__":
     # User imput Indicators
     ind = { 
         'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param2'),
+        'var': VAR(asset=None, timeframe=model_execution_tf, window='param2', alpha=0.01, var_type='parametric', price_col='close')
         #'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         # 'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
@@ -1206,7 +1230,7 @@ if __name__ == "__main__":
         # Can use columns df['high'] or str 'high' to point
 
         atr = df['atr']
-        #ema = df['ema']
+        var = df['var']
 
         bull = df['close'] < df['open']
         bear = df['close'] > df['open']
@@ -1237,6 +1261,11 @@ if __name__ == "__main__":
         be_long_dist  = None #sl_long_dist  * 1.0
         be_short_dist = None #sl_short_dist * 1.0
 
+        # Position Sizing
+        var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
+        lot_series = (pl.lit(0.01) / var).clip(0.1, 10.0)
+
+        sig_compound_fract = None
         
         if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
         if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
@@ -1256,6 +1285,10 @@ if __name__ == "__main__":
         
         if be_long_dist is not None and not isinstance(be_long_dist, str): be_long_dist = be_long_dist.shift(1)
         if be_short_dist is not None and not isinstance(be_short_dist, str): be_short_dist = be_short_dist.shift(1)
+
+        if lot_series is not None and not isinstance(lot_series, str): lot_series = lot_series.shift(1)
+
+        if sig_compound_fract is not None and not isinstance(sig_compound_fract, str): sig_compound_fract = sig_compound_fract.shift(1)
         return {
             'entry_long':       entry_long,
             'entry_short':      entry_short,
@@ -1276,11 +1309,13 @@ if __name__ == "__main__":
             'be_trigger_long':  be_long_dist,
             'be_trigger_short': be_short_dist,
 
+            'custom_lot_size_long':  lot_series,
+            'custom_lot_size_short': lot_series,
+
+            'compound_fract_series': sig_compound_fract,
+
             '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
         }
-    sig_compound_fract = None
-    sig_lot_size_long = None
-    sig_lot_size_short = None
 
     # XXX - Recriar ponte py - cpp - py
     # XXX - Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
@@ -1308,7 +1343,6 @@ if __name__ == "__main__":
     """
     
     # - Multi entry and lot strategy
-
     # - Organize _results_map with ps_id and param_set_key
     # - Develop start_date - end_date for operation
 
@@ -1350,9 +1384,8 @@ if __name__ == "__main__":
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                                                  print_logs=False),
             strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="risk_per_trade", dist_signal_ref=None, dist_fixed=None,
-                capital_method="fixed", compound_fract=1.0, compound_fract_series=sig_compound_fract,
-                custom_lot_size_long=sig_lot_size_long, custom_lot_size_short=sig_lot_size_short,
+                sizing_method="signal", dist_signal_ref=None, dist_fixed=None,
+                capital_method="compound", compound_fract=1.0,
                 sizing_params={
                     "fixed_lot":      1.0,  
                     "risk_pct":       0.01, 

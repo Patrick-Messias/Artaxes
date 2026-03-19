@@ -1,32 +1,60 @@
-import pandas as pd, numpy as np, scipy.stats as st
+import polars as pl
+import numpy as np
 from Indicator import Indicator
 
+
 class VAR(Indicator):
-    def __init__(self, asset, timeframe: str, window: int = 20, alpha: float = 0.05, type: str = 'parametric', price_col: str = 'pct_change'):
-        super().__init__(asset, timeframe)
-        self.asset = asset
-        self.window = window
-        self.alpha = alpha 
-        self.type = type.lower()
-        self.price_col = price_col
+    """
+    Value at Risk (VaR) rolante baseado em retornos do ativo.
 
-    def calculate(self, df: pd.DataFrame) -> pd.Series:
-        if self.price_col == 'pct_change' and 'pct_change' not in df.columns:
-            df['pct_change'] = df['close'].pct_change().fillna(0)
+    Métodos:
+        "parametric"  → VaR = mean - z_score × std  (distribuição normal)
+        "historical"  → VaR = percentil alpha dos retornos históricos
 
-        if self.price_col not in df.columns:
-            raise KeyError(f"Column '{self.price_col}' not found in DataFrame.")
+    Retorna série de VaR (valores negativos = perda esperada).
+    Útil como proxy de volatilidade para position sizing — lote = risk_pct / |VaR|.
+    """
 
-        if len(df) < self.window:
-            raise ValueError("DataFrame too short for selected window.")
+    def __init__(self, asset=None, timeframe=None, **params):
+        super().__init__(asset, timeframe, **params)
+        self.name = "var"
 
-        if self.type == 'parametric':
-            rolling_mean = df[self.price_col].rolling(self.window).mean()
-            rolling_std = df[self.price_col].rolling(self.window).std(ddof=1)
-            z_score = st.norm.ppf(1 - self.alpha)
-            var_series = rolling_mean - z_score * rolling_std
-            return var_series
+    def _calculate_logic(self, df: pl.DataFrame, **kwargs) -> pl.Series:
+        window    = int(kwargs.get('window',    20))
+        alpha     = float(kwargs.get('alpha',   0.05))
+        var_type  = str(kwargs.get('var_type',  'historical')).lower()
+        price_col = str(kwargs.get('price_col', 'close'))
+
+        if price_col not in df.columns:
+            actual_col = next((c for c in df.columns if c.lower() == price_col.lower()), None)
+            if actual_col:
+                price_col = actual_col
+            else:
+                raise ValueError(f"Coluna '{price_col}' não encontrada. Colunas: {df.columns}")
+
+        # Calcula pct_change (retornos) se price_col for 'close' ou similar
+        returns = df.select(
+            pl.col(price_col).pct_change().fill_null(0.0)
+        ).to_series()
+
+        if var_type == 'historical': # rolling_quantile nativo — sem overhead Python por janela
+            var_series = returns.rolling_quantile(
+                quantile=alpha,
+                interpolation='linear',
+                window_size=window,
+            )
+
+        elif var_type == 'parametric':
+            from scipy.stats import norm
+            z_score = float(norm.ppf(1 - alpha))
+
+            rolling_mean = returns.rolling_mean(window_size=window)
+            rolling_std  = returns.rolling_std(window_size=window, ddof=1)
+
+            # Operação direta entre Series — sem pl.lit()
+            var_series = rolling_mean - (rolling_std * z_score)
 
         else:
-            raise ValueError(f"Unsupported type: {self.type}")
+            raise ValueError(f"var_type não suportado: '{var_type}'. Use 'historical' ou 'parametric'.")
 
+        return var_series.fill_null(0.0).alias("var")

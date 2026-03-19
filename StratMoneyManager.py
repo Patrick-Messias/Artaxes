@@ -94,12 +94,12 @@ class StratMoneyManager(MoneyManager):
 
         self.capital_method         = params.capital_method
         self.compound_fract         = params.compound_fract
-        self.compound_fract_series  = params.compound_fract_series
+        self.compound_fract_series  = None
 
         self.dist_signal_ref       = params.dist_signal_ref
         self.dist_fixed            = params.dist_fixed
-        self.custom_lot_size_long  = params.custom_lot_size_long
-        self.custom_lot_size_short = params.custom_lot_size_short
+        self.custom_lot_size_long  = None
+        self.custom_lot_size_short = None
 
     # ─────────────────────────────────────────────────────────────────────────
     # Interface C++ — serializa método e params para sim_params
