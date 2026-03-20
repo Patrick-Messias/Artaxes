@@ -74,7 +74,6 @@ class OperationParams():
 
     # Settings
     operation_timeframe: str=None
-    backtest_mode: Literal["ohlc", "close-close", "open-open", "avg_price", "ohlc_m1", "tick"] = "ohlc"
     date_start: str=None
     date_end: str=None
     save: bool=False
@@ -89,7 +88,6 @@ class Operation():
         self.metrics = op_params.metrics
 
         self.operation_timeframe = op_params.operation_timeframe
-        self.backtest_mode = op_params.backtest_mode
         self.date_start = op_params.date_start
         self.date_end = op_params.date_end
         self.save = op_params.save
@@ -152,12 +150,15 @@ class Operation():
             for strat_name, strat_obj in strats.items():
                 param_sets = self._calculate_param_combinations(strat_obj.params)
                 self._results_map[self.name]['models'][model_name]['strats'][strat_name] = {'assets': {}}
+
+                # Backtest price(s) method
+                backtest_mode = getattr(strat_obj.execution_settings, 'backtest_mode', 'ohlc')
  
                 for asset_name in assets:
                     asset_class = self.assets.get(asset_name)
                     if not asset_class: continue
+
                     base_asset_df  = asset_class.data_get(model_tf)
-                    
                     if base_asset_df.is_empty():
                         print(f"   ⚠️ WARNING: {asset_name} @ {model_tf} returned empty — skipping.")
                         continue
@@ -171,7 +172,7 @@ class Operation():
                     exec_set_raw["slippage"]   = exec_set_raw["slippage"]   * tick
                     exec_set_mod   = self.prepare_time_params(exec_set_raw)
                     n_ps           = len(param_sets)
- 
+
                     ind_cache:   dict[str, dict] = {}
                     ps_ind_keys: dict[str, list] = {}
                     sig_cache:   dict[str, dict] = {}
@@ -179,8 +180,8 @@ class Operation():
  
                     import time
                     _t = time.perf_counter()
+                    
                     # ── Fase 1: Indicadores e Sinais ───────────────────────────
-
                     sig_key_params: list | None = None
 
                     for ps_name, ps_dict in param_sets.items():
@@ -193,6 +194,7 @@ class Operation():
  
                             if unique_key not in ind_cache:
                                 print(f"   > Calculating indicator >>> {ind_key} >>> {unique_key}")
+
                                 temp_ind_df   = self._calculate_indicator(
                                     model_timeframe=model_tf,
                                     ind_name=ind_key,
@@ -203,6 +205,7 @@ class Operation():
                                     datetime_candle_references=asset_class.datetime_candle_references
                                 )
                                 novas_colunas = [c for c in temp_ind_df.columns if c not in base_asset_df.columns]
+
                                 ind_cache[unique_key] = {
                                     c: temp_ind_df[c].cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
                                     for c in novas_colunas
@@ -276,6 +279,95 @@ class Operation():
 
                     print(f"   > [OP] fase1={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
 
+                    # ── Fase 0: Calculates price array ─────────────────────────
+
+                    ohlc_cols = {'open', 'high', 'low', 'close'}
+                    has_ohlc = ohlc_cols.issubset(set(base_asset_df.columns))
+                    price_cols = [c for c in base_asset_df.columns
+                                  if c not in ('datetime', 'date', 'time', 'ativo',
+                                               'tick_volume', 'real_volume', 'spread')]
+                    
+                    single_price = not has_ohlc and len(price_cols) == 1
+                    price_array: Optional[np.ndarray] = None # None -> uses ohlc
+                    is_pct_mode = False
+
+                    if backtest_mode == 'ohlc': price_array = None # Sends ohlc
+                    elif has_ohlc: # Has ohlc, calculates price by mode
+                        if backtest_mode == 'close-close': 
+                            price_array = (
+                                base_asset_df['close'].pct_change().fill_null(0.0)
+                                .to_numpy().astype(np.float64)
+                            )
+                            is_pct_mode=True
+                        elif backtest_mode == 'open-open':
+                            price_array = (
+                                base_asset_df['open'].pct_change().fill_null(0.0)
+                                .to_numpy().astype(np.float64)
+                            )
+                            is_pct_mode=True
+                        elif backtest_mode == 'close':
+                            price_array = base_asset_df['close'].to_numpy().astype(np.float64)
+                        elif backtest_mode == 'open':
+                            price_array = base_asset_df['open'].to_numpy().astype(np.float64)
+                        elif backtest_mode == 'avg_price':
+                            price_array = (
+                                (base_asset_df['open'] + base_asset_df['high'] + 
+                                 base_asset_df['low'] + base_asset_df['close']) / 4.0
+                            ).to_numpy().astype(np.float64)
+                        else:
+                            price_array = None # Fallback to ohlc
+
+                    elif single_price:
+                        col = price_cols[0]
+                        if col in ('close-close', 'open-open', 'pct_change'):
+                            # Coluna já é pct_change calculado
+                            price_array = base_asset_df[col].to_numpy().astype(np.float64)
+                            is_pct_mode = True
+                        elif col in ('open', 'close'):
+                            # Preço absoluto — verifica backtest_mode para saber se calcula pct_change
+                            if backtest_mode in ('close-close', 'open-open'):
+                                price_array = (
+                                    base_asset_df[col].pct_change().fill_null(0.0)
+                                    .to_numpy().astype(np.float64)
+                                )
+                                is_pct_mode = True
+                            else:
+                                price_array = base_asset_df[col].to_numpy().astype(np.float64)
+                        else:
+                            # Coluna com nome arbitrário — assume já calculado
+                            price_array = base_asset_df[col].to_numpy().astype(np.float64)
+
+                    sl_tp_pct_conversion: Optional[dict] = None
+                    if is_pct_mode and has_ohlc:
+                        ref_price = base_asset_df['open' if backtest_mode == 'open-open' else 'close'].to_numpy()
+
+                        # For each SL/TP seris in sig_cache, converts bar by bar
+                        # sl_pct_long[i]  = (ref_price[i] - sl_price_long[i])  / ref_price[i]  * 100 (negativo = perda)
+                        # tp_pct_long[i]  = (tp_price_long[i]  - ref_price[i]) / ref_price[i]  * 100 (positivo = ganho)
+                        pct_refs = {
+                            'sl_price_long': ('sl', True),
+                            'sl_price_short': ('sl', False),
+                            'tp_price_long': ('tp', True),
+                            'tp_price_short': ('tp', False)
+                        }
+                        for sig_name, (kind, is_long) in pct_refs.items():
+                            # Busca em todos os sig_cache hashes
+                            for sig_hash, cache in sig_cache.items():
+                                if sig_name in cache:
+                                    price_arr = cache[sig_name]  # np.float64 array em preço absoluto
+                                    if kind == 'sl':
+                                        # SL → % negativa (perda máxima acumulada)
+                                        pct = ((price_arr - ref_price) / ref_price) * 100.0
+                                        if is_long: pct = -np.abs(pct)   # long SL sempre negativo
+                                        else:       pct =  np.abs(pct)   # short SL sempre positivo
+                                    else:
+                                        # TP → % positiva (ganho alvo acumulado)
+                                        pct = ((price_arr - ref_price) / ref_price) * 100.0
+                                        if is_long: pct =  np.abs(pct)   # long TP sempre positivo
+                                        else:       pct = -np.abs(pct)   # short TP sempre negativo
+
+                                    sl_tp_pct_conversion[f"{sig_hash}__{sig_name}"] = pct
+                                    
                     # ── Fase 2: Indicators Pool ────────────────────────────────
                     indicators_pool:  dict = {}
                     ps_ind_col_keys:  dict[str, list] = {}
@@ -336,6 +428,15 @@ class Operation():
                                     ref_name = "compound_fract" if sig_name == "compound_fract_series" else sig_name
                                     ps_signal_refs[ps_name][ref_name] = pool_key
  
+                    if is_pct_mode and sl_tp_pct_conversion:
+                        for conv_key, pct_arr in sl_tp_pct_conversion.items():
+                            # conv_key = "{sig_hash}__{sig_name}"
+                            # Encontra a pool_key correspondente e substitui
+                            sig_hash, sig_name = conv_key.split('__', 1)
+                            pool_key = f"sig__{sig_hash}__{sig_name}"
+                            if pool_key in indicators_pool:
+                                indicators_pool[pool_key] = pct_arr.astype(np.float64)
+
                     print(f"   > [OP] fase3={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
 
                     # ── Fase 4: Shared signal arrays ───────────────────────────
@@ -360,16 +461,15 @@ class Operation():
                     # ── Fase 5: Monta asset_batch ──────────────────────────────
                     smm = strat_obj.strat_money_manager  # None → neutro
 
+                    # Injeta séries do SMM no indicators_pool
+                    # Alternativa a retornar no strat_signals — mesma pool_key fixa
                     if smm is not None:
-                        # Injeta séries do SMM no indicators_pool
-                        # Alternativa a retornar no strat_signals — mesma pool_key fixa
                         # compound_fract_series → substitui compound_fract escalar barra a barra
                         if smm.compound_fract_series is not None:
                             indicators_pool["compound_fract"] = (
                                 smm.compound_fract_series.cast(pl.Float64)
                                 .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
                             )
-
                         # dist_signal_ref → distância para risk_per_trade
                         if smm.dist_signal_ref is not None:
                             indicators_pool["dist_ref"] = (
@@ -391,6 +491,8 @@ class Operation():
                     asset_batch = {
                         "asset_header":         f"{model_name}_{strat_name}_{asset_name}",
                         "data":                 base_asset_df.to_dict(as_series=False),
+                        "price_array":          price_array,
+                        "backtest_mode":        backtest_mode,
                         "execution_settings":   exec_set_mod,
                         "indicators_pool":      indicators_pool,
                         "shared_signal_arrays": shared_signal_arrays,
@@ -597,10 +699,16 @@ class Operation():
             else:
                 dt_int = df['datetime'].to_numpy().astype(np.int64)
 
-            ohlc_arrays = {
-                col: df[col].to_numpy().astype(np.float64)
-                for col in ['open', 'high', 'low', 'close'] if col in df.columns
-            }
+            backtest_mode = asset_batch.get('backtest_mode', 'ohlc')
+            price_array = asset_batch.get('price_array')
+
+            if backtest_mode == 'ohlc' or price_array is None: # Default mode, send ohlc
+                ohlc_arrays = {
+                    col: df[col].to_numpy().astype(np.float64)
+                    for col in ['open', 'high', 'low', 'close'] if col in df.columns
+                }
+            else: # price only
+                ohlc_arrays = {"close": price_array}
 
             ind_pool_arrays = {}
             for key, vals in asset_batch.get('indicators_pool', {}).items():
@@ -621,6 +729,7 @@ class Operation():
                 sig_arrays = {}
                 for name, arr in sim.get('signal_arrays', {}).items():
                     sig_arrays[name] = arr.astype(np.uint8) if arr.dtype != np.uint8 else arr
+
                 sim_params.append({
                     "id":            sim.get("id", ""),
                     "params":        sim.get("params", {}),
@@ -1492,16 +1601,16 @@ if __name__ == "__main__":
         exit_tf_short = bull & bull.shift(1)
 
         # Preço da ordem pendente
-        limit_long_price  = df['open'] #'high' #'high[1]' #
-        limit_short_price = df['open'] #'low' #'low[1]' #
+        limit_long_price  = df['open'] #'high[1]' #
+        limit_short_price = df['open'] #'low[1]' #
 
         # Distâncias (definidas ANTES de serem usadas)
-        sl_long_price  = limit_long_price - atr * params['sl_perc'] 
-        sl_short_price = limit_long_price + atr * params['sl_perc'] 
+        sl_long_price  = None #limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = None #limit_long_price + atr * params['sl_perc'] 
 
         # TP absoluto: 2R
-        tp_long_price  = limit_long_price + atr  * params['tp_perc']
-        tp_short_price = limit_long_price - atr * params['tp_perc']
+        tp_long_price  = None #limit_long_price + atr  * params['tp_perc']
+        tp_short_price = None #limit_long_price - atr * params['tp_perc']
 
         # Trailing: 0.5R
         trail_long_dist  = None #sl_long_dist  * 0.5
@@ -1515,10 +1624,10 @@ if __name__ == "__main__":
         var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
         lot_series = (pl.lit(0.01) / var).clip(0.1, 10.0)
 
-        n = len(df)
-        compound_fract_vals = np.ones(n, dtype=np.float64)
-        compound_fract_vals[10000:] = 0.1
-        compound_fract_series = pl.Series("compound_fract_series", compound_fract_vals)
+        # n = len(df)
+        # compound_fract_vals = np.ones(n, dtype=np.float64)
+        # compound_fract_vals[10000:] = 0.1
+        # compound_fract_series = pl.Series("compound_fract_series", compound_fract_vals)
         compound_fract_series = None
         dist_signal_ref = None
         
@@ -1589,7 +1698,7 @@ if __name__ == "__main__":
                                                  day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                                                  day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                                                  fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
-                                                 print_logs=False),
+                                                 backtest_mode="open-open", print_logs=False),
             strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
                 sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
                 sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}

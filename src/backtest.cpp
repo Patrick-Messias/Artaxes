@@ -128,6 +128,21 @@ SimulationOutput Backtest::run_simulation(
         const double* low   = get_price_ptr("low");
         const double* close = get_price_ptr("close");
 
+        // backtest_mode
+        // "OHLC"               -> default: fill=open, SL/TP via high/low intrabar
+        // "close-close"        -> pct_change: PnL = price[i] * direction (direct return)
+        // "open-open"          -> pct_change: PnL = price[i] * direction (direct return)
+        // "close"              -> absolute price: fill=price, check_high=check_low=price
+        // "close"              -> absolute price: fill=price, check_high=check_low=price
+        // "avg_price"          -> absolute price: fill=price, check_high=check_low=price
+        std::string backtest_mode = exec_settings.value("backtest_mode", "ohlc");
+
+        // pct_change mode, PnL sum bar by bar, SL/TP in % 
+        bool is_pct_mode = (backtest_mode == "close-close") || backtest_mode == "open-open";
+
+        // price only mode, absolute price, SL/TP in price, without intrabar validation
+        bool is_price_only = (backtest_mode != "ohlc");
+
         const uint8_t* sig_entry_long  = get_signal_ptr("entry_long");
         const uint8_t* sig_entry_short = get_signal_ptr("entry_short");
         const uint8_t* sig_exit_long   = get_signal_ptr("exit_long");
@@ -166,7 +181,7 @@ SimulationOutput Backtest::run_simulation(
 
         bool   print_logs          = exec_settings.value("print_logs", false);
         double slippage            = exec_settings.value("slippage",   0.0);
-        double commission     = exec_settings.value("commission", 0.0);
+        double commission          = exec_settings.value("commission", 0.0);
         int    backtest_start_idx  = params.value("backtest_start_idx", 1);
         int    limit_order_expiry  = params.value("limit_order_exclusion_after_period", 1);
         double limit_perc_treshold = params.value("limit_order_perc_treshold_for_order_diff", 1.0);
@@ -202,7 +217,7 @@ SimulationOutput Backtest::run_simulation(
                      ? (int)get_value_safe(exec_settings["timeTF"], params) : 1440;
 
         auto apply_exit_slip = [&](double price, const std::string& reason, bool is_long) {
-            if (reason == "EF") return price;
+            if (reason == "EF" || is_price_only) return price;  // sem slippage em price_only
             return is_long ? price - slippage : price + slippage;
         };
 
@@ -212,11 +227,25 @@ SimulationOutput Backtest::run_simulation(
             return std::string(buf);
         };
 
+        // Mode pct: PnL = comulative_return sum
+        // Mode price: PnL = (exit - entry) / entry * 100
         auto close_trade = [&](Trade& t, double raw_exit, const std::string& reason,
                                size_t bar_idx, bool is_long) {
             double entry      = t.entry_price;
             double exit_price = apply_exit_slip(raw_exit, reason, is_long);
-            double net_pnl    = (((exit_price - entry) - commission) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+            double net_pnl;
+            double dv;
+ 
+            if (is_pct_mode) {
+                // pct_change: profit acumulado barra a barra no trade
+                net_pnl = t.profit;  // acumulado em update_pct_pnl
+                dv      = raw_exit * (is_long ? 1.0 : -1.0);  // retorno da barra de saída
+            } else {
+                net_pnl = (((exit_price - entry) - commission) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                double prev_p = t.prev_day_price;
+                dv = (((exit_price - prev_p) - commission) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+            }
+ 
             t.exit_price  = exit_price;
             { auto _s = make_dt_str(bar_idx); std::memcpy(t.exit_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.exit_datetime))); }
             t.exit_reason = reason;
@@ -226,60 +255,58 @@ SimulationOutput Backtest::run_simulation(
             t.mfe         = t.max_fav_price;
             t.profit      = net_pnl;
             temp_cumulative_pnl += net_pnl;
-
-            // Acumula profit para kelly/var
             trade_profits.push_back(net_pnl);
-
+ 
             if (print_logs)
                 std::cout << "[EXIT] " << (is_long?"L":"S") << " " << reason
                           << " | In: " << std::fixed << std::setprecision(5) << entry
                           << " Out: " << exit_price
                           << " Net: " << std::setprecision(4) << net_pnl << "%" << std::endl;
-
-            double prev_p = t.prev_day_price;
-            double dv = (((exit_price - prev_p) - commission) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+ 
             daily_results_matrix.push_back({
                 format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]),
                 dv,
-                std::abs(t.lot_size),  // lot_size vigente no fechamento
+                std::abs(t.lot_size),
                 ps_id
             });
         };
 
         auto open_trade = [&](Trade& t, double raw_fill, size_t idx, bool is_long) {
-            double fill = is_long ? raw_fill + slippage : raw_fill - slippage;
+            double fill = is_price_only ? raw_fill
+                                        : (is_long ? raw_fill + slippage : raw_fill - slippage);
             t.entry_price    = fill;
             t.status         = "open";
             auto _s = make_dt_str(idx);
             std::memcpy(t.entry_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.entry_datetime)));
             t.bars_held      = 0;
+            t.profit         = 0.0;  // acumulador pct_mode
  
-            // Resolve SL antes do MoneyManager — usado como dist para risk_per_trade
             double sl = resolve_sl(is_long, fill, (int)idx);
             double tp = resolve_tp(is_long, fill, (int)idx);
             if (sl > 0.0) t.stop_loss   = sl;
             if (tp > 0.0) t.take_profit = tp;
- 
-            // MoneyManager calcula lot_size — sl já resolvido, passa como dist fallback
+
             LotResult lr = MoneyManager::calculate(
                 mm_params, fill, is_long,
-                t.stop_loss,          // ← sl_price para dist fallback em risk_per_trade
+                t.stop_loss,
                 idx, fast_pool, trade_profits, temp_cumulative_pnl
             );
             t.lot_size = lr.lot_size;
  
-            t.max_fav_price  = fill;
-            t.max_adv_price  = fill;
+            t.max_fav_price  = is_pct_mode ? 0.0 : fill;
+            t.max_adv_price  = is_pct_mode ? 0.0 : fill;
             t.prev_day_price = fill;
  
-            // Trailing stop (após lot_size definido)
-            const RefResult& tr = is_long ? ref_trail_long : ref_trail_short;
-            if (ref_valid(tr, idx)) {
-                double tv = ref_val(tr, idx);
-                if (tv > 0.0) {
-                    double tsl = is_long ? fill - tv : fill + tv;
-                    double csl = t.stop_loss;
-                    if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
+            // Trailing (só faz sentido em modos price absoluto)
+            if (!is_pct_mode) {
+                const RefResult& tr = is_long ? ref_trail_long : ref_trail_short;
+                if (ref_valid(tr, idx)) {
+                    double tv = ref_val(tr, idx);
+                    if (tv > 0.0) {
+                        double tsl = is_long ? fill - tv : fill + tv;
+                        double csl = t.stop_loss;
+                        if (is_long ? (tsl > csl) : (tsl < csl || csl == 0.0)) t.stop_loss = tsl;
+                    }
                 }
             }
  
@@ -292,6 +319,7 @@ SimulationOutput Backtest::run_simulation(
         };
 
         auto update_trailing = [&](Trade& t, bool is_long, double ref, size_t idx) {
+            if (is_pct_mode) return;  // trailing não faz sentido em pct_change
             const RefResult& tr = is_long ? ref_trail_long : ref_trail_short;
             if (!ref_valid(tr, idx)) return;
             double tv = ref_val(tr, idx);
@@ -300,6 +328,21 @@ SimulationOutput Backtest::run_simulation(
             double cur_sl = is_long ? t.stop_loss
                                     : (t.stop_loss > 0.0 ? t.stop_loss : std::numeric_limits<double>::max());
             if (is_long ? (new_sl > cur_sl) : (new_sl < cur_sl)) t.stop_loss = new_sl;
+        };
+ 
+        // Acumula retorno pct barra a barra para trades abertos em pct_mode
+        // Também verifica SL/TP em retorno acumulado
+        auto update_pct_pnl = [&](Trade& t, bool is_long, double price_i) -> bool {
+            double ret  = price_i * (is_long ? 1.0 : -1.0);
+            t.profit   += ret;  // acumula retorno
+            if (ret > 0.0) t.max_fav_price += ret;
+            else           t.max_adv_price += ret;
+ 
+            double sl = t.stop_loss;
+            double tp = t.take_profit;
+            bool hit_sl = (sl != 0.0 && t.profit <= sl);
+            bool hit_tp = (tp != 0.0 && t.profit >= tp);
+            return hit_sl || hit_tp;  // retorna true se deve fechar
         };
 
         // ═════════════════════════════════════════════════════════════════════
@@ -311,67 +354,88 @@ SimulationOutput Backtest::run_simulation(
             bool day_switched = (!is_last_bar && bar_dates[i+1] != bar_dates[i]);
             bool dt_final     = (currentTime >= timeTF);
             if (day_switched) { day_trades_long = 0; day_trades_short = 0; }
-
+ 
+            // ── Resolve preços pelo backtest_mode ─────────────────────────────
+            // fill_price  → preço de entrada/saída de mercado
+            // check_high  → limite superior para verificação de SL/TP intrabar
+            // check_low   → limite inferior para verificação de SL/TP intrabar
+            double fill_price, check_high, check_low;
+            if (!is_price_only) {
+                fill_price = open[i];
+                check_high = high[i];
+                check_low  = low[i];
+            } else {
+                fill_price = close[i];  // Python enviou price como "close"
+                check_high = close[i];
+                check_low  = close[i];
+            }
+ 
             bool signal_long   = sig_entry_long  && sig_entry_long[i]  != 0;
             bool signal_short  = sig_entry_short && sig_entry_short[i] != 0;
             bool do_exit_long  = sig_exit_long   && sig_exit_long[i]   != 0;
             bool do_exit_short = sig_exit_short  && sig_exit_short[i]  != 0;
-
+ 
             // ── 1. EXIT LOGIC ─────────────────────────────────────────────────
             {
                 auto it = active_trades.begin();
                 while (it != active_trades.end()) {
                     bool is_long = (it->lot_size > 0.0);
                     std::string reason;
+ 
                     if      (is_long ? do_exit_long : do_exit_short)               reason = "TF";
                     else if ([&]() {
                         int nb = is_long ? nb_long : nb_short;
                         if (nb <= 0 || it->bars_held < nb) return false;
                         if (exit_nb_only_if_pnl == 0) return true;
-                        double p = (open[i] - it->entry_price) / it->entry_price * (is_long?1:-1);
+                        double p = is_pct_mode
+                            ? it->profit
+                            : (fill_price - it->entry_price) / it->entry_price * (is_long?1:-1);
                         return (exit_nb_only_if_pnl > 0) ? p > 0 : p < 0;
                     }())                                                            reason = "NB";
                     else if (is_daytrade && (dt_final||day_switched||is_last_bar)) reason = "DT";
                     else if (!close_days.empty() && close_days.count(bar_days[i])) reason = "WC";
                     else if (is_last_bar)                                          reason = "EF";
-
-                    // BE trigger
-                    const RefResult& be_r = is_long ? ref_be_long : ref_be_short;
-                    if (ref_valid(be_r, i)) {
-                        double be_v = ref_val(be_r, i);
-                        if (be_v > 0.0) {
-                            double ep = it->entry_price;
-                            if (is_long ? (open[i] >= ep + be_v) : (open[i] <= ep - be_v)) {
-                                double csl = it->stop_loss;
-                                if (is_long ? (csl < ep) : (csl > ep || csl == 0.0))
-                                    it->stop_loss = ep;
+ 
+                    // BE trigger (só price absoluto)
+                    if (!is_pct_mode) {
+                        const RefResult& be_r = is_long ? ref_be_long : ref_be_short;
+                        if (ref_valid(be_r, i)) {
+                            double be_v = ref_val(be_r, i);
+                            if (be_v > 0.0) {
+                                double ep = it->entry_price;
+                                if (is_long ? (fill_price >= ep + be_v) : (fill_price <= ep - be_v)) {
+                                    double csl = it->stop_loss;
+                                    if (is_long ? (csl < ep) : (csl > ep || csl == 0.0))
+                                        it->stop_loss = ep;
+                                }
                             }
                         }
+                        update_trailing(*it, is_long, fill_price, i);
                     }
-                    update_trailing(*it, is_long, open[i], i);
-
+ 
                     if (!reason.empty()) {
-                        close_trade(*it, open[i], reason, i, is_long);
+                        close_trade(*it, fill_price, reason, i, is_long);
                         trades.push_back(*it);
                         it = active_trades.erase(it);
                     } else { ++it; }
                 }
             }
-
+ 
             // ── 2. PENDING ORDERS ─────────────────────────────────────────────
-            {
+            // Ordens pendentes só fazem sentido em ohlc (price absoluto com high/low)
+            if (!is_price_only) {
                 auto p_it = pending_orders.begin();
                 while (p_it != pending_orders.end()) {
                     bool   is_long = (p_it->lot_size > 0.0);
                     double target  = p_it->entry_price;
                     bool triggered = false;
                     double fill    = target;
-
+ 
                     bool expired =
                         (p_it->bars_held >= limit_order_expiry) ||
                         (((dt_final||day_switched) && is_daytrade) || is_last_bar);
                     if (expired) { p_it = pending_orders.erase(p_it); continue; }
-
+ 
                     std::string pos_type = p_it->exit_reason;
                     if (is_long) {
                         if      (pos_type=="L_BELOW" && open[i] <= target) { triggered=true; fill=open[i]; }
@@ -384,7 +448,7 @@ SimulationOutput Backtest::run_simulation(
                         else if (pos_type=="S_BELOW" && open[i] <= target) { triggered=true; fill=open[i]; }
                         else if (pos_type=="S_BELOW" && low[i]  <  target)   triggered=true;
                     }
-
+ 
                     if (triggered) {
                         open_trade(*p_it, fill, i, is_long);
                         double sl = p_it->stop_loss;
@@ -405,36 +469,41 @@ SimulationOutput Backtest::run_simulation(
                     }
                 }
             }
-
+ 
             // ── 3. NEW ENTRIES ────────────────────────────────────────────────
             {
                 bool day_blocked = (!close_days.empty() && close_days.count(bar_days[i]));
                 if (!day_blocked && is_daytrade)
                     day_blocked = (currentTime < timeEI || currentTime > timeEF);
-
+ 
                 if (!day_blocked && (signal_long || signal_short)) {
                     int cur_longs = 0, cur_shorts = 0;
                     for (const auto& t : active_trades)  { if(t.lot_size>0)++cur_longs; else if(t.lot_size<0)++cur_shorts; }
                     for (const auto& p : pending_orders) { if(p.lot_size>0)++cur_longs; else if(p.lot_size<0)++cur_shorts; }
-
+ 
                     auto execute_entry = [&](bool is_long) {
-                        if (order_type == "market") {
+                        if (order_type == "market" || is_price_only) {
+                            // price_only sempre market — sem ordens pendentes
                             Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
-                            open_trade(t, open[i], i, is_long);
-                            double sl=t.stop_loss, tp=t.take_profit;
-                            std::string inst = check_instant_exit(is_long,t.entry_price,sl,tp,open[i],high[i],low[i],close[i]);
-                            if (!inst.empty()) {
-                                close_trade(t,(inst=="TP"?tp:sl),inst,i,is_long);
-                                trades.push_back(std::move(t));
-                            } else {
-                                active_trades.push_back(std::move(t));
+                            open_trade(t, fill_price, i, is_long);
+                            if (!is_pct_mode) {
+                                double sl=t.stop_loss, tp=t.take_profit;
+                                std::string inst = check_instant_exit(is_long, t.entry_price,
+                                    sl, tp, fill_price, check_high, check_low, fill_price);
+                                if (!inst.empty()) {
+                                    close_trade(t,(inst=="TP"?tp:sl),inst,i,is_long);
+                                    trades.push_back(std::move(t));
+                                    return;
+                                }
                             }
+                            active_trades.push_back(std::move(t));
                             is_long ? ++day_trades_long : ++day_trades_short;
                         } else {
+                            // limit/stop — só em ohlc
                             const RefResult& lim_r = is_long ? ref_limit_long : ref_limit_short;
                             if (!ref_valid(lim_r, i) || ref_val(lim_r, i) <= 0.0) {
                                 Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
-                                open_trade(t,open[i],i,is_long);
+                                open_trade(t, open[i], i, is_long);
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
@@ -448,13 +517,11 @@ SimulationOutput Backtest::run_simulation(
                             bool already_hit = (is_long && target<=open[i]) || (!is_long && target>=open[i]);
                             if (already_hit && gap_market_fallback) {
                                 Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
-                                open_trade(t,open[i],i,is_long);
+                                open_trade(t, open[i], i, is_long);
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
                             }
-                            // Pending order — lot_size placeholder ±1.0
-                            // open_trade será chamado quando triggered, recalculando o lote
                             Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
                             t.entry_price=target; t.status="pending";
                             { auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
@@ -462,7 +529,7 @@ SimulationOutput Backtest::run_simulation(
                             pending_orders.push_back(std::move(t));
                         }
                     };
-
+ 
                     auto cancel_opposite = [&](bool long_sig) {
                         if (!cancel_opp_pending) return;
                         auto oit = pending_orders.begin();
@@ -471,70 +538,99 @@ SimulationOutput Backtest::run_simulation(
                             oit = (long_sig?(lot<0):(lot>0)) ? pending_orders.erase(oit) : ++oit;
                         }
                     };
-
+ 
                     if (signal_long  && cur_longs  < max_long  && day_trades_long  < max_long_pd  && (hedge_enabled||cur_shorts==0))
                         { cancel_opposite(true);  execute_entry(true);  }
                     if (signal_short && cur_shorts < max_short && day_trades_short < max_short_pd && (hedge_enabled||cur_longs==0))
                         { cancel_opposite(false); execute_entry(false); }
                 }
             }
-
+ 
             // ── 4. INTRA-CANDLE SL/TP + TRAILING ─────────────────────────────
             {
                 auto it = active_trades.begin();
                 while (it != active_trades.end()) {
                     bool is_long = (it->lot_size > 0.0);
-                    update_trailing(*it, is_long, is_long ? high[i] : low[i], i);
-                    double sl=it->stop_loss, tp=it->take_profit;
-                    bool hit_sl = is_long?(sl>0&&low[i]<=sl):(sl>0&&high[i]>=sl);
-                    bool hit_tp = is_long?(tp>0&&high[i]>=tp):(tp>0&&low[i]<=tp);
-                    if (hit_sl || hit_tp) {
-                        std::string reason; double exit_px;
-                        if (hit_sl && hit_tp) {
-                            reason = check_instant_exit(is_long,it->entry_price,sl,tp,open[i],high[i],low[i],close[i]);
-                            if (reason.empty()) reason="SL";
-                            exit_px = (reason=="TP")?tp:sl;
-                        } else { reason=hit_sl?"SL":"TP"; exit_px=hit_sl?sl:tp; }
-                        close_trade(*it, exit_px, reason, i, is_long);
-                        trades.push_back(*it);
-                        it = active_trades.erase(it);
-                    } else {
-                        if (is_long) {
-                            if (high[i]>it->max_fav_price) it->max_fav_price=high[i];
-                            if (low[i] <it->max_adv_price) it->max_adv_price=low[i];
+ 
+                    if (is_pct_mode) {
+                        // pct_mode: acumula retorno e verifica SL/TP em % acumulado
+                        bool should_close = update_pct_pnl(*it, is_long, close[i]);
+                        if (should_close) {
+                            std::string reason = (it->profit <= it->stop_loss) ? "SL" : "TP";
+                            close_trade(*it, close[i], reason, i, is_long);
+                            trades.push_back(*it);
+                            it = active_trades.erase(it);
                         } else {
-                            if (low[i] <it->max_fav_price) it->max_fav_price=low[i];
-                            if (high[i]>it->max_adv_price) it->max_adv_price=high[i];
+                            it->bars_held++;
+                            ++it;
                         }
-                        it->bars_held = it->bars_held+1;
-                        ++it;
+                    } else {
+                        // price absoluto: verifica SL/TP via check_high/check_low
+                        update_trailing(*it, is_long, is_long ? check_high : check_low, i);
+                        double sl=it->stop_loss, tp=it->take_profit;
+                        bool hit_sl = is_long?(sl>0&&check_low<=sl):(sl>0&&check_high>=sl);
+                        bool hit_tp = is_long?(tp>0&&check_high>=tp):(tp>0&&check_low<=tp);
+                        if (hit_sl || hit_tp) {
+                            std::string reason; double exit_px;
+                            if (hit_sl && hit_tp) {
+                                reason = check_instant_exit(is_long, it->entry_price, sl, tp,
+                                    fill_price, check_high, check_low, fill_price);
+                                if (reason.empty()) reason="SL";
+                                exit_px = (reason=="TP")?tp:sl;
+                            } else { reason=hit_sl?"SL":"TP"; exit_px=hit_sl?sl:tp; }
+                            close_trade(*it, exit_px, reason, i, is_long);
+                            trades.push_back(*it);
+                            it = active_trades.erase(it);
+                        } else {
+                            if (is_long) {
+                                if (check_high > it->max_fav_price) it->max_fav_price = check_high;
+                                if (check_low  < it->max_adv_price) it->max_adv_price = check_low;
+                            } else {
+                                if (check_low  < it->max_fav_price) it->max_fav_price = check_low;
+                                if (check_high > it->max_adv_price) it->max_adv_price = check_high;
+                            }
+                            it->bars_held++;
+                            ++it;
+                        }
                     }
                 }
             }
-
+ 
             // ── 5. DAILY PnL UPDATE ───────────────────────────────────────────
             if (day_switched || dt_final || is_last_bar) {
                 for (auto& trade : active_trades) {
-                    bool is_long  = (trade.lot_size > 0);
-                    double prev_p = trade.prev_day_price;
-                    double curr_p = close[i];
-                    double dv = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+                    bool is_long = (trade.lot_size > 0);
+                    double dv;
+ 
+                    if (is_pct_mode) {
+                        // pct_mode: dv já foi acumulado em update_pct_pnl
+                        // emite o retorno acumulado desde o último daily snapshot
+                        // e reseta o acumulador diário
+                        dv = trade.profit;  // retorno acumulado do período
+                        trade.profit = 0.0; // reseta para próximo período diário
+                    } else {
+                        double prev_p = trade.prev_day_price;
+                        double curr_p = close[i];
+                        dv = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+                        trade.prev_day_price = curr_p;
+                    }
+ 
                     daily_results_matrix.push_back({
                         format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
                         dv,
-                        std::abs(trade.lot_size),  // lot_size vigente neste período
+                        std::abs(trade.lot_size),
                         ps_id
                     });
-                    trade.prev_day_price = curr_p;
                 }
             }
         }
     } catch (const std::exception& e) {
         std::cerr << "[Backtest Error]: " << e.what() << std::endl;
     }
-
+ 
     SimulationOutput output;
     output.trades    = std::move(trades);
     output.daily_vec = std::move(daily_results_matrix);
     return output;
 }
+

@@ -25,7 +25,7 @@ class ExecutionSettings:
     commission:                         float = 0.0       # em ticks — multiplicado pelo tick do Asset em _operation
 
     # ── Backtest mode ─────────────────────────────────────────────────────────
-    backtest_mode: Literal['ohlc', 'close-close', 'open-open', 'avg_price'] = 'ohlc'
+    backtest_mode: Literal['ohlc', 'close', 'open', 'close-close', 'open-open', 'avg_price'] = 'ohlc'
     # 'ohlc'        → padrão, verifica SL/TP intrabar via high/low
     # 'close-close' → executa apenas no fechamento, sem verificação intrabar
     # 'open-open'   → executa apenas na abertura
