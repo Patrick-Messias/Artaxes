@@ -1623,7 +1623,7 @@ if __name__ == "__main__":
     # XXX - Corrigir bug compound_fract_series
     
     # - Develop start_date - end_date for operation
-    # - Create SQL database for results
+    # - Create method to save results and clear _results_map
 
     # - Divisão Backtest OOS simples em Monte Carlo
     # - Plot long list with small leters with selectable mode-strat-asset-parest/wf results
@@ -1633,6 +1633,8 @@ if __name__ == "__main__":
     # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
     # - Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
     # - Modify HTF-LTF function to work from LTF to HTF also
+
+    # - Create SQL database for HTML panel
 
     # - Dev Roadmap png/list 
     # - Deselop SM selection system for Models/Strats/Assets
