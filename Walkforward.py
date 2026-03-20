@@ -443,6 +443,15 @@ class Walkforward:
         if not wf_result or 'windows' not in wf_result or not wf_result['windows']:
             print("      > [Error] No windows data to plot timeline.")
             return
+        
+        if "windows" in wf_result:
+            from datetime import datetime as dt
+            for win in wf_result["windows"]:
+                for k in ("is_start", "is_end", "os_start", "os_end"):
+                    if k in win and isinstance(win[k], str):
+                        try:
+                            win[k] = dt.fromisoformat(win[k])
+                        except: pass
 
         import matplotlib.dates as mdates
         from matplotlib.patches import Patch
