@@ -1,61 +1,20 @@
-import polars as pl
-import os
-import re
-import datetime
-from BaseClass import BaseClass
-from dataclasses import dataclass
-from typing import Union, Callable, Dict, List, Optional
+import polars as pl, os, re
+from pathlib import Path
+from typing import Union, Dict, List, Optional
 
-# =================================================================================================================================|| UTILS
 
-def create_datetime_columns(df: pl.DataFrame) -> pl.DataFrame:
-    """Garante que o DataFrame tenha colunas 'datetime', 'date' e 'time' usando Polars."""
-    
-    # 1. Tenta criar a coluna 'datetime' se ela não existir
-    if 'datetime' not in df.columns:
-        if 'date' in df.columns and 'time' in df.columns:
-            # Caso data e hora separados (Trata strings ou tipos data)
-            df = df.with_columns([
-                pl.format("{} {}", pl.col("date"), pl.col("time"))
-                .str.to_datetime(strict=False)
-                .alias("datetime")
-            ])
-        elif 'date' in df.columns:
-            df = df.with_columns([
-                pl.col("date").cast(pl.Utf8).str.to_datetime(strict=False).alias("datetime")
-            ])
-        elif 'time' in df.columns:
-            # Apenas hora: assume uma data base (1900-01-01)
-            df = df.with_columns([
-                pl.format("1900-01-01 {}", pl.col("time"))
-                .str.to_datetime(strict=False)
-                .alias("datetime")
-            ])
-        else:
-            raise ValueError("Não foi possível criar 'datetime': faltam colunas 'date' e 'time'.")
+# ═════════════════════════════════════════════════════════════════════════════
+# UTILS
+# ═════════════════════════════════════════════════════════════════════════════
 
-    # 2. Garante consistência nas colunas complementares
-    # No Polars, extraímos propriedades de data/hora via .dt
-    df = df.with_columns([
-        pl.col("datetime").dt.date().alias("date"),
-        pl.col("datetime").dt.time().alias("time")
-    ])
-
-    # 3. Remove nulos e reseta o "índice" (no Polars apenas drop_nulls)
-    df = df.drop_nulls(subset=["datetime"])
-    
-    return df
-
-def load_data(data_path, min_limit=0.0, max_limit=1.0, index_col_setting=False, drop_index=True):
-    """Carrega dados usando Polars com suporte a CSV e Excel."""
-    
-    def normalize_columns(df: pl.DataFrame):
-        # Converte todas as colunas para lowercase
-        return df.select([pl.col(c).alias(c.lower()) for c in df.columns])
-
-    def process_file(file_path):
+def load_data(data_path: str) -> pl.DataFrame:
+    """
+    Carrega dados de CSV ou Excel para Polars DataFrame.
+    Suporta arquivo único (com ou sem extensão) ou diretório.
+    Normaliza colunas para lowercase e converte datetime automaticamente.
+    """
+    def _process_file(file_path: str) -> Optional[pl.DataFrame]:
         try:
-            # 1. Leitura inicial
             if file_path.endswith(('.xlsx', '.xls')):
                 df = pl.read_excel(file_path)
             elif file_path.endswith('.csv'):
@@ -63,173 +22,310 @@ def load_data(data_path, min_limit=0.0, max_limit=1.0, index_col_setting=False, 
             else:
                 return None
 
-            df = normalize_columns(df)
+            # Normaliza colunas para lowercase
+            df = df.rename({c: c.lower() for c in df.columns})
 
-            # 2. NOVO COMPONENTE: TRATAMENTO ROBUSTO DE DATETIME
+            # Monta coluna datetime se necessário
             if "datetime" not in df.columns:
                 if "date" in df.columns and "time" in df.columns:
-                    # Convertemos tudo para String primeiro para evitar o erro de tipos diferentes
                     df = df.with_columns([
                         pl.col("date").cast(pl.Utf8),
-                        pl.col("time").cast(pl.Utf8)
-                    ])
-                    
-                    # Agora concatenamos com segurança
-                    df = df.with_columns(
+                        pl.col("time").cast(pl.Utf8),
+                    ]).with_columns(
                         (pl.col("date") + pl.lit(" ") + pl.col("time")).alias("datetime")
                     )
                 else:
-                    raise ValueError(f"Colunas temporais não encontradas em {file_path}")
+                    raise ValueError(f"No datetime/date+time columns found in {file_path}")
 
-            # 3. CONVERSÃO PARA DATETIME (Tratando formatos de Excel vs CSV)
-            # O Excel costuma usar 'YYYY-MM-DD', o CSV do MT5 costuma usar 'YYYY.MM.DD'
+            # Converte datetime — suporta MT5 (YYYY.MM.DD) e ISO (YYYY-MM-DD)
             df = df.with_columns(
-                pl.col("datetime").str.replace_all(r"\.", "-").str.to_datetime(strict=False)
+                pl.col("datetime")
+                .str.replace_all(r"\.", "-")
+                .str.to_datetime(strict=False)
             )
 
-            # 4. GARANTIA DE SUCESSO
             if df["datetime"].null_count() == len(df):
-                raise ValueError("Falha crítica: a conversão de datetime resultou apenas em valores nulos.")
+                raise ValueError(f"Datetime conversion failed for {file_path}")
 
-            # Restante do código (ativo name, slice, etc)
-            ativo_name = os.path.splitext(os.path.basename(file_path))[0]
-            df = df.with_columns(pl.lit(ativo_name).alias('ativo'))
-            
-            # Chamada da sua função de colunas extras (se existir)
-            # df = create_datetime_columns(df)
+            # Nome do ativo a partir do filename
+            asset_name = os.path.splitext(os.path.basename(file_path))[0]
+            df = df.with_columns(pl.lit(asset_name).alias("ativo"))
 
-            total_rows = len(df)
-            start_idx = int(total_rows * min_limit)
-            end_idx = int(total_rows * max_limit)
-            
-            return df.slice(start_idx, end_idx - start_idx)
+            return df
 
         except Exception as e:
-            print(f"Erro ao processar {file_path}: {str(e)}")
-            # Retornamos None para que o load_data filtre e não envie um DF vazio
+            print(f"   ⚠️ Error loading {file_path}: {e}")
             return None
 
-    # Lógica de diretório
-    if os.path.isdir(data_path):
-        files = [os.path.join(data_path, f) for f in os.listdir(data_path) 
-                if f.endswith(('.xlsx', '.xls', '.csv'))]
-        results = [process_file(f) for f in files]
-        return [df for df in results if df is not None]
-    
-    # Lógica de arquivo único com tentativa de extensões
-    possible_extensions = ['.xlsx', '.xls', '.csv']
-    
-    if any(data_path.endswith(ext) for ext in possible_extensions):
-        result = process_file(data_path)
+    path = Path(data_path)
+
+    # Diretório — carrega todos os arquivos
+    if path.is_dir():
+        dfs = []
+        for f in sorted(path.iterdir()):
+            if f.suffix in ('.csv', '.xlsx', '.xls'):
+                df = _process_file(str(f))
+                if df is not None:
+                    dfs.append(df)
+        return pl.concat(dfs, how="diagonal_relaxed") if dfs else pl.DataFrame()
+
+    # Arquivo único — tenta com e sem extensão
+    if path.exists():
+        result = _process_file(str(path))
         return result if result is not None else pl.DataFrame()
-    
-    for ext in possible_extensions:
-        file_path = data_path + ext
-        if os.path.exists(file_path):
-            result = process_file(file_path)
-            if result is not None:
-                return result
-    
+
+    for ext in ('.csv', '.xlsx', '.xls'):
+        candidate = Path(str(data_path) + ext)
+        if candidate.exists():
+            result = _process_file(str(candidate))
+            return result if result is not None else pl.DataFrame()
+
     return pl.DataFrame()
 
-# =================================================================================================================================|| ASSET
 
-@dataclass
-class AssetParams:
-    tick: float = 0.01
-    tick_fin_val: float = 1.0
-    lot_value: float = 100.0
-    min_lot: float = 1.0
-    leverage: float = 1.0
-    commissions: float = 0.0
-    slippage: float = 0.0
-    spread: float = 0.0
-    datetime_candle_references: str = 'open'
+# ═════════════════════════════════════════════════════════════════════════════
+# ASSET
+# ═════════════════════════════════════════════════════════════════════════════
 
-class Asset(BaseClass):
-    ASSET_PARAMS = {
+class Asset:
+    """
+    Representa um ativo financeiro com seus parâmetros de mercado e dados OHLC.
+
+    Parâmetros de mercado (tick, tick_fin_val, lot_*, leverage, custos) são
+    carregados automaticamente do ASSET_PARAMS via type/market/name.
+    Parâmetros extras podem ser passados via **kwargs para sobrescrever.
+
+    Filtro de data: date_start e date_end filtram os dados retornados por data_get().
+    """
+
+    ASSET_PARAMS: Dict = {
         'futures': {
             'b3': {
                 'WIN$': {
-                    'tick': 1, 'tick_fin_val': 0.2, 
+                    'tick': 1, 'tick_fin_val': 0.2,
                     'lot_value': 20000.0, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000,
-                    'leverage': 20, 'commissions': 0.5, 'slippage': 0.25, 'spread': 0.25,
-                    'datetime_candle_references': 'open'
+                    'leverage': 20, 'margin_rate': 0.05,
+                    'commissions': 0.5, 'slippage': 0.25, 'spread': 0.25,
+                    'swap_long': 0.0, 'swap_short': 0.0,
+                    'datetime_candle_references': 'open',
                 },
                 'WDO$': {
-                    'tick': 5, 'tick_fin_val': 5.0, 
+                    'tick': 5, 'tick_fin_val': 5.0,
                     'lot_value': 40000.0, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000,
-                    'leverage': 20, 'commissions': 0.5, 'slippage': 0.25, 'spread': 0.25,
-                    'datetime_candle_references': 'open'
-                }
-            }
+                    'leverage': 20, 'margin_rate': 0.05,
+                    'commissions': 0.5, 'slippage': 0.25, 'spread': 0.25,
+                    'swap_long': 0.0, 'swap_short': 0.0,
+                    'datetime_candle_references': 'open',
+                },
+            },
         },
         'currency_pair': {
             'forex': {
-                'generic': {'tick': 0.0001, 'tick_fin_val': 10, 
-                    'lot_value': 100000.0, 'min_lot': 0.01, 'lot_step': 0.01, 'lot_max': 10000,
-                    'leverage': 100, 'commissions': 1.5, 'slippage': 0.75, 'spread': 0.75,
-                    'datetime_candle_references': 'open'
-                }
-            }
+                'generic': {
+                    'tick': 0.0001, 'tick_fin_val': 10,
+                    'lot_value': 100000.0, 'min_lot': 0.01, 'lot_step': 0.01, 'lot_max': 500,
+                    'leverage': 100, 'margin_rate': 0.01,
+                    'commissions': 1.5, 'slippage': 0.75, 'spread': 0.75,
+                    'swap_long': -0.5, 'swap_short': -0.5,
+                    'datetime_candle_references': 'open',
+                },
+            },
         },
         'stock': {
-            'NASDAQ': {'generic': {'tick': 0.01, 'tick_fin_val': 1, 'lot_value': 100, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000, 'leverage': 1, 'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02, 'datetime_candle_references': 'open'}},
-            'NYSE': {'generic': {'tick': 0.01, 'tick_fin_val': 1, 'lot_value': 100, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000, 'leverage': 1, 'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02, 'datetime_candle_references': 'open'}}
-        }
+            'NASDAQ': {
+                'generic': {
+                    'tick': 0.01, 'tick_fin_val': 1,
+                    'lot_value': 100, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000,
+                    'leverage': 1, 'margin_rate': 1.0,
+                    'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02,
+                    'swap_long': 0.0, 'swap_short': 0.0,
+                    'datetime_candle_references': 'open',
+                },
+            },
+            'NYSE': {
+                'generic': {
+                    'tick': 0.01, 'tick_fin_val': 1,
+                    'lot_value': 100, 'min_lot': 1, 'lot_step': 1, 'lot_max': 10000,
+                    'leverage': 1, 'margin_rate': 1.0,
+                    'commissions': 5.0, 'slippage': 0.05, 'spread': 0.02,
+                    'swap_long': 0.0, 'swap_short': 0.0,
+                    'datetime_candle_references': 'open',
+                },
+            },
+        },
     }
 
-    def __init__(self, name: str, type: str, market: str, timeframe: List[str] = None, 
-                 data_path: str = 'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados', **kwargs):
-        super().__init__()
-        self.name = name
-        self.type = type
-        self.market = market
-        self.data_path = data_path
-        self.data: Dict[str, Optional[pl.DataFrame]] = {}
-        self.timeframe = timeframe
-        
+    # Defaults quando asset não encontrado no ASSET_PARAMS
+    _DEFAULT_PARAMS: Dict = {
+        'tick': 0.01, 'tick_fin_val': 1.0,
+        'lot_value': 100.0, 'min_lot': 1.0, 'lot_step': 1.0, 'lot_max': 10000.0,
+        'leverage': 1.0, 'margin_rate': 1.0,
+        'commissions': 0.0, 'slippage': 0.0, 'spread': 0.0,
+        'swap_long': 0.0, 'swap_short': 0.0,
+        'datetime_candle_references': 'open',
+    }
+
+    def __init__(
+        self,
+        name:        str,
+        type:        str,
+        market:      str,
+        data_path:   str = '',
+        timeframe:   Optional[List[str]] = None,
+        date_start:  Optional[str] = None,   # 'YYYY-MM-DD'
+        date_end:    Optional[str] = None,   # 'YYYY-MM-DD'
+        **kwargs,
+    ):
+        self.name       = name
+        self.type       = type
+        self.market     = market
+        self.data_path  = data_path
+        self.date_start = date_start
+        self.date_end   = date_end
+
+        self._data: Dict[str, Optional[pl.DataFrame]] = {}
+
+        # Inicializa timeframes disponíveis
         if timeframe:
-            for tf in timeframe: self.data[tf] = None
+            for tf in timeframe:
+                self._data[tf] = None
         else:
-            self.timeframes_load_available()
+            self._discover_timeframes()
 
-        default_params = self.get_default_params()
-        for key, value in {**default_params, **kwargs}.items():
-            setattr(self, key, value)
+        # Aplica parâmetros de mercado — ASSET_PARAMS → generic → defaults → kwargs
+        params = self._load_params()
+        params.update(kwargs)  # kwargs sobrescreve tudo
+        for k, v in params.items():
+            setattr(self, k, v)
 
-    def get_default_params(self):
+    # ─────────────────────────────────────────────────────────────────────────
+    # Params
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _load_params(self) -> Dict:
+        """Carrega parâmetros de mercado com fallback: específico → generic → defaults."""
         try:
             return self.ASSET_PARAMS[self.type][self.market][self.name].copy()
         except KeyError:
-            try:
-                return self.ASSET_PARAMS[self.type][self.market]['generic'].copy()
-            except KeyError:
-                return { 
-                    'tick': 0.01, 'tick_fin_val': 1.0, 'lot_value': 100.0, 'min_lot': 1.0,
-                    'leverage': 1.0, 'commissions': 0.0, 'slippage': 0.0, 'spread': 0.0,
-                    'datetime_candle_references': 'open'
-                }
+            pass
+        try:
+            return self.ASSET_PARAMS[self.type][self.market]['generic'].copy()
+        except KeyError:
+            pass
+        return self._DEFAULT_PARAMS.copy()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Data
+    # ─────────────────────────────────────────────────────────────────────────
 
     def data_get(self, timeframe: str) -> pl.DataFrame:
-        if timeframe not in self.data or self.data[timeframe] is None:
-            data_file = os.path.join(self.data_path, f"{self.name}_{timeframe}")
-            self.data[timeframe] = load_data(data_file)
-        return self.data[timeframe]
+        """
+        Retorna dados OHLC para o timeframe especificado.
+        Carrega do disco se ainda não em cache.
+        Aplica filtro de date_start/date_end se definidos no Asset.
+        """
+        if timeframe not in self._data or self._data[timeframe] is None:
+            file_path = os.path.join(self.data_path, f"{self.name}_{timeframe}")
+            df = load_data(file_path)
 
-    def timeframes_load_available(self):
-        if not os.path.isdir(self.data_path): return
-        pattern = re.compile(f"{self.name}_([A-Z][0-9]+)")
+            if df.is_empty():
+                print(f"   ⚠️ WARNING: No data found for {self.name} @ {timeframe}")
+                self._data[timeframe] = df
+            else:
+                self._data[timeframe] = df
+
+        df = self._data[timeframe]
+
+        if df is None or df.is_empty():
+            return pl.DataFrame()
+
+        # Aplica filtro de data
+        df = self._filter_dates(df)
+
+        # Warnings de cobertura
+        self._check_date_coverage(df, timeframe)
+
+        return df
+
+    def _filter_dates(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Filtra o DataFrame pelo date_start e date_end do Asset."""
+        if not self.date_start and not self.date_end:
+            return df
+
+        dt = pl.col("datetime")
+        if self.date_start:
+            start = pl.lit(self.date_start).str.to_datetime("%Y-%m-%d")
+            df = df.filter(dt >= start)
+        if self.date_end:
+            end = pl.lit(self.date_end).str.to_datetime("%Y-%m-%d")
+            df = df.filter(dt <= end)
+
+        return df
+
+    def _check_date_coverage(self, df: pl.DataFrame, timeframe: str):
+        """Emite warnings se o dado não cobre o range solicitado."""
+        if df.is_empty():
+            print(f"   ⚠️ WARNING: {self.name} @ {timeframe} has no data in range "
+                  f"{self.date_start or 'start'} → {self.date_end or 'end'}")
+            return
+
+        actual_start = df["datetime"].min()
+        actual_end   = df["datetime"].max()
+
+        if self.date_start:
+            expected = pl.Series([self.date_start]).str.to_datetime("%Y-%m-%d")[0]
+            gap = abs((actual_start - expected).days) if hasattr((actual_start - expected), 'days') else 0
+            if gap > 5:
+                print(f"   ⚠️ WARNING: {self.name} @ {timeframe} starts at {actual_start} "
+                      f"(expected {self.date_start}, {gap}d gap)")
+
+        if self.date_end:
+            expected = pl.Series([self.date_end]).str.to_datetime("%Y-%m-%d")[0]
+            gap = (expected - actual_end).days if hasattr((expected - actual_end), 'days') else 0
+            if gap > 5:
+                print(f"   ⚠️ WARNING: {self.name} @ {timeframe} ends at {actual_end} "
+                      f"(expected {self.date_end}, {gap}d missing)")
+
+    def set_date_range(self, date_start: Optional[str] = None, date_end: Optional[str] = None):
+        """
+        Atualiza o filtro de data e invalida o cache para recarregar.
+        Útil para reutilizar o mesmo Asset em múltiplas Operations com ranges diferentes.
+        """
+        self.date_start = date_start
+        self.date_end   = date_end
+
+    def _discover_timeframes(self):
+        """Descobre timeframes disponíveis no data_path pelo padrão {NAME}_{TF}."""
+        if not self.data_path or not os.path.isdir(self.data_path):
+            return
+        pattern = re.compile(rf"{re.escape(self.name)}_([A-Z][0-9]+)", re.IGNORECASE)
         for file in os.listdir(self.data_path):
             match = pattern.match(file)
             if match:
-                tf = match.group(1)
-                if tf not in self.data: self.data[tf] = None
+                tf = match.group(1).upper()
+                if tf not in self._data:
+                    self._data[tf] = None
+
+    @property
+    def timeframes(self) -> List[str]:
+        """Lista de timeframes disponíveis."""
+        return list(self._data.keys())
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Utils
+    # ─────────────────────────────────────────────────────────────────────────
 
     @staticmethod
-    def load_unique_assets(assets: Dict[str, "Asset"], type: str, market: str, path: str) -> Dict[str, "Asset"]:
-        if not os.path.isdir(path): return assets
-        pattern = re.compile(r"([A-Za-z0-9$]+)_[A-Z][0-9]+\.(csv|xlsx|xls)")
+    def load_unique_assets(
+        assets:  Dict[str, "Asset"],
+        type:    str,
+        market:  str,
+        path:    str,
+    ) -> Dict[str, "Asset"]:
+        """Carrega automaticamente todos os ativos únicos de um diretório."""
+        if not os.path.isdir(path):
+            return assets
+        pattern = re.compile(r"([A-Za-z0-9$]+)_[A-Z][0-9]+\.(csv|xlsx|xls)", re.IGNORECASE)
         for file in os.listdir(path):
             match = pattern.match(file)
             if match:
@@ -238,59 +334,82 @@ class Asset(BaseClass):
                     assets[asset_name] = Asset(asset_name, type, market, data_path=path)
         return assets
 
-# =================================================================================================================================|| PORTFOLIO
+    def __repr__(self) -> str:
+        tfs = ', '.join(self.timeframes) or 'none'
+        return (f"<Asset {self.name} | {self.type}/{self.market} | "
+                f"tick={self.tick} tick_fin_val={self.tick_fin_val} | "
+                f"TFs: {tfs} | "
+                f"date: {self.date_start or 'all'} → {self.date_end or 'all'}>")
 
-class Asset_Portfolio(BaseClass):
-    def __init__(self, asset_portfolio_params: dict = None, name: str = None, assets: Union[dict, list, None] = None):
-        super().__init__()
-        if asset_portfolio_params:
-            self.name = asset_portfolio_params.get('name', 'unnamed_portfolio')
-            assets_input = asset_portfolio_params.get('assets', {})
-        else:
-            self.name = name or 'unnamed_portfolio'
-            assets_input = assets or {}
 
+# ═════════════════════════════════════════════════════════════════════════════
+# ASSET PORTFOLIO
+# ═════════════════════════════════════════════════════════════════════════════
+
+class AssetPortfolio:
+    """
+    Coleção de Assets operados em conjunto.
+    Fornece acesso unificado a dados e correlações.
+    """
+
+    def __init__(
+        self,
+        name:   str = 'portfolio',
+        assets: Union[Dict[str, Asset], List[Asset], None] = None,
+    ):
+        self.name   = name
         self.assets: Dict[str, Asset] = {}
-        if isinstance(assets_input, dict):
-            self.assets = assets_input
-        elif isinstance(assets_input, list):
-            for a in assets_input:
-                if isinstance(a, Asset): self.assets[a.name] = a
+
+        if isinstance(assets, dict):
+            self.assets = assets
+        elif isinstance(assets, list):
+            for a in assets:
+                if isinstance(a, Asset):
+                    self.assets[a.name] = a
 
     def data_get(self, timeframes: List[str]) -> Dict[str, Dict[str, pl.DataFrame]]:
-        result = {}
+        """Retorna {tf: {asset_name: df}} para todos os assets e timeframes."""
+        result: Dict[str, Dict[str, pl.DataFrame]] = {}
         for tf in timeframes:
             result[tf] = {}
             for name, asset in self.assets.items():
                 try:
                     result[tf][name] = asset.data_get(tf)
                 except Exception as e:
-                    print(f"Error loading {name} @ {tf}: {e}")
+                    print(f"   ⚠️ Error loading {name} @ {tf}: {e}")
                     result[tf][name] = pl.DataFrame()
         return result
 
+    def set_date_range(self, date_start: Optional[str] = None, date_end: Optional[str] = None):
+        """Propaga filtro de data para todos os assets do portfolio."""
+        for asset in self.assets.values():
+            asset.set_date_range(date_start, date_end)
+
     def calculate_correlation(self, timeframe: str) -> pl.DataFrame:
-        """Calcula correlação entre ativos usando o preço de fechamento."""
+        """Matriz de correlação entre assets pelo preço de fechamento."""
         combined = None
         for name, asset in self.assets.items():
             df = asset.data_get(timeframe).select([
                 pl.col("datetime"),
-                pl.col("close").alias(name)
+                pl.col("close").alias(name),
             ])
-            if combined is None:
-                combined = df
-            else:
-                combined = combined.join(df, on="datetime", how="outer")
-        
-        if combined is None: return pl.DataFrame()
-        
-        # Polars correlation matrix
+            combined = df if combined is None else combined.join(df, on="datetime", how="full", coalesce=True)
+
+        if combined is None:
+            return pl.DataFrame()
+
         numeric_cols = [c for c in combined.columns if c != "datetime"]
         return combined.select(numeric_cols).corr()
 
-    def preload_data(self, timeframes: List[str], verbose: bool = False) -> None:
-        if verbose: print(f"\nPrecarregando dados para {len(self.assets)} assets...")
+    def preload_data(self, timeframes: List[str], verbose: bool = False):
+        """Pré-carrega dados de todos os assets para os timeframes especificados."""
+        if verbose:
+            print(f"\nPreloading data for {len(self.assets)} assets...")
         for name, asset in self.assets.items():
             for tf in timeframes:
                 df = asset.data_get(tf)
-                if verbose: print(f"Asset {name} - TF {tf}: OK ({len(df)} linhas)")
+                if verbose:
+                    print(f"   {name} @ {tf}: {len(df)} rows")
+
+    def __repr__(self) -> str:
+        return f"<AssetPortfolio '{self.name}' | {len(self.assets)} assets: {list(self.assets.keys())}>"

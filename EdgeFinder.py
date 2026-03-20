@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from BaseClass import BaseClass
 from typing import Dict, Optional
 from Indicator import Indicator
 from Asset import Asset
@@ -42,7 +41,7 @@ class EdgeFinderParams():
 
     monte_carlo_simulations: int = 1000  # if 0 then no monte carlo simulation
 
-class EdgeFinder(BaseClass): 
+class EdgeFinder(): 
     def __init__(self, edgefinder_params: EdgeFinderParams):
         super().__init__()
 

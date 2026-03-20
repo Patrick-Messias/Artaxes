@@ -2,7 +2,6 @@ import numpy as np
 import polars as pl
 from dataclasses import dataclass, field
 from typing import Optional, List, Literal
-from Trade import Trade
 from MoneyManager import MoneyManager, MoneyManagerParams
 
 

@@ -11,7 +11,6 @@ import polars as pl
 import uuid
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-from BaseClass import BaseClass
 from Indicator import Indicator
 
 @dataclass
@@ -28,7 +27,7 @@ class SystemManagerParams:
     # Regras lógicas de ativação/desativação (Filtros de sistema)
     sm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-class SystemManager(BaseClass): 
+class SystemManager(): 
     def __init__(self, system_params: SystemManagerParams):
         super().__init__()
         self.name = system_params.name

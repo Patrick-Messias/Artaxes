@@ -9,9 +9,8 @@ PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio
 
 import polars as pl
 import uuid
-from typing import Dict, Optional, Callable, Union
+from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
-from BaseClass import BaseClass
 from Indicator import Indicator
 
 @dataclass
@@ -42,7 +41,7 @@ class MoneyManagerParams:
     # Regras customizadas de alocação
     mm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-class MoneyManager(BaseClass): # Classe base para SMM, MMM e PMM
+class MoneyManager(): # Classe base para SMM, MMM e PMM
     def __init__(self, mm_params: MoneyManagerParams):
         super().__init__()
         self.name = mm_params.name
@@ -71,16 +70,7 @@ class MoneyManager(BaseClass): # Classe base para SMM, MMM e PMM
                 if val is not None and (val <= 0 or val >= 1):
                     raise ValueError(f"Invalid drawdown {period} - Value {val} must be between 0 and 1 for 'var' (percentage) method")
 
-    def calculate_var(self, confidence_level: float = 0.95):
-        """
-        Placeholder para cálculo de Value at Risk.
-        No Polars, isso seria feito operando sobre os retornos históricos 
-        contidos no mm_external_data.
-        """
-        # Exemplo teórico de uso com Polars:
-        # returns = self.mm_external_data['equity_curve'].select(pl.col('returns'))
-        # return returns.quantile(1 - confidence_level)
-        return None
+    def calculate_var(): pass # UTILIZAR CLASSE DO INDICADOR VAR PARA EVITAR REDUNDANCIA
 
     def get_allocated_capital(self) -> float:
         """Retorna o capital máximo que este manager pode expor."""

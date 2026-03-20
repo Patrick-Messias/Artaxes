@@ -9,23 +9,21 @@ Pode ter subvisões filtradas (ex: trades de um Strat, trades de um Model, etc.)
 """
 
 from dataclasses import dataclass, field
-from BaseClass import BaseClass
-from Trade import Trade
 from Asset import Asset
 import Indicator, uuid
 
 @dataclass
 class TradeManagerParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
-    trades: dict[Trade]={}
+    trades: dict = {}
 
-class Trade_Management(BaseClass): 
+class Trade_Management(): 
     def __init__(self, tm_params: TradeManagerParams):
         super().__init__()
         self.name = tm_params.name
         self.trades = tm_params.trades
 
-    def _get_trade_id(self, trade: Trade): # Returns trade's id (str)
+    def _get_trade_id(self, trade): # Returns trade's id (str)
         if isinstance(trade, str): 
             return trade
 
@@ -34,7 +32,7 @@ class Trade_Management(BaseClass):
         else: 
             raise ValueError("Invalid trade - Has to be Trade object with 'id' attribute")
 
-    def add_trade(self, trade: Trade): # Adds single trade to trades dict
+    def add_trade(self, trade): # Adds single trade to trades dict
         if not hasattr(trade, "id"):
             trade.id = str(uuid.uuid4())
 
@@ -46,7 +44,7 @@ class Trade_Management(BaseClass):
         self.trades[trade_id] = trade
         return True
 
-    def remove_trade(self, trade: Trade): # Removes single trade from trades dict
+    def remove_trade(self, trade): # Removes single trade from trades dict
         trade_id = self._get_trade_id(trade)
 
         if trade_id in self.trades:

@@ -1,6 +1,4 @@
 import polars as pl
-import itertools
-import json
 
 class Indicator:
     def __init__(self, asset: str = None, timeframe: str = None, **params):

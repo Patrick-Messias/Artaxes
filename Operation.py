@@ -1,24 +1,17 @@
-import polars as pl, numpy as np, json, sys, uuid, math, datetime, psutil, re, itertools
+import polars as pl, numpy as np, json, sys, uuid, math, psutil, re, itertools
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
-from webbrowser import get
 from typing import Union, Dict, Literal, Optional, Any
-from dataclasses import dataclass, field, asdict, is_dataclass
+from dataclasses import dataclass, field, asdict
 from Model import ModelParams, Model
-from Asset import Asset, AssetParams
+from Asset import Asset
 from Strat import Strat, StratParams, ExecutionSettings
-from Portfolio import Portfolio, PortfolioParams
-from Backtest import Backtest, BacktestParams
 from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
 from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
-from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
-from Optimization import Optimization
 from Walkforward import Walkforward
 from Indicator import Indicator
-from BaseClass import BaseClass
 from itertools import product
-from Trade import Trade
 
 # =========================================================================================================================================|| Global Mapping (REMOVE FROM TIHS FILE LATER)
 
@@ -39,14 +32,14 @@ _map = { #Não deve mapear os assets, strat, etc porque toda vez vai ter que ite
                                         #     pd.DataFrame # ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['signals']: pd.DataFrame
                                         # },
                                         'trades': {
-                                            list[Trade] # ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['preliminary_backtest']: np.array['preliminary_pnl']
+                                            list[str] # Trade ['portfolio_name']['models'][model_name]['strats']['strat_name']['param_sets']['param_set']['preliminary_backtest']: np.array['preliminary_pnl']
                                         }
                                     },
-                                    'wfm_matrix_data': list[list[Trade]], # Raw daily returns matrix from all param_sets
+                                    'wfm_matrix_data': list[list[str]], # Trade Raw daily returns matrix from all param_sets
                                     'walkforward': {
                                         'wf_param_set':{ # ex: '12_12'
                                             '{wf_param}': {
-                                                list[Trade] # ['portfolio_name']['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets']['walkforward'][wf_param_set][wf_param]: Walkforward
+                                                list[str] # Trade ['portfolio_name']['models'][model_name]['strats'][strat_name]['assets'][asset_name]['param_sets']['walkforward'][wf_param_set][wf_param]: Walkforward
                                             }
                                         }
                                     }
@@ -86,7 +79,7 @@ class OperationParams():
     date_end: str=None
     save: bool=False
     
-class Operation(BaseClass):
+class Operation():
     def __init__(self, op_params: OperationParams):
         super().__init__()
         self.name = op_params.name
@@ -116,12 +109,10 @@ class Operation(BaseClass):
         pass
 
     def _init_data(self):
-        # Loads paths to all saved data
-
         from Storage import Storage
         storage = Storage(base_path="results")
         meta    = storage.load_meta(self.name)
-
+ 
         if meta:
             print(f"   > Found saved results for '{self.name}' — loading structure...")
             self._results_map[self.name] = {"models": {}}
@@ -139,6 +130,12 @@ class Operation(BaseClass):
             print(f"   > Structure loaded — trades and WFM available from parquet.")
         else:
             print(f"   > No saved results found for '{self.name}' — starting fresh.")
+ 
+        # Propaga date_start/date_end para todos os assets globais
+        # Asset.data_get() vai filtrar automaticamente sem precisar tratar no _operation
+        if self.date_start or self.date_end:
+            for asset in self.assets.values():
+                asset.set_date_range(self.date_start, self.date_end)
 
     # || ===================================================================== || II - Data Processing || ===================================================================== ||
 
@@ -161,41 +158,9 @@ class Operation(BaseClass):
                     if not asset_class: continue
                     base_asset_df  = asset_class.data_get(model_tf)
                     
-                    # ── Fase 0: Data Filtering ───────────────────────────
-                    if self.date_start or self.date_end:
-                        dt_col = pl.col("datetime")
-
-                    if self.date_start:
-                        start_dt = pl.lit(self.date_start).str.to_datetime("%Y-%m-%d")
-                        base_asset_df = base_asset_df.filter(dt_col >= start_dt)
-                    if self.date_end:
-                        end_dt = pl.lit(self.date_end).str.to_datetime("%Y-%m-%d")
-                        base_asset_df = base_asset_df.filter(dt_col <= end_dt)
-
                     if base_asset_df.is_empty():
-                        print(f"   ⚠️ WARNING: {asset_name} has no data in range "
-                            f"{self.date_start or 'start'} → {self.date_end or 'end'} — skipping.")
+                        print(f"   ⚠️ WARNING: {asset_name} @ {model_tf} returned empty — skipping.")
                         continue
-
-                    # Verifies that the asset covers the full range from strat to end
-                    actual_start = base_asset_df["datetime"].min()
-                    actual_end = base_asset_df["datetime"].max()
-
-                    if self.date_start:
-                        expected_start = pl.Series([self.date_start]).str.to_datetime("%Y-%m-%d")[0]
-                        diff_days = (actual_start - expected_start).days if hasattr((actual_start - expected_start), 'days') else 0
-                        if abs(diff_days) > 5: # 5 day tolerance for small gaps like weekends
-                            print(f"   ⚠️ WARNING: {asset_name} data starts at {actual_start} "
-                                f"but requested start was {self.date_start} "
-                                f"({abs(diff_days)} days gap).")
-
-                    if self.date_end:
-                        expected_end = pl.Series([self.date_end]).str.to_datetime("%Y-%m-%d")[0]
-                        diff_days = (expected_end - actual_end).days if hasattr((expected_end - actual_end), 'days') else 0
-                        if diff_days > 5:
-                            print(f"   ⚠️ WARNING: {asset_name} data ends at {actual_end} "
-                                f"but requested end was {self.date_end} "
-                                f"({diff_days} days missing at end).")
                             
                     self._results_map[self.name]['models'][model_name]['strats'][strat_name]['assets'][asset_name] = {'param_sets': {}}
 
@@ -309,7 +274,6 @@ class Operation(BaseClass):
                                         sig_cache[sig_hash][sig_name] = np.asarray(sig_val, dtype==np.float64)
                         else: pass
 
-                    print(f"   > [DEBUG] sig_cache unique hashes: {len(sig_cache)} / {n_ps} param_sets")
                     print(f"   > [OP] fase1={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
 
                     # ── Fase 2: Indicators Pool ────────────────────────────────
@@ -324,6 +288,7 @@ class Operation(BaseClass):
                                 if pool_key not in indicators_pool:
                                     indicators_pool[pool_key] = values
                                 ps_ind_col_keys[ps_name].append(pool_key)
+
                     print(f"   > [OP] fase2={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
                     
                     # ── Fase 3: Arrays de preço derivados → pool ──────────────
@@ -388,9 +353,10 @@ class Operation(BaseClass):
                                 for ps in param_sets:
                                     ps_signal_arrays[ps].pop(sig_name, None)
  
-                    print(f"   > Pool: {len(indicators_pool)} cols | "
+                    print(f"   > [Pool]: {len(indicators_pool)} cols | "
                           f"Shared bin: {len(shared_signal_arrays)} | Param_sets: {n_ps}")
                     print(f"   > [OP] fase4={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
+
                     # ── Fase 5: Monta asset_batch ──────────────────────────────
                     smm = strat_obj.strat_money_manager  # None → neutro
 
@@ -471,7 +437,7 @@ class Operation(BaseClass):
                     )
                     all_sim   = list(asset_batch.pop("simulations"))
                     n_batches = math.ceil(n_ps / batch_size)
-                    print(f"   > Batching: {n_ps} sims | batch_size={batch_size} | n_batches={n_batches}")
+                    print(f"   > [Batching]: {n_ps} sims | batch_size={batch_size} | n_batches={n_batches}")
  
                     # ── Fase 6: Envio para C++ ─────────────────────────────────
                     all_ps_names = [s.get("id", "") for s in all_sim]
@@ -499,6 +465,7 @@ class Operation(BaseClass):
                             print(f"   > WFM Matrix generated for {model_name} | {strat_name} | {asset_name}: {matrix_pnl.shape}")
                         except Exception as e:
                             print(f"   > Error generating WFM Matrix: {e}")
+
                     print(f"   > [OP] fase5_prep={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
         return True
     
@@ -1045,10 +1012,10 @@ class Operation(BaseClass):
 
     def _report_pnl_summary(
         self,
-        load_from_storage: bool = False,
         model:             Optional[str] = None,
         strat:             Optional[str] = None,
         asset:             Optional[str] = None,
+        load_from_storage: bool = True,
     ):
         """
         Imprime resumo de performance por parset.
@@ -1139,10 +1106,10 @@ class Operation(BaseClass):
 
     def _plot_pnl_curves(
         self,
-        load_from_storage: bool = False,
         model:             Optional[str] = None,
         strat:             Optional[str] = None,
         asset:             Optional[str] = None,
+        load_from_storage: bool = True,
         mode:              str = 'param_sets',
     ):
         """
@@ -1229,13 +1196,12 @@ class Operation(BaseClass):
         plt.tight_layout()
         plt.show()
 
-
     def _plot_wfm(
         self,
-        load_from_storage: bool = False,
         model:             Optional[str] = None,
         strat:             Optional[str] = None,
         asset:             Optional[str] = None,
+        load_from_storage: bool = True,
     ):
         """
         Plota resultados do Walkforward — todas as configs IS/OS.
@@ -1418,8 +1384,6 @@ class Operation(BaseClass):
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        import time
-        t0 = time.perf_counter()
         self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
@@ -1428,13 +1392,11 @@ class Operation(BaseClass):
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        t1 = time.perf_counter()
-        print(f"   > [PERF] in operation: {t1-t0:.3f}s")
         self._run_walkforward()
 
-        #self._report_pnl_summary(False)
-        #self._plot_pnl_curves(False)
-        #self._plot_wfm(False)
+        #self._report_pnl_summary()
+        #self._plot_pnl_curves()
+        self._plot_wfm()
 
         # V - Portfolio Simulation
         print(f"\n>>> V - Portfolio Simulation <<<")
@@ -1443,8 +1405,6 @@ class Operation(BaseClass):
         return self._results_map
 
 # || ======================================================================================================================================================================= ||
-
-
 
 if __name__ == "__main__":
     eurusd = Asset(
@@ -1612,62 +1572,6 @@ if __name__ == "__main__":
             '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
         }
 
-    # XXX - Recriar ponte py - cpp - py
-    # XXX - Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
-    # XXX - Optimization 
-
-    # XXX - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
-    #talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
-    # XXX - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator. Redundante salvar lado/asset/model/strat, se orientar pelo _results_map
-    # XXX - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
-
-    # XXX - Substituir dist_signal_ref e dist_fixed por uma serie opcional de quanto seria a distância para considerar o calculo, para caso precise e não tenha SL
-    # XXX - Corrigir bug compound_fract_series
-    
-    # XXX - Develop start_date - end_date for operation
-    # XXX - Create method to save results and clear _results_map
-
-    # - Modernize Classes
-    # - Adicionar novo Backtester para Close-Close, Open-Open.
-
-    # - Create SQL database for HTML panel
-    # - Panel with all model-strat-asset-parest/wf results, can filter between all, select analysis, plots, and CRUD Portfolio with results, for Portfolio Simulation 
-
-    # - SM and MM for Portfolio and Models
-
-    # - Dev Roadmap png/list 
-    # - Deselop SM selection system for Models/Strats/Assets
-    # - Develop Portfolio Simulator
-    # - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
-
-    # - Modify HTF-LTF function to work from LTF to HTF also
-    # - Monte Carlo
-
-    # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
-    # - Vectorized and not vectorized [i] backtest
-    # - Implement tick backtest as data and timeframe [1 tick, 5, 20, etc] for calculations
-
-    """
-    WFM lot_size (DailyResult)
-    └── Backtest individual
-    └── SMM definido → lot_size real (regras próprias da strat)
-    └── SMM não definido → lot_size = 1.0
-
-    Walkforward Analysis
-    └── usa lot_size do DailyResult como está
-    → reflete a gestão real da strat isolada
-
-    Portfolio Simulator
-    └── recebe capital alocado de MMM/PMM
-    → sobrescreve lot_size com novo calc_lot_size(capital_alocado)
-    → mesmas regras do SMM, capital diferente
-    → resultado: WFM ajustado pro contexto do portfolio
-    """
-    
-    # - Best leave for PS? Scale in/out of open trade, can use entry/exit signals or new specific signals, must be able to handle market or limit/stop orders, how will this handle in Portfolio Simulator?
-    # - Update position in backtest (for multiple entries) must have daily returns update with lot_size update
-    # PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
-
     AT15 = Strat(
         StratParams(
             name="AT15",
@@ -1723,8 +1627,49 @@ if __name__ == "__main__":
     operation.run()
 
 
+""" ||===================================================|| TASKS ||===================================================||
+
+# XXX - Recriar ponte py - cpp - py
+# XXX - Recriar sistema de regras para ficar mais simples (py gera sinal - cpp executa)
+# XXX - Optimization 
+
+# XXX - Existe um problema no updated pnl daily, se eu considero um novo parset com trade comprado ainda vou estar simulando a variação baseada na abertura, como tratar? \
+#talvez colocar que se trocou o parset e o parset novo já tem trade aberto ele considera a variação do pct_change e não do (close-open)/open, logo qualquer nova variação negativa -, positiva +
+# XXX - Adicionar lado, WFM que pode selecionar optmizize LONG, SHORT or BOTH sides tanto em WFM quanto Portfolio Simulator. Redundante salvar lado/asset/model/strat, se orientar pelo _results_map
+# XXX - Desenvolver MM sistema de slippage, lot, comission, etc; Tanto em py tanto cpp, Model lida com Asset
+
+# XXX - Substituir dist_signal_ref e dist_fixed por uma serie opcional de quanto seria a distância para considerar o calculo, para caso precise e não tenha SL
+# XXX - Corrigir bug compound_fract_series
+
+# XXX - Develop start_date - end_date for operation
+# XXX - Create method to save results and clear _results_map
+
+# XXX - Modernize Classes
+# - Adicionar novo Backtester para Close-Close, Open-Open.
+
+# - Create SQL database for HTML panel
+# - Panel with all model-strat-asset-parest/wf results, can filter between all, select analysis, plots, and CRUD Portfolio with results, for Portfolio Simulation 
+
+# - SM and MM for Portfolio and Models
+
+# - Dev Roadmap png/list 
+# - Deselop SM selection system for Models/Strats/Assets
+# - Develop Portfolio Simulator
+# - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
+
+# - Modify HTF-LTF function to work from LTF to HTF also
+# - Monte Carlo
+
+# - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
+# - Vectorized and not vectorized [i] backtest
+# - Implement tick backtest as data and timeframe [1 tick, 5, 20, etc] for calculations
+
+# - Best leave for PS? Scale in/out of open trade, can use entry/exit signals or new specific signals, must be able to handle market or limit/stop orders, how will this handle in Portfolio Simulator?
+# - Update position in backtest (for multiple entries) must have daily returns update with lot_size update
+# PortfolioSimulator deve ter a opção de ter uma matrix de covariancia para models uma para strats e uma para assets? talvez uma que armazene as posições selecionadas apenas?
 
 
+"""
 
 
 

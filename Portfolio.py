@@ -1,8 +1,7 @@
 # Holds >1 models, doesn't define Assets, Server uniquely to Manage Positions between multiple models has to dominate over all MMM and MMA
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
-from BaseClass import BaseClass
+from typing import Optional
 from PortfolioSystemManager import PortfolioSystemManager
 from PortfolioMoneyManager import PortfolioMoneyManager
 import uuid
@@ -14,7 +13,7 @@ class PortfolioParams():
     portfolio_money_manager: Optional['PortfolioMoneyManager'] = None
     portfolio_system_manager: Optional['PortfolioSystemManager'] = None
 
-class Portfolio(BaseClass): 
+class Portfolio(): 
     def __init__(self, portfolio_params: PortfolioParams):
         super().__init__()
         self.name = portfolio_params.name

@@ -1,8 +1,7 @@
 import polars as pl, pandas as pd, numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from datetime import datetime, timedelta
-from typing import List, Literal, Dict, Any, Union
+from typing import List, Literal, Dict
 
 # Defines types to facilitate reuse
 SortOrder = Literal['asc', 'des']
