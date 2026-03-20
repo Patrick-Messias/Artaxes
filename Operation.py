@@ -3,7 +3,7 @@ sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indi
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
 from webbrowser import get
-from typing import Union, Dict, List, Optional, Any
+from typing import Union, Dict, Literal, Optional, Any
 from dataclasses import dataclass, field, asdict, is_dataclass
 from Model import ModelParams, Model
 from Asset import Asset, AssetParams
@@ -81,6 +81,7 @@ class OperationParams():
 
     # Settings
     operation_timeframe: str=None
+    backtest_mode: Literal["ohlc", "close-close", "open-open", "avg_price", "ohlc_m1", "tick"] = "ohlc"
     date_start: str=None
     date_end: str=None
     save: bool=False
@@ -95,6 +96,7 @@ class Operation(BaseClass):
         self.metrics = op_params.metrics
 
         self.operation_timeframe = op_params.operation_timeframe
+        self.backtest_mode = op_params.backtest_mode
         self.date_start = op_params.date_start
         self.date_end = op_params.date_end
         self.save = op_params.save
@@ -1622,24 +1624,29 @@ if __name__ == "__main__":
     # XXX - Substituir dist_signal_ref e dist_fixed por uma serie opcional de quanto seria a distância para considerar o calculo, para caso precise e não tenha SL
     # XXX - Corrigir bug compound_fract_series
     
-    # - Develop start_date - end_date for operation
-    # - Create method to save results and clear _results_map
+    # XXX - Develop start_date - end_date for operation
+    # XXX - Create method to save results and clear _results_map
 
-    # - Divisão Backtest OOS simples em Monte Carlo
-    # - Plot long list with small leters with selectable mode-strat-asset-parest/wf results
-    # - List above should show parset ps_id and param_set_key for all OS wfm results
     # - Modernize Classes
-
-    # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
-    # - Adicionar novo Backtester para Close-Close, Open-Open, Tick. Vetoriazado e não vetorizado [i]
-    # - Modify HTF-LTF function to work from LTF to HTF also
+    # - Adicionar novo Backtester para Close-Close, Open-Open.
 
     # - Create SQL database for HTML panel
+    # - Panel with all model-strat-asset-parest/wf results, can filter between all, select analysis, plots, and CRUD Portfolio with results, for Portfolio Simulation 
+
+    # - SM and MM for Portfolio and Models
 
     # - Dev Roadmap png/list 
     # - Deselop SM selection system for Models/Strats/Assets
     # - Develop Portfolio Simulator
     # - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
+
+    # - Modify HTF-LTF function to work from LTF to HTF also
+    # - Monte Carlo
+
+    # - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
+    # - Vectorized and not vectorized [i] backtest
+    # - Implement tick backtest as data and timeframe [1 tick, 5, 20, etc] for calculations
+
     """
     WFM lot_size (DailyResult)
     └── Backtest individual
