@@ -15,7 +15,8 @@ struct Trade {
     double take_profit    = 0.0;
     double max_fav_price  = 0.0;
     double max_adv_price  = 0.0;
-    double prev_day_price = 0.0;
+    double daily_pnl_accum = 0.0; 
+    //double prev_day_price = 0.0;
     double mfe            = 0.0;
     double mae            = 0.0;
     double exit_price     = 0.0;

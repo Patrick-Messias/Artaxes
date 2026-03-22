@@ -166,16 +166,33 @@ SimulationOutput Backtest::run_simulation(
 
         auto resolve_sl = [&](bool is_long, double fill, int idx) -> double {
             const RefResult& rp = is_long ? ref_sl_price_long : ref_sl_price_short;
-            if (ref_valid(rp, idx)) { double v = ref_val(rp, idx); if (v > 0.0) return v; }
+            if (ref_valid(rp, idx)) {
+                double v = ref_val(rp, idx);
+                // pct_mode: SL long é negativo, SL short é positivo — aceita != 0
+                // ohlc: SL é preço absoluto — aceita > 0
+                if (is_pct_mode ? (v != 0.0) : (v > 0.0)) return v;
+            }
             const RefResult& rd = is_long ? ref_sl_long : ref_sl_short;
-            if (ref_valid(rd, idx)) { double v = ref_val(rd, idx); if (v > 0.0) return is_long ? fill - v : fill + v; }
+            if (ref_valid(rd, idx)) {
+                double v = ref_val(rd, idx);
+                if (v > 0.0) return is_long ? fill - v : fill + v;
+            }
             return 0.0;
         };
+
         auto resolve_tp = [&](bool is_long, double fill, int idx) -> double {
             const RefResult& rp = is_long ? ref_tp_price_long : ref_tp_price_short;
-            if (ref_valid(rp, idx)) { double v = ref_val(rp, idx); if (v > 0.0) return v; }
+            if (ref_valid(rp, idx)) {
+                double v = ref_val(rp, idx);
+                // pct_mode: TP long é positivo, TP short é negativo — aceita != 0
+                // ohlc: TP é preço absoluto — aceita > 0
+                if (is_pct_mode ? (v != 0.0) : (v > 0.0)) return v;
+            }
             const RefResult& rd = is_long ? ref_tp_long : ref_tp_short;
-            if (ref_valid(rd, idx)) { double v = ref_val(rd, idx); if (v > 0.0) return is_long ? fill + v : fill - v; }
+            if (ref_valid(rd, idx)) {
+                double v = ref_val(rd, idx);
+                if (v > 0.0) return is_long ? fill + v : fill - v;
+            }
             return 0.0;
         };
 
@@ -239,10 +256,10 @@ SimulationOutput Backtest::run_simulation(
             if (is_pct_mode) {
                 // pct_change: profit acumulado barra a barra no trade
                 net_pnl = t.profit;  // acumulado em update_pct_pnl
-                dv      = raw_exit * (is_long ? 1.0 : -1.0);  // retorno da barra de saída
+                dv      = t.daily_pnl_accum;  // retorno da barra de saída
             } else {
                 net_pnl = (((exit_price - entry) - commission) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
-                double prev_p = t.prev_day_price;
+                double prev_p = t.daily_pnl_accum;
                 dv = (((exit_price - prev_p) - commission) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
             }
  
@@ -295,7 +312,7 @@ SimulationOutput Backtest::run_simulation(
  
             t.max_fav_price  = is_pct_mode ? 0.0 : fill;
             t.max_adv_price  = is_pct_mode ? 0.0 : fill;
-            t.prev_day_price = fill;
+            t.daily_pnl_accum  = is_pct_mode ? 0.0 : fill;
  
             // Trailing (só faz sentido em modos price absoluto)
             if (!is_pct_mode) {
@@ -333,18 +350,20 @@ SimulationOutput Backtest::run_simulation(
         // Acumula retorno pct barra a barra para trades abertos em pct_mode
         // Também verifica SL/TP em retorno acumulado
         auto update_pct_pnl = [&](Trade& t, bool is_long, double price_i) -> bool {
-            double ret  = price_i * (is_long ? 1.0 : -1.0);
-            t.profit   += ret;  // acumula retorno
+            double ret         = price_i * (is_long ? 1.0 : -1.0);
+            t.profit          += ret;          // acumula total — para close_trade e SL/TP
+            t.daily_pnl_accum   += ret;          // acumula diário — para daily snapshot
+
             if (ret > 0.0) t.max_fav_price += ret;
             else           t.max_adv_price += ret;
- 
+
             double sl = t.stop_loss;
             double tp = t.take_profit;
             bool hit_sl = (sl != 0.0 && t.profit <= sl);
             bool hit_tp = (tp != 0.0 && t.profit >= tp);
-            return hit_sl || hit_tp;  // retorna true se deve fechar
+            return hit_sl || hit_tp;
         };
-
+        
         // ═════════════════════════════════════════════════════════════════════
         // MAIN LOOP
         // ═════════════════════════════════════════════════════════════════════
@@ -375,29 +394,25 @@ SimulationOutput Backtest::run_simulation(
             bool do_exit_long  = sig_exit_long   && sig_exit_long[i]   != 0;
             bool do_exit_short = sig_exit_short  && sig_exit_short[i]  != 0;
  
+
             // ── 1. EXIT LOGIC ─────────────────────────────────────────────────
             {
                 auto it = active_trades.begin();
                 while (it != active_trades.end()) {
                     bool is_long = (it->lot_size > 0.0);
-                    std::string reason;
- 
-                    if      (is_long ? do_exit_long : do_exit_short)               reason = "TF";
-                    else if ([&]() {
-                        int nb = is_long ? nb_long : nb_short;
-                        if (nb <= 0 || it->bars_held < nb) return false;
-                        if (exit_nb_only_if_pnl == 0) return true;
-                        double p = is_pct_mode
-                            ? it->profit
-                            : (fill_price - it->entry_price) / it->entry_price * (is_long?1:-1);
-                        return (exit_nb_only_if_pnl > 0) ? p > 0 : p < 0;
-                    }())                                                            reason = "NB";
-                    else if (is_daytrade && (dt_final||day_switched||is_last_bar)) reason = "DT";
-                    else if (!close_days.empty() && close_days.count(bar_days[i])) reason = "WC";
-                    else if (is_last_bar)                                          reason = "EF";
- 
-                    // BE trigger (só price absoluto)
-                    if (!is_pct_mode) {
+
+                    // pct_mode: acumula retorno PRIMEIRO, depois verifica saídas
+                    if (is_pct_mode) {
+                        bool hit = update_pct_pnl(*it, is_long, close[i]);
+                        if (hit) {
+                            std::string r = (it->profit <= it->stop_loss) ? "SL" : "TP";
+                            close_trade(*it, fill_price, r, i, is_long);
+                            trades.push_back(*it);
+                            it = active_trades.erase(it);
+                            continue;
+                        }
+                    } else {
+                        // BE trigger e trailing só em price absoluto
                         const RefResult& be_r = is_long ? ref_be_long : ref_be_short;
                         if (ref_valid(be_r, i)) {
                             double be_v = ref_val(be_r, i);
@@ -412,7 +427,22 @@ SimulationOutput Backtest::run_simulation(
                         }
                         update_trailing(*it, is_long, fill_price, i);
                     }
- 
+
+                    std::string reason;
+                    if      (is_long ? do_exit_long : do_exit_short)               reason = "TF";
+                    else if ([&]() {
+                        int nb = is_long ? nb_long : nb_short;
+                        if (nb <= 0 || it->bars_held < nb) return false;
+                        if (exit_nb_only_if_pnl == 0) return true;
+                        double p = is_pct_mode
+                            ? it->profit
+                            : (fill_price - it->entry_price) / it->entry_price * (is_long?1:-1);
+                        return (exit_nb_only_if_pnl > 0) ? p > 0 : p < 0;
+                    }())                                                            reason = "NB";
+                    else if (is_daytrade && (dt_final||day_switched||is_last_bar)) reason = "DT";
+                    else if (!close_days.empty() && close_days.count(bar_days[i])) reason = "WC";
+                    else if (is_last_bar)                                          reason = "EF";
+
                     if (!reason.empty()) {
                         close_trade(*it, fill_price, reason, i, is_long);
                         trades.push_back(*it);
@@ -420,7 +450,7 @@ SimulationOutput Backtest::run_simulation(
                     } else { ++it; }
                 }
             }
- 
+
             // ── 2. PENDING ORDERS ─────────────────────────────────────────────
             // Ordens pendentes só fazem sentido em ohlc (price absoluto com high/low)
             if (!is_price_only) {
@@ -551,21 +581,12 @@ SimulationOutput Backtest::run_simulation(
                 auto it = active_trades.begin();
                 while (it != active_trades.end()) {
                     bool is_long = (it->lot_size > 0.0);
- 
+
                     if (is_pct_mode) {
-                        // pct_mode: acumula retorno e verifica SL/TP em % acumulado
-                        bool should_close = update_pct_pnl(*it, is_long, close[i]);
-                        if (should_close) {
-                            std::string reason = (it->profit <= it->stop_loss) ? "SL" : "TP";
-                            close_trade(*it, close[i], reason, i, is_long);
-                            trades.push_back(*it);
-                            it = active_trades.erase(it);
-                        } else {
-                            it->bars_held++;
-                            ++it;
-                        }
+                        // já processado na Seção 1 — só incrementa bars_held
+                        it->bars_held++;
+                        ++it;
                     } else {
-                        // price absoluto: verifica SL/TP via check_high/check_low
                         update_trailing(*it, is_long, is_long ? check_high : check_low, i);
                         double sl=it->stop_loss, tp=it->take_profit;
                         bool hit_sl = is_long?(sl>0&&check_low<=sl):(sl>0&&check_high>=sl);
@@ -606,13 +627,13 @@ SimulationOutput Backtest::run_simulation(
                         // pct_mode: dv já foi acumulado em update_pct_pnl
                         // emite o retorno acumulado desde o último daily snapshot
                         // e reseta o acumulador diário
-                        dv = trade.profit;  // retorno acumulado do período
-                        trade.profit = 0.0; // reseta para próximo período diário
+                        dv = trade.daily_pnl_accum ;  // retorno acumulado do período
+                        trade.daily_pnl_accum  = 0.0; // reseta para próximo período diário
                     } else {
-                        double prev_p = trade.prev_day_price;
+                        double prev_p = trade.daily_pnl_accum ;
                         double curr_p = close[i];
                         dv = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
-                        trade.prev_day_price = curr_p;
+                        trade.daily_pnl_accum  = curr_p;
                     }
  
                     daily_results_matrix.push_back({
@@ -633,4 +654,3 @@ SimulationOutput Backtest::run_simulation(
     output.daily_vec = std::move(daily_results_matrix);
     return output;
 }
-

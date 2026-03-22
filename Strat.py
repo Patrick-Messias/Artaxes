@@ -30,6 +30,7 @@ class ExecutionSettings:
     # 'close-close' → executa apenas no fechamento, sem verificação intrabar
     # 'open-open'   → executa apenas na abertura
     # 'avg_price'   → preço = (o+h+l+c)/4
+    convert_sltp_to_pct: bool = False
 
     # ── Day Trade / Horários ──────────────────────────────────────────────────
     day_trade:                      bool                = False
