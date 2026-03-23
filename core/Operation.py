@@ -1,5 +1,5 @@
 import polars as pl, numpy as np, json, sys, uuid, math, psutil, re, itertools
-sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\Indicators')
+sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
 from typing import Union, Dict, Optional, Any
@@ -1550,7 +1550,6 @@ class Operation():
                     if res_key:
                         wfm_engine.plot_advanced_heatmap(metric=res_key)
 
-
     # || ===================================================================== || Walkforward || ===================================================================== ||
 
     def _run_walkforward(self):
@@ -1636,7 +1635,6 @@ class Operation():
  
         return True
     
-
     # || ======================================================================================================================================================================= ||
                         
     def run(self):
@@ -1910,7 +1908,10 @@ if __name__ == "__main__":
 # XXX - Modernize Classes
 # XXX - Adicionar novo Backtester para Close-Close, Open-Open.
 
-# - Create SQL database for HTML panel
+# - Create backend and frontend for results panel
+#   - Schema DuckDB: Metadata tables + views over all existing parquets
+#   - FastAPI: Endpoints REST to list and consult results, WebSocket for streaming of backtest progress
+#   - React + TS: Frontend consumes API, selected results basket, plots graphs
 # - Panel with all model-strat-asset-parest/wf results, can filter between all, select analysis, plots, and CRUD Portfolio with results, for Portfolio Simulation 
 
 # - SM and MM for Portfolio and Models
@@ -1923,7 +1924,10 @@ if __name__ == "__main__":
 # - Modify HTF-LTF function to work from LTF to HTF also
 # - Monte Carlo
 
-# - Adicionar Backtest M1 (procura converter sinais para M1 se dado disponível)
+# - Parquet parset save for very high ammount of parsets, for >2000 parsets per strat freezes
+# - Option to save and use only Trade or daily returns
+
+# - Add M1 Backtest (Converts current datetime into M1 signals if asset's data is available) 
 # - Vectorized and not vectorized [i] backtest
 # - Implement tick backtest as data and timeframe [1 tick, 5, 20, etc] for calculations
 

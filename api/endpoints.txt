@@ -1,0 +1,24 @@
+GET  /operations                    → lista todas operations
+POST /operations/populate/{name}    → popula DuckDB de results/
+GET  /operations/{name}/summary     → models/strats/assets/parsets
+GET  /param-sets                    → seletor de cesta (filtros)
+GET  /param-sets/{id}/trades        → trades de um parset
+GET  /param-sets/{id}/pnl-matrix    → daily returns
+POST /assets                        → cadastra asset
+GET  /assets                        → lista assets
+WS   /ws/backtest                   → WebSocket streaming de progresso
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
