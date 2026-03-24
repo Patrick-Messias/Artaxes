@@ -1909,10 +1909,17 @@ if __name__ == "__main__":
 # XXX - Adicionar novo Backtester para Close-Close, Open-Open.
 
 # - Create backend and frontend for results panel
-#   - Schema DuckDB: Metadata tables + views over all existing parquets
-#   - FastAPI: Endpoints REST to list and consult results, WebSocket for streaming of backtest progress
-#   - React + TS: Frontend consumes API, selected results basket, plots graphs
+    - Schema DuckDB: Metadata tables + views over all existing parquets
+    - FastAPI: Endpoints REST to list and consult results, WebSocket for streaming of backtest progress
+    - React + TS: Frontend consumes API, selected results basket, plots graphs
 # - Panel with all model-strat-asset-parest/wf results, can filter between all, select analysis, plots, and CRUD Portfolio with results, for Portfolio Simulation 
+    - Setup — package.json, vite.config.ts, tailwind.config.js, tsconfig.json
+    - Types + API client — types/index.ts, api/client.ts
+    - Store — store/basket.ts
+    - App + Layout — App.tsx, main.tsx
+    - Sidebar — Sidebar.tsx, FilterBar.tsx, ModeA.tsx, ModeB.tsx
+    - Basket — Basket.tsx, BasketItem.tsx
+    - Chart — EquityChart.tsx, BenchmarkSelector.tsx
 
 # - SM and MM for Portfolio and Models
 

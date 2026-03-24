@@ -1,0 +1,99 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36" version="28.1.0">
+  <diagram name="Page-1" id="pKMM0n6ajR7tGVyxCfVk">
+    <mxGraphModel dx="1169" dy="462" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-11" value="Asset(BaseClass)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="10" y="240" width="270" height="300" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-12" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;name: str&lt;br&gt;type: str&lt;br&gt;market: str&lt;br&gt;timeframe: list[str]&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;font-size: 8px;&quot;&gt;data_path: str&lt;br&gt;**kwargs&lt;/font&gt;&lt;/div&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-11">
+          <mxGeometry y="26" width="270" height="94" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-13" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-11">
+          <mxGeometry y="120" width="270" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-14" value="&lt;font style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def&amp;nbsp;get_default_params(self)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def register_asset_params(name: str, type: str, market: str, params: dict)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def data_add(self, timeframe: str, data: pd.DataFrame)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def data_refresh(self, timeframe: str)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def data_is_empty(self, timeframe: str) -&amp;gt; bool&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def data_get(self, timeframe: str)&amp;nbsp;&lt;/span&gt;&lt;/font&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;-&amp;gt; pd.DataFrame&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def timeframes_list(self) -&amp;gt; list[str]&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def timeframes_load_available(self)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def load_unique_assets(assets: dict[str, &quot;Asset&quot;], type: str, market: str, path: str) -&amp;gt; dict[str, &quot;Asset&quot;]&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def predefined_assets() -&amp;gt; dict[str, &quot;Asset&quot;]&lt;/span&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-11">
+          <mxGeometry y="128" width="270" height="172" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-17" value="Asset_Portfolio(BaseClass)" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="10" y="580" width="270" height="270" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-18" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;name: str&lt;br&gt;assets: dict[str, Asset]&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-17">
+          <mxGeometry y="26" width="270" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-19" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-17">
+          <mxGeometry y="60" width="270" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-20" value="&lt;span style=&quot;font-size: 8px;&quot;&gt;def asset_add(self, asset: Asset)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def asset_remove(self, asset_name: str)&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def assets_filter(self, condition: callable) -&amp;gt; list[Asset]&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def asset_get(self, name: str) -&amp;gt; Asset&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def assets_list(self, print_assets: bool = True, sort_by: str = None) -&amp;gt; list&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def data_get(self, timeframes: list[str]) -&amp;gt; dict[str, dict[str, pd.DataFrame]]&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def stats(self) -&amp;gt; dict&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def calculate_correlation(self, timeframe: str, method=&#39;pearson&#39;) -&amp;gt; pd.DataFrame&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def plot_correlation(self, timeframe: str, figsize=(12, 10))&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def preload_data(self, timeframes: list[str], verbose: bool = False) -&amp;gt; None&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def __repr__(self)&lt;/span&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-17">
+          <mxGeometry y="68" width="270" height="202" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-40" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="kWlvczbfiEXIVuEbkbT4-25" target="kWlvczbfiEXIVuEbkbT4-11">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-25" value="@dataclass AssetParams" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=29;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="10" y="10" width="140" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-26" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;tick: float&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="29" width="140" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-27" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;tick_fin_val: float&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="50" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-29" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;lot_value: float&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="70" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-30" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;min_lot: float&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="90" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-31" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;leverage: float&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="110" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-35" value="&lt;span style=&quot;font-size: 8px;&quot;&gt;comissions: float&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="130" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-36" value="&lt;span style=&quot;font-size: 8px;&quot;&gt;slippage: float&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="150" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-37" value="&lt;span style=&quot;font-size: 8px;&quot;&gt;spread: float&lt;/span&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-25">
+          <mxGeometry y="170" width="140" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-42" value="BaseClass" style="swimlane;fontStyle=1;align=center;verticalAlign=middle;childLayout=stackLayout;horizontal=1;startSize=29;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;html=1;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="170" y="10" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-43" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;def get_value(self, attr_value: str=None)&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-42">
+          <mxGeometry y="29" width="240" height="21" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-44" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;delete_value(self, attr_value: str=None)&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-42">
+          <mxGeometry y="50" width="240" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-45" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;def modify_specific_value(self, attr_value: str, new_attr_value)&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-42">
+          <mxGeometry y="70" width="240" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-46" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;def list_values(self)&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-42">
+          <mxGeometry y="90" width="240" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-52" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="kWlvczbfiEXIVuEbkbT4-14" target="kWlvczbfiEXIVuEbkbT4-17">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="145" y="550" />
+              <mxPoint x="145" y="550" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-62" value="@dataclass Indicator" style="swimlane;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=26;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="425" y="10" width="270" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-63" value="&lt;font style=&quot;font-size: 8px;&quot;&gt;name: str&lt;br&gt;params: dict&lt;br&gt;func_path: Optional[str]&lt;br&gt;sliced_data: bool&lt;/font&gt;&lt;div&gt;&lt;font style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;sliced_data_length_param: Optional[str]&amp;nbsp;&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;input_cols: Optional[List[str]]&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;output_name_template: Optional[str]&lt;/span&gt;&lt;/font&gt;&lt;/div&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-62">
+          <mxGeometry y="26" width="270" height="104" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-64" value="" style="line;strokeWidth=1;fillColor=none;align=left;verticalAlign=middle;spacingTop=-1;spacingLeft=3;spacingRight=3;rotatable=0;labelPosition=right;points=[];portConstraint=eastwest;strokeColor=inherit;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-62">
+          <mxGeometry y="130" width="270" height="8" as="geometry" />
+        </mxCell>
+        <mxCell id="kWlvczbfiEXIVuEbkbT4-65" value="&lt;font style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 8px;&quot;&gt;def&amp;nbsp;&lt;/span&gt;&lt;br&gt;&lt;/font&gt;" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=4;spacingRight=4;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;" vertex="1" parent="kWlvczbfiEXIVuEbkbT4-62">
+          <mxGeometry y="138" width="270" height="22" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
