@@ -38,19 +38,40 @@ def operation_summary(name: str, db: Database=Depends(get_db)):
 
 @router.post("/populate/{name}", response_model=PopulateResponse)
 def populate_operation(name: str, db: Database = Depends(get_db)):
-    # Reads results/{name}/ and populates all metadata tables in DuckDB
-    # Safe to call multiple times, idempotent operation
-
     try:
-        op_id = db.populate_operation(name)
+        # Chamamos a função do banco
+        result = db.populate_operation(name)
+        
+        # Se o seu Database.py retornar um dicionário, pegamos o ID dele
+        # Se retornar direto o ID, usamos direto. 
+        # Vou assumir que o Database.py agora retorna o ID (int)
+        
+        if result is None:
+             raise HTTPException(status_code=500, detail="Banco não retornou ID da operação")
+
         return PopulateResponse(
-            operation_id=op_id,
-            message=f"Operation '{name}' populated sucessfully."
+            operation_id=result if isinstance(result, int) else result.get("operation_id"),
+            message=f"Operação '{name}' populada com sucesso!"
         )
-    except FileNotFoundError as e:
-        raise HTTPException(404, str(e))
     except Exception as e:
-        raise HTTPException(500, f"Error populating operation: {e}")
+        print(f"  > [ERROR] {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error populating operation: {str(e)}")
+
+# @router.post("/populate/{name}", response_model=PopulateResponse)
+# def populate_operation(name: str, db: Database = Depends(get_db)):
+#     # Reads results/{name}/ and populates all metadata tables in DuckDB
+#     # Safe to call multiple times, idempotent operation
+
+#     try:
+#         op_id = db.populate_operation(name)
+#         return PopulateResponse(
+#             operation_id=op_id,
+#             message=f"Operation '{name}' populated sucessfully."
+#         )
+#     except FileNotFoundError as e:
+#         raise HTTPException(404, str(e))
+#     except Exception as e:
+#         raise HTTPException(500, f"Error populating operation: {e}")
 
 
 

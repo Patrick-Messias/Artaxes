@@ -5,11 +5,33 @@
 -- All tables below are Metadata, hard data is located in disk
 -- ═══════════════════════════════════════════════════════════════════════════
 
+-- Adicione estas sequências no topo do arquivo
+CREATE SEQUENCE IF NOT EXISTS seq_operations_id;
+CREATE SEQUENCE IF NOT EXISTS seq_models_id;
+CREATE SEQUENCE IF NOT EXISTS seq_strats_id;
+CREATE SEQUENCE IF NOT EXISTS seq_assets_id;
+CREATE SEQUENCE IF NOT EXISTS seq_assets_group_id;
+CREATE SEQUENCE IF NOT EXISTS seq_param_sets_id;
+CREATE SEQUENCE IF NOT EXISTS seq_param_sets_id;
+CREATE SEQUENCE IF NOT EXISTS seq_portfolio_simulation_id;
+CREATE SEQUENCE IF NOT EXISTS seq_wf_results_id;
+CREATE SEQUENCE IF NOT EXISTS seq_portfolio_position_id;
+CREATE SEQUENCE IF NOT EXISTS seq_portfolio_daily_results_id;
+
+CREATE TABLE IF NOT EXISTS operations (
+    id              INTEGER PRIMARY KEY DEFAULT nextval('seq_operations_id'),
+    name            VARCHAR NOT NULL UNIQUE,
+    date_start      TIMESTAMP,
+    date_end        TIMESTAMP,
+    status          VARCHAR DEFAULT 'idle',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ── ASSET_GROUPS ─────────────────────────────────────────────────────────────
 -- Shared parameters for groups of assets (ex: all SP500 stocks share same tick)
 -- Asset inherits group parameters when its own field is NULL
 CREATE TABLE IF NOT EXISTS asset_groups (
-    id              INTEGER PRIMARY KEY,
+    id              INTEGER PRIMARY KEY DEFAULT nextval('seq_assets_group_id'),
     name            VARCHAR NOT NULL,           -- ex: 'SP500', 'Forex Majors'
     market          VARCHAR,
     tick            DOUBLE,
@@ -24,9 +46,10 @@ CREATE TABLE IF NOT EXISTS asset_groups (
 -- Technical data of each Asset
 -- If group_id is set, inherits NULL fields from asset_groups
 CREATE TABLE IF NOT EXISTS assets (
-    id              INTEGER PRIMARY KEY,
+    id              INTEGER PRIMARY KEY DEFAULT nextval('seq_assets_id'),
+    operation_id    INTEGER,
     group_id        INTEGER REFERENCES asset_groups(id),  -- optional group inheritance
-    name            VARCHAR NOT NULL,
+    name            VARCHAR NOT NULL UNIQUE,
     type            VARCHAR,
     market          VARCHAR,
     tick            DOUBLE,
@@ -38,21 +61,21 @@ CREATE TABLE IF NOT EXISTS assets (
     swap_long       DOUBLE,
     swap_short      DOUBLE,
     data_path       VARCHAR,
-    created_at      TIMESTAMP DEFAULT NOW()
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ── OPERATIONS ───────────────────────────────────────────────────────────────
 -- Every time that the user does a full backtest it turns into an operation
 -- This is the container of everything that has been calculated in that round
 CREATE TABLE IF NOT EXISTS operations (
-    id              INTEGER PRIMARY KEY,        
+    id              INTEGER PRIMARY KEY DEFAULT nextval('seq_operations_id'),        
     name            VARCHAR NOT NULL UNIQUE,    -- ex: 'op_eurusd_2020'
     date_start      DATE,                       -- backtest period start
     date_end        DATE,                       -- backtest period end
     op_timeframe    VARCHAR,                    -- operation's main timeframe
     status          VARCHAR DEFAULT 'pending',  -- pending | running | done | erro
     results_path    VARCHAR,                    -- parquet results base path: results/{name}/ 
-    create_at       TIMESTAMP DEFAULT NOW(),   
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,   
     finished_at     TIMESTAMP
 );
 
@@ -60,7 +83,7 @@ CREATE TABLE IF NOT EXISTS operations (
 -- Enside ever operation, models defined by user
 -- Models group Strat(s) and Asset(s) 
 CREATE TABLE IF NOT EXISTS models (
-    id              INTEGER PRIMARY KEY,
+    id              INTEGER PRIMARY KEY DEFAULT nextval('seq_models_id'),
     operation_id    INTEGER NOT NULL REFERENCES operations(id),
     name            VARCHAR NOT NULL,   -- ex: 'MA Trend Following'
     exec_tf         VARCHAR             -- execution timeframe: 'M15', 'H1', etc
@@ -68,7 +91,7 @@ CREATE TABLE IF NOT EXISTS models (
 
 -- ── MODEL_ASSETS ─────────────────────────────────────────────────────────────
 -- Junction table: which assets each model uses
--- A model can have multiple assets; an asset can appear in multiple models
+-- A model can have multiple assets an asset can appear in multiple models
 CREATE TABLE IF NOT EXISTS model_assets (
     model_id        INTEGER NOT NULL REFERENCES models(id),
     asset_id        INTEGER NOT NULL REFERENCES assets(id),
@@ -77,7 +100,7 @@ CREATE TABLE IF NOT EXISTS model_assets (
 
 -- ── STRATS ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS strats (
-    id                      INTEGER PRIMARY KEY,                        
+    id                      INTEGER PRIMARY KEY DEFAULT nextval('seq_strats_id'),                        
     model_id                INTEGER NOT NULL REFERENCES models(id),
     name                    VARCHAR NOT NULL,                           -- ex: 'AT15'
     backtest_mode           VARCHAR DEFAULT 'ohlc',                     -- ohlc | open | close | open-open | close-close | avg_price | ohlc_m1 | tick
@@ -92,7 +115,7 @@ CREATE TABLE IF NOT EXISTS strats (
 -- Every combination of parameters worked in Strat/Asset
 -- Points to parquets in disk, DuckDB read directly without copying data
 CREATE TABLE IF NOT EXISTS param_sets (
-    id                      INTEGER PRIMARY KEY,
+    id                      INTEGER PRIMARY KEY DEFAULT nextval('seq_param_sets_id'),
     strat_id                INTEGER NOT NULL REFERENCES strats(id),
     asset_id                INTEGER NOT NULL REFERENCES assets(id),
     name                    VARCHAR NOT NULL,                           -- ex: 'param_set-8-2'
@@ -102,14 +125,14 @@ CREATE TABLE IF NOT EXISTS param_sets (
     lot_matrix_path         VARCHAR,                                    -- parquet path for lot_matrix
     n_trades                INTEGER,                                    -- total trades (cache with quick queries)
     total_pnl               DOUBLE,                                     -- PnL total % (cache)
-    created_at              TIMESTAMP DEFAULT NOW()
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ── WF_RESULTS ───────────────────────────────────────────────────────────────
 -- Walkforward results reference by Strat/Asset
 -- Doesn't copy JSON, only saves path for reading on demmand
 CREATE TABLE IF NOT EXISTS wf_results (
-    id                      INTEGER PRIMARY KEY,
+    id                      INTEGER PRIMARY KEY DEFAULT nextval('seq_wf_results_id'),
     strat_id                INTEGER NOT NULL REFERENCES strats(id),
     asset_id                INTEGER NOT NULL REFERENCES assets(id),
     json_path               VARCHAR NOT NULL,                           -- path to all_wf_results.json
@@ -124,19 +147,19 @@ CREATE TABLE IF NOT EXISTS wf_results (
     wf_select_metric        VARCHAR,                                    -- metric used 'wfe', 'pnl', etc
     wf_selection_analysis_radius_n  INTEGER,
     wf_select_logic         VARCHAR,
-    created_at              TIMESTAMP DEFAULT NOW()
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ── PORTFOLIO_SIMULATION ─────────────────────────────────────────────────────
 -- Every portfolio simulation created by the user
 -- Can combie param_set from multiple operations
 CREATE TABLE IF NOT EXISTS portfolio_simulation(
-    id                      INTEGER PRIMARY KEY,
+    id                      INTEGER PRIMARY KEY DEFAULT nextval('seq_portfolio_simulation_id'),
     name                    VARCHAR NOT NULL,                           -- ex: 'sim_forex_2023'
     operation_ids           INTEGER[],                                  -- operation_ids array included
     config_json             JSON,                                       -- config of the simulation (capital, MM, etc)
     status                  VARCHAR DEFAULT 'pending',
-    created_at              TIMESTAMP DEFAULT NOW(),
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     finished_at             TIMESTAMP
 );
 
@@ -144,7 +167,7 @@ CREATE TABLE IF NOT EXISTS portfolio_simulation(
 -- Detailed book of every position enside a simulation
 -- Registers everything of every trade simulated in portfolio
 CREATE TABLE IF NOT EXISTS portfolio_position (
-    id                      BIGINT PRIMARY KEY,
+    id                      BIGINT PRIMARY KEY DEFAULT nextval('seq_portfolio_position_id'),
     sim_id                  INTEGER NOT NULL REFERENCES portfolio_simulation(id),
     datetime                TIMESTAMP NOT NULL,                         -- Entry moment
     asset_id                INTEGER REFERENCES assets(id),
@@ -164,10 +187,10 @@ CREATE TABLE IF NOT EXISTS portfolio_position (
 
 -- ── PORTFOLIO_DAILY_RESULTS ──────────────────────────────────────────────────
 -- Light version with only [datetime, pnl_total] for quick calculations
--- Equity curve, drawdown, sharpe, etc; Everything runs in SQL with this table
+-- Equity curve, drawdown, sharpe, etc Everything runs in SQL with this table
 -- without needing to open detailed positions
 CREATE TABLE IF NOT EXISTS portfolio_daily_results (
-    id                      BIGINT PRIMARY KEY,
+    id                      BIGINT PRIMARY KEY DEFAULT nextval('seq_portfolio_daily_results_id'),
     sim_id                  INTEGER NOT NULL REFERENCES portfolio_simulation(id),
     datetime                TIMESTAMP NOT NULL,
     total_pnl               DOUBLE,                                     -- sum of all PnL of the day

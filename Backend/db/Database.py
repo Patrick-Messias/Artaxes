@@ -15,9 +15,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
-DB_PATH      = Path(os.getenv("DB_PATH",      "./db/art.duckdb"))
-RESULTS_PATH = Path(os.getenv("RESULTS_PATH", "./results"))
-SCHEMA_PATH  = Path(os.path.dirname(__file__)) / "schema.sql"
+BASE_DIR = Path(__file__).resolve().parent.parent
+DB_PATH      = BASE_DIR / "db" / "art.duckdb"
+SCHEMA_PATH  = BASE_DIR / "db" / "schema.sql"
+RESULTS_PATH = Path(r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\results")
 
 class Database:
     # Manages DuckDB connection and all database operations
@@ -30,11 +31,30 @@ class Database:
         self.con = duckdb.connect(str(self.db_path))
         self._create_schema()
 
+    # def _create_schema(self):
+    #     # Creates all tables and views from schema.sql if the don't exist
+    #     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+    #         sql = f.read()
+    #     self.con.execute(sql)
+
     def _create_schema(self):
-        # Creates all tables and views from schema.sql if the don't exist
-        with open(SCHEMA_PATH, 'r') as f:
-            sql = f.read()
-        self.con.executescript(sql)
+            with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+                # Remove comentários de linha inteira e espaços em branco extras
+                lines = f.readlines()
+                sql_clean = "".join([line for line in lines if not line.strip().startswith('--')])
+            
+            # Divide pelos pontos e vírgula
+            statements = sql_clean.split(';')
+            
+            for stmt in statements:
+                command = stmt.strip()
+                if command:
+                    try:
+                        self.con.execute(command)
+                    except Exception as e:
+                        # Se falhar aqui, o terminal vai te avisar EXATAMENTE qual tabela deu erro
+                        print(f"     > [DB ERROR] Falha no comando: {command[:50]}...")
+                        print(f"     > [DB ERROR] Motivo: {e}")
 
     def close(self):
         self.con.close()
@@ -175,98 +195,267 @@ class Database:
 
     # ── Populate from results/ ────────────────────────────────────────────────
 
-    def populate_operation(self, operation_name: str) -> int:
-        # Reads results/{operation_name}/ and populates all metadata tables
-        # Idempotent - safe to call multiple times, updates existing records
-        # Returns the operation id
+    def sync_results_to_db(self, operation_name: str):
+        import os
+        from pathlib import Path
+        
+        # Usando o seu path fixo para não ter erro
+        base_path = Path(r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\results") / operation_name / "trades"
+        
+        print(f"\n     > [DEBUG] BUSCANDO EM: {base_path}")
 
-        # Structure expected:
-        #       results/{op_name}/
-        #               meta/operation_meta.json
-        #               trades/{model}/{strat}/{asset}/
-        #                       {ps_name}.parquet
-        #                       pnl_matrix.parquet
-        #                       lot_matrix.parquet
-        #                       all_wf_results.json (optional)
+        if not base_path.exists():
+            print(f"     > [DEBUG] ERRO: Pasta não encontrada: {base_path}")
+            return
 
-        op_path = RESULTS_PATH / operation_name
-        meta_path = op_path / "meta" / "operation_meta.json"
- 
-        if not op_path.exists():
-            raise FileNotFoundError(f"Operation path not found: {op_path}")
- 
-        # Lê meta da operation
-        meta = {}
-        if meta_path.exists():
-            with open(meta_path) as f:
-                meta = json.load(f)
- 
-        # Upsert operation
-        op_id = self._upsert_operation(
-            name=operation_name,
-            date_start=meta.get("date_start"),
-            date_end=meta.get("date_end"),
-            op_timeframe=meta.get("operation_timeframe"),
-            results_path=str(op_path),
-        )
- 
-        trades_path = op_path / "trades"
-        if not trades_path.exists():
-            print(f"   > No trades found for {operation_name}")
-            return op_id
- 
-        # Itera models → strats → assets
-        for model_name in sorted(trades_path.iterdir()):
-            if not model_name.is_dir(): continue
- 
-            # Lê exec_tf do meta se disponível
-            exec_tf = meta.get("models", {}).get(model_name.name, {}).get("exec_tf")
-            model_id = self._upsert_model(op_id, model_name.name, exec_tf)
- 
-            for strat_dir in sorted(model_name.iterdir()):
-                if not strat_dir.is_dir(): continue
- 
-                strat_id = self._upsert_strat(model_id, strat_dir.name)
- 
-                for asset_dir in sorted(strat_dir.iterdir()):
-                    if not asset_dir.is_dir(): continue
- 
-                    asset_name = asset_dir.name
-                    # Garante que o asset existe (sem params — usuário cadastra depois)
-                    asset_id = self._get_or_create_asset(asset_name)
- 
-                    # Liga asset ao model
-                    self._upsert_model_asset(model_id, asset_id)
- 
-                    # Popula param_sets — todos os .parquet exceto os reservados
-                    reserved = {"pnl_matrix.parquet", "lot_matrix.parquet", "wfm_raw.parquet"}
-                    pnl_matrix_path = asset_dir / "pnl_matrix.parquet"
-                    lot_matrix_path = asset_dir / "lot_matrix.parquet"
- 
-                    for ps_file in sorted(asset_dir.glob("*.parquet")):
-                        if ps_file.name in reserved: continue
- 
-                        ps_name = ps_file.stem
-                        n_trades, total_pnl = self._read_trade_metrics(ps_file)
- 
-                        self._upsert_param_set(
-                            strat_id=strat_id,
-                            asset_id=asset_id,
-                            name=ps_name,
-                            trades_path=str(ps_file),
-                            pnl_matrix_path=str(pnl_matrix_path) if pnl_matrix_path.exists() else None,
-                            lot_matrix_path=str(lot_matrix_path) if lot_matrix_path.exists() else None,
-                            n_trades=n_trades,
-                            total_pnl=total_pnl,
-                        )
- 
-                    # WF results
-                    wf_json = asset_dir / "all_wf_results.json"
-                    if wf_json.exists():
-                        self._upsert_wf_result(strat_id, asset_id, str(wf_json))
- 
-        print(f"   > [DB] Operation '{operation_name}' populated (id={op_id})")
+        # rglob("**/*.parquet") busca em TODAS as subpastas, não importa a profundidade
+        files = list(base_path.rglob("*.parquet"))
+        print(f"     > [DEBUG] Arquivos encontrados: {len(files)}")
+
+        for f in files:
+            # Pega o caminho relativo a partir da pasta 'trades'
+            # Ex: MA Trend Following\AT15\EURUSD\trades.parquet
+            relative = f.relative_to(base_path)
+            parts = relative.parts
+            
+            # Baseado na sua estrutura:
+            # parts[0] = Model (MA Trend Following)
+            # parts[1] = Strat (AT15)
+            # parts[2] = Asset (EURUSD)
+            
+            if len(parts) < 3:
+                continue
+                
+            model_name = parts[0]
+            strat_name = parts[1]
+            asset_name = parts[2]
+
+            # No final do loop 'for f in files:'
+            ps_real_name = f.stem  # Pega o nome do arquivo sem a extensão .parquet
+            
+            print(f"     > [DB] Sincronizando: {model_name} > {strat_name} > {asset_name} ({ps_real_name})")
+            
+            # Passa o ps_real_name para o upsert
+            self._upsert_hierarchy(operation_name, model_name, strat_name, asset_name, str(f), ps_real_name)
+            
+    def _upsert_hierarchy(self, op_name, model_name, strat_name, asset_name, file_path, ps_name):
+        # 1. Pegar ID da Operação
+        res_op = self.con.execute("SELECT id FROM operations WHERE name = ?", [op_name]).fetchone()
+        if not res_op: return
+        op_id = res_op[0]
+
+        # 2. Inserir/Pegar ID do Modelo
+        self.con.execute("INSERT OR IGNORE INTO models (operation_id, name) VALUES (?, ?)", [op_id, model_name])
+        model_id = self.con.execute("SELECT id FROM models WHERE operation_id = ? AND name = ?", [op_id, model_name]).fetchone()[0]
+
+        self.con.execute("""
+            INSERT OR IGNORE INTO assets (operation_id, name) 
+            VALUES (?, ?)
+        """, [op_id, asset_name])
+
+        # 3. Inserir/Pegar ID da Estratégia
+        self.con.execute("INSERT OR IGNORE INTO strats (model_id, name) VALUES (?, ?)", [model_id, strat_name])
+        strat_id = self.con.execute("SELECT id FROM strats WHERE model_id = ? AND name = ?", [model_id, strat_name]).fetchone()[0]
+
+        # 4. Inserir/Pegar ID do Ativo (Vinculado à operação)
+        self.con.execute("INSERT OR IGNORE INTO assets (operation_id, name) VALUES (?, ?)", [op_id, asset_name])
+        asset_id = self.con.execute("SELECT id FROM assets WHERE operation_id = ? AND name = ?", [op_id, asset_name]).fetchone()[0]
+
+        # 5. Inserir o Param Set (O arquivo final)
+        # Note: Use 'name' ou 'ps_name' conforme corrigimos no passo anterior
+        self.con.execute("""
+            INSERT OR IGNORE INTO param_sets (strat_id, asset_id, name, trades_path)
+            VALUES (?, ?, ?, ?)
+        """, [strat_id, asset_id, ps_name, file_path])
+            
+    # def sync_results_to_db(self, operation_name: str):
+    #     # O caminho deve bater com a estrutura: Backtest/results/operation_test/trades/
+    #     base_path = Path(f"Backtest/results/{operation_name}/trades")
+        
+    #     if not base_path.exists():
+    #         print(f"     > [DEBUG] ERRO: A pasta {base_path} não existe!")
+    #         return
+        
+    #     files = list(base_path.rglob("*.parquet"))
+    #     print(f"     > [DEBUG] Arquivos encontrados: {len(files)}")
+        
+    #     for f in files:
+    #         print(f"     > [DEBUG] Lendo: {f.name}")
+
+    #     # Pega o ID da operação
+    #     op_id = self.con.execute("SELECT id FROM operations WHERE name = ?", [operation_name]).fetchone()[0]
+
+    #     # Iterar nos Modelos (ex: MA Trend Following)
+    #     for model_dir in base_path.iterdir():
+    #         if not model_dir.is_dir(): continue
+            
+    #         self.con.execute("INSERT INTO models (operation_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING", [op_id, model_dir.name])
+    #         model_id = self.con.execute("SELECT id FROM models WHERE name = ? AND operation_id = ?", [model_dir.name, op_id]).fetchone()[0]
+
+    #         # Iterar nas Estratégias (ex: AT15)
+    #         for strat_dir in model_dir.iterdir():
+    #             if not strat_dir.is_dir(): continue
+                
+    #             self.con.execute("INSERT INTO strats (model_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING", [model_id, strat_dir.name])
+    #             strat_id = self.con.execute("SELECT id FROM strats WHERE name = ? AND model_id = ?", [strat_dir.name, model_id]).fetchone()[0]
+
+    #             # Iterar nos Ativos (ex: EURUSD)
+    #             for asset_dir in strat_dir.iterdir():
+    #                 if not asset_dir.is_dir(): continue
+                    
+    #                 # Garante que o Ativo existe na tabela assets
+    #                 self.con.execute("INSERT INTO assets (name) VALUES (?) ON CONFLICT DO NOTHING", [asset_dir.name])
+    #                 asset_id = self.con.execute("SELECT id FROM assets WHERE name = ?", [asset_dir.name]).fetchone()[0]
+                    
+    #                 # Procura os arquivos de matriz (pnl_matrix.parquet)
+    #                 pnl_path = asset_dir / "pnl_matrix.parquet"
+    #                 pnl_str = str(pnl_path) if pnl_path.exists() else None
+
+    #                 # Iterar nos arquivos de cada Param Set (.parquet que não são matrizes)
+    #                 for ps_file in asset_dir.glob("*.parquet"):
+    #                     if ps_file.name in ["pnl_matrix.parquet", "lot_matrix.parquet"]:
+    #                         continue
+                        
+    #                     # Aqui usamos o nome do arquivo (sem .parquet) como nome do Param Set
+    #                     self.con.execute("""
+    #                         INSERT INTO param_sets (strat_id, asset_id, name, trades_path, pnl_matrix_path)
+    #                         VALUES (?, ?, ?, ?, ?)
+    #                         ON CONFLICT DO NOTHING
+    #                     """, [strat_id, asset_id, ps_file.stem, str(ps_file), pnl_str])
+
+    # Dentro do método que cria a operação (ex: populate_operation ou similar)
+    def populate_operation(self, name: str):
+        # Use OR IGNORE para não dar erro se o nome já existir
+        self.con.execute("INSERT OR IGNORE INTO operations (name, status) VALUES (?, ?)", [name, 'completed'])
+        
+        # Busca o ID (seja o novo ou o que já existia)
+        res = self.con.execute("SELECT id FROM operations WHERE name = ?", [name]).fetchone()
+        op_id = res[0]
+        
+        # Agora chama a sincronização de arquivos
+        self.sync_results_to_db(name)
         return op_id
+    
+
+    # def populate_operation(self, name: str):
+    #     print(f"     > [DB] Populating operation: {name}")
+        
+    #     # O RETURNING id já devolve o número gerado pelo banco
+    #     res = self.con.execute("""
+    #         INSERT INTO operations (name, status) 
+    #         VALUES (?, 'active')
+    #         RETURNING id
+    #     """, [name]).fetchone()
+        
+    #     op_id = res[0] if res else None
+
+    #     if not op_id:
+    #             res = self.con.execute("SELECT id FROM operations WHERE name = ?", [name]).fetchone()
+    #             op_id = res[0] if res else 0
+
+    #     return int(op_id) # Retorna explicitamente um inteiro
+
+        # 2. Sincroniza os arquivos do disco com as tabelas
+        # try:
+        #     self.sync_results_to_db(name)
+        #     print(f"     > [DB] Operation '{name}' populated successfully.")
+        #     return {"status": "success", "operation": name}
+        # except Exception as e:
+        #     print(f"     > [DB] Error during sync: {e}")
+        #     return {"status": "error", "message": str(e)}
+
+    # def populate_operation(self, operation_name: str) -> int:
+    #     # Reads results/{operation_name}/ and populates all metadata tables
+    #     # Idempotent - safe to call multiple times, updates existing records
+    #     # Returns the operation id
+
+    #     # Structure expected:
+    #     #       results/{op_name}/
+    #     #               meta/operation_meta.json
+    #     #               trades/{model}/{strat}/{asset}/
+    #     #                       {ps_name}.parquet
+    #     #                       pnl_matrix.parquet
+    #     #                       lot_matrix.parquet
+    #     #                       all_wf_results.json (optional)
+
+    #     op_path = RESULTS_PATH / operation_name
+    #     meta_path = op_path / "meta" / "operation_meta.json"
+ 
+    #     if not op_path.exists():
+    #         raise FileNotFoundError(f"Operation path not found: {op_path}")
+ 
+    #     # Lê meta da operation
+    #     meta = {}
+    #     if meta_path.exists():
+    #         with open(meta_path) as f:
+    #             meta = json.load(f)
+ 
+    #     # Upsert operation
+    #     op_id = self._upsert_operation(
+    #         name=operation_name,
+    #         date_start=meta.get("date_start"),
+    #         date_end=meta.get("date_end"),
+    #         op_timeframe=meta.get("operation_timeframe"),
+    #         results_path=str(op_path),
+    #     )
+ 
+    #     trades_path = op_path / "trades"
+    #     if not trades_path.exists():
+    #         print(f"   > No trades found for {operation_name}")
+    #         return op_id
+ 
+    #     # Itera models → strats → assets
+    #     for model_name in sorted(trades_path.iterdir()):
+    #         if not model_name.is_dir(): continue
+ 
+    #         # Lê exec_tf do meta se disponível
+    #         exec_tf = meta.get("models", {}).get(model_name.name, {}).get("exec_tf")
+    #         model_id = self._upsert_model(op_id, model_name.name, exec_tf)
+ 
+    #         for strat_dir in sorted(model_name.iterdir()):
+    #             if not strat_dir.is_dir(): continue
+ 
+    #             strat_id = self._upsert_strat(model_id, strat_dir.name)
+ 
+    #             for asset_dir in sorted(strat_dir.iterdir()):
+    #                 if not asset_dir.is_dir(): continue
+ 
+    #                 asset_name = asset_dir.name
+    #                 # Garante que o asset existe (sem params — usuário cadastra depois)
+    #                 asset_id = self._get_or_create_asset(asset_name)
+ 
+    #                 # Liga asset ao model
+    #                 self._upsert_model_asset(model_id, asset_id)
+ 
+    #                 # Popula param_sets — todos os .parquet exceto os reservados
+    #                 reserved = {"pnl_matrix.parquet", "lot_matrix.parquet", "wfm_raw.parquet"}
+    #                 pnl_matrix_path = asset_dir / "pnl_matrix.parquet"
+    #                 lot_matrix_path = asset_dir / "lot_matrix.parquet"
+ 
+    #                 for ps_file in sorted(asset_dir.glob("*.parquet")):
+    #                     if ps_file.name in reserved: continue
+ 
+    #                     ps_name = ps_file.stem
+    #                     n_trades, total_pnl = self._read_trade_metrics(ps_file)
+ 
+    #                     self._upsert_param_set(
+    #                         strat_id=strat_id,
+    #                         asset_id=asset_id,
+    #                         name=ps_name,
+    #                         trades_path=str(ps_file),
+    #                         pnl_matrix_path=str(pnl_matrix_path) if pnl_matrix_path.exists() else None,
+    #                         lot_matrix_path=str(lot_matrix_path) if lot_matrix_path.exists() else None,
+    #                         n_trades=n_trades,
+    #                         total_pnl=total_pnl,
+    #                     )
+ 
+    #                 # WF results
+    #                 wf_json = asset_dir / "all_wf_results.json"
+    #                 if wf_json.exists():
+    #                     self._upsert_wf_result(strat_id, asset_id, str(wf_json))
+ 
+    #     print(f"   > [DB] Operation '{operation_name}' populated (id={op_id})")
+    #     return op_id
 
     # ── Internal upserts ─────────────────────────────────────────────────────
 
