@@ -232,6 +232,9 @@ class Database:
 
             # No final do loop 'for f in files:'
             ps_real_name = f.stem  # Pega o nome do arquivo sem a extensão .parquet
+
+            if "matrix" in ps_real_name.lower(): # Doesn't consider pnl_matrix and lot_matrix
+                continue
             
             print(f"     > [DB] Sincronizando: {model_name} > {strat_name} > {asset_name} ({ps_real_name})")
             
