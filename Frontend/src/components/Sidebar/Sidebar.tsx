@@ -26,6 +26,7 @@ export function Sidebar({ fontSize }: Props) {
   useEffect(() => {
     Promise.all([api.getOperations(), api.getParamSets()])
       .then(([ops, ps]) => {
+        console.log("Operações:", ops.length, "ParamSets:", ps.length);
         setOperations(ops)
         setParamSets(ps)
         setLoading(false)

@@ -4,7 +4,7 @@ import { Basket }       from './components/Basket/Basket'
 import { EquityChart }  from './components/Chart/EquityChart'
 
 export default function App() {
-  const [fontSize, setFontSize] = useState(11)
+  const [fontSize, setFontSize] = useState(7)
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-[#0D0D0D] text-white font-mono">
@@ -26,7 +26,7 @@ export default function App() {
             <label className="flex items-center gap-2 text-[10px] text-[#444]">
               <span>font</span>
               <input
-                type="range" min={9} max={14} value={fontSize}
+                type="range" min={4} max={14} value={fontSize}
                 onChange={e => setFontSize(Number(e.target.value))}
                 className="w-16 accent-[#00D9FF]"
               />

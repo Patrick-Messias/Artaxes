@@ -1,10 +1,28 @@
-import polars as pl, numpy as np, seaborn as sns, matplotlib.pyplot as plt
+import polars as pl, numpy as np, seaborn as sns, matplotlib.pyplot as plt, datetime
 from scipy.cluster import hierarchy
 from scipy.spatial.distance import pdist, squareform
 from typing import Union, Optional, Dict, List
 
+def Sharpe(): 
+    return None
+
+def ExpectedValue():
+    return None
+
+def TimeValitation():
+    # ?
+    return None
+
+def Score(data: Union[pl.DataFrame, Dict, List], weight: Optional[list]=None, mc_params: Dict={'runs': 1000, 'shuffle': True, 'select_col': 'wfm_matrix_data', 'percentile': 95.0}):
+    if weight is None: weight = [0.25, 0.25, 0.25, 0.25]
+
+    # scoreA = (wfe_sharpe * weight[0]) * (expected_value * weight[1]) * (1/monte_carlo_drawdown * weight[2]) * (time_validation * weight[3])
+    # scoreB = (wfe_sharpe * weight[0]) / (time_validation * weight[3]) + (expected_value * weight[1]) / (1/monte_carlo_drawdown * weight[2])
+
+    return None # (scoreA + scoreB) / 2
+
 def MonteCarlo(data: Union[pl.DataFrame, Dict, List], runs: int=1000, shuffle: bool = True, select_col: str='wfm_matrix_data') -> np.ndarray:
-    # data: DataFrame Polars (WFM Matrix), Dict or list of returns
+    # data: DataFrame Polars (WFM Matrix), Dict or list of returnsa
     # runs: Quantity of simulations to be generated
     # shuffle: True for Permutation (without reposition), False for Bootstrap (with reposition)
     # select_col: Name of the profit/loss column if DataFrame
@@ -32,38 +50,68 @@ def MonteCarlo(data: Union[pl.DataFrame, Dict, List], runs: int=1000, shuffle: b
 
     return mc_runs
 
-def get_mc_metrics(mc_runs: np.ndarray, percentile: float=95.0):
-    # mc_runs: (runs, days) -> Brute returns from MonteCarlo
 
-    # Generates equity curves to simulate drawdown and total retuns
+def mc_drawdown(mc_runs: np.ndarray, percentile: float=95.0, only_max_per_curve: bool=True):
     equities = np.cumsum(mc_runs, axis=1)
-
-    # Max Drawdown of every simulation
     peaks = np.maximum.accumulate(equities, axis=1)
-    drawdowns = equities - peaks # Negative values
-    max_drawdowns = np.min(drawdowns, axis=1) # Worst drawdown of every run
+    drawdowns = equities - peaks
+    
+    # Pior drawdown de cada simulação
+    max_drawdowns = np.min(drawdowns, axis=1)
+    
+    # Todos drawdowns (filtrando só negativos)
+    intra_drawdowns = drawdowns[drawdowns < 0]
+    if intra_drawdowns.size == 0:
+        intra_drawdowns = np.array([0.0])
 
-    # Final return of every simulation
-    final_returns = equities[:,-1]
+    # Escolha do dataset
+    data = max_drawdowns if only_max_per_curve else intra_drawdowns
 
-    # Drawdown statistics, orders drawdowns (best-worst)
-    sorted_dd = np.sort(max_drawdowns)
-    idx = int((1-percentile/100) * len(sorted_dd))
-
-    var_dd = sorted_dd[idx]                 # VaR
-    cvar_dd = np.mean(sorted_dd[:idx+1])    # CVaR (Avg of worsts)
-    avg_dd = np.mean(max_drawdowns)         # Average Drawdown
-
-    # Returns Statistics
-    avg_win = np.percentile(final_returns, 50) # Median (percentile 50)
+    # VaR / CVaR
+    var_level = 100 - percentile
+    avg = np.mean(data)
+    var = np.percentile(data, var_level)
+    cvar = data[data <= var].mean()
 
     return {
-        "avg_drawdown": avg_dd,
-        "drawdown_var_95": var_dd,
-        "drawdown_cvar_95": cvar_dd,
-        "avg_win_median": avg_win,
-        "worst_run": np.min(final_returns),
-        "best_run": np.max(final_returns)
+        "mean": avg,
+        "var": var,
+        "cvar": cvar
+    }
+
+def mc_stagnation(mc_runs: np.ndarray, percentile: float=95.0, only_max_per_curve: bool=True):
+    equities = np.cumsum(mc_runs, axis=1)
+    peaks = np.maximum.accumulate(equities, axis=1)
+    is_at_peak = (equities == peaks)
+
+    num_days = equities.shape[1]
+
+    max_stags = []
+    all_stags = []
+
+    for run_peaks in is_at_peak:
+        peak_days = np.where(run_peaks)[0]
+        durations = np.diff(np.concatenate(([0], peak_days, [num_days-1])))
+        durations = durations[durations > 0]
+
+        if len(durations) > 0:
+            max_stags.append(np.max(durations))
+            all_stags.extend(durations)
+        else:
+            max_stags.append(0)
+
+    max_stags = np.array(max_stags)
+    all_stags = np.array(all_stags) if len(all_stags) > 0 else np.array([0.0])
+
+    data = max_stags if only_max_per_curve else all_stags
+
+    var_level = percentile
+    avg = np.mean(data)
+    perc = np.percentile(data, var_level)
+
+    return {
+        "mean": avg,
+        "perc": perc
     }
 
 
@@ -153,14 +201,49 @@ def CorrelationClusteringMC(
     return linkage_matrix, corr_matrix
 
 
-
-# Permutation Test
-
+# Permutation Test - How model compares to random data sample?
 
 
+# In Sample - Out Sample Test
+def ISOS_TEST(data: pl.DataFrame, os_start_datetime=None, os_end_datetime=None, metrics: list=['pnl', 'dd', 'pnl_dd'], mc_runs: int=1000, mc_shuffle: bool=True, mc_col: str='wfm_matrix_data', datetime_format: str="%Y-%m-%d %H:%M:%S"):
+
+    if os_start_datetime is None: 
+        print("< [Error] No start date for OS.")
+        return []
+    
+    last_dt = data["datetime"].last()
+    if os_start_datetime >= last_dt or os_end_datetime > last_dt:
+        print("< [Error] Start or end datetime higher then last datetime on data")
+        return []
+    
+    # If str, converts to datetime
+    dt_start = datetime.strptime(os_start_datetime, datetime_format) if isinstance(os_start_datetime, str) else os_start_datetime
+    dt_end = datetime.strptime(os_end_datetime, datetime_format) if isinstance(os_end_datetime, str) else os_end_datetime
+    if dt_end < dt_start:
+        print("< [Error] End datetime is before start datetime")
+        return []
+    
+    # Selects OS Data
+    os_df = data.filter(pl.col("datetime").is_between(os_start_datetime, os_end_datetime))
+    is_df = data.filter(pl.col("datetime") < os_end_datetime)
+
+    # Runs MC on len of os_data from is_data
+    os_len = int(os_df.height) # To select sample from is_mc_data and compare
+    is_mc_data = MonteCarlo(is_df['pnl'], mc_runs, mc_shuffle, mc_col)
+
+    # Analyzes os_df performance with random os_len sized samples from is_mc_data
+    os_pnl = np.sum(os_df['pnl'])
+    for rn in mc_runs:
+        pass # GET mc_runs number of random samples of os_len size
+    
+    for met in metrics:
+        pass # COMPARES sample to data
+
+    return None
 
 
 
+# Entry Cluster Analysis - Are entries/signals grouped or distributed across datetime? 
 
 
 

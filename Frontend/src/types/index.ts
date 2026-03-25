@@ -19,6 +19,7 @@ export interface Operation {
 
 export interface ParamSet {
   id:              number
+  name:            string
   ps_name:         string
   param_json:      Record<string, unknown> | null
   n_trades:        number | null
@@ -37,6 +38,7 @@ export interface ParamSet {
   best_ps_name:    string | null
   best_wfe:        number | null
   wf_json_path:    string | null
+  wf_metric:       number | null
 }
 
 export interface Asset {

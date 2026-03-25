@@ -26,14 +26,15 @@ def operation_summary(name: str, db: Database=Depends(get_db)):
         m = r["model_name"]
         s = r["strat_name"]
         a = r["asset_name"]
-        summary.setdefault(m, {}).setdefault(s, {}).setdefault(a, []).append({
-            "id":          r["id"],
-            "name":        r["ps_name"],
-            "n_trades":    r["n_trades"],
-            "total_pnl":   r["total_pnl"],
-            "best_wfe":    r["best_wfe"],
-            "best_ps":     r["best_ps_name"],
-        })
+    summary.setdefault(m, {}).setdefault(s, {}).setdefault(a, []).append({
+        "id":           r.get("id"),
+        "name":         r.get("ps_name"),
+        "n_trades":     r.get("n_trades"),
+        "total_pnl":    r.get("total_pnl"),
+        "wf_json_path": r.get("wf_json_path"), # O React precisa DISSO para mostrar o botão
+        "is_wf_winner": bool(r.get("is_wf_winner")),
+        "wf_metric":    r.get("wf_metric")
+    })
     return summary
 
 @router.post("/populate/{name}", response_model=PopulateResponse)

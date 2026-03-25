@@ -30,31 +30,29 @@ class Database:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.con = duckdb.connect(str(self.db_path))
         self._create_schema()
+        self._setup_database()
 
-    # def _create_schema(self):
-    #     # Creates all tables and views from schema.sql if the don't exist
-    #     with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
-    #         sql = f.read()
-    #     self.con.execute(sql)
+    def _setup_database(self):
+        # Garante que as colunas de Walk Forward existam na tabela 
+        try:
+            self.con.execute("ALTER TABLE param_sets ADD COLUMN IF NOT EXISTS is_wf_winner BOOLEAN DEFAULT FALSE;")
+            self.con.execute("ALTER TABLE param_sets ADD COLUMN IF NOT EXISTS wf_metric DOUBLE;")
+        except:
+            pass
 
     def _create_schema(self):
             with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
-                # Remove comentários de linha inteira e espaços em branco extras
                 lines = f.readlines()
                 sql_clean = "".join([line for line in lines if not line.strip().startswith('--')])
             
-            # Divide pelos pontos e vírgula
             statements = sql_clean.split(';')
-            
             for stmt in statements:
                 command = stmt.strip()
                 if command:
                     try:
                         self.con.execute(command)
                     except Exception as e:
-                        # Se falhar aqui, o terminal vai te avisar EXATAMENTE qual tabela deu erro
-                        print(f"     > [DB ERROR] Falha no comando: {command[:50]}...")
-                        print(f"     > [DB ERROR] Motivo: {e}")
+                        print(f"     > [DB ERROR] {e}")
 
     def close(self):
         self.con.close()
@@ -200,7 +198,7 @@ class Database:
         from pathlib import Path
         
         # Usando o seu path fixo para não ter erro
-        base_path = Path(r"C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\results") / operation_name / "trades"
+        base_path = Path(f"results/{operation_name}/trades")
         
         print(f"\n     > [DEBUG] BUSCANDO EM: {base_path}")
 
@@ -241,6 +239,44 @@ class Database:
             # Passa o ps_real_name para o upsert
             self._upsert_hierarchy(operation_name, model_name, strat_name, asset_name, str(f), ps_real_name)
             
+        # Process Walk Forward
+        wf_json_path = base_path.parent / "all_wf_results.json"
+        if wf_json_path.exists():
+            self._import_walk_forward_logic(operation_name, wf_json_path)
+
+
+    # No Database.py, dentro de _import_walk_forward_logic
+    def _import_walk_forward_logic(self, operation_name, json_path):
+        try:
+            with open(json_path, 'r') as f:
+                data = json.load(f)
+            
+            updated_count = 0
+            for combo_name, combo_content in data.items():
+                results = combo_content.get("results", [])
+                for window in results:
+                    raw_name = window.get("best_param") # Ex: "ps_param_set-3-3..."
+                    if not raw_name: continue
+
+                    # Limpeza extrema para o match
+                    clean_name = raw_name.replace("ps_", "").replace(".parquet", "").strip()
+                    
+                    # Usamos LIKE com curingas (%) para encontrar o nome mesmo se houver prefixos
+                    self.con.execute("""
+                        UPDATE param_sets 
+                        SET is_wf_winner = TRUE, 
+                            wf_json_path = ?
+                        WHERE name LIKE ? 
+                    """, [str(json_path), f"%{clean_name}%"])
+                    
+                    updated_count += self.con.rowcount
+            
+            self.con.commit()
+            print(f"     > [DB] WF Match: {updated_count} registros vinculados.")
+        except Exception as e:
+            print(f"     > [DB ERROR] WF: {e}")
+
+
     def _upsert_hierarchy(self, op_name, model_name, strat_name, asset_name, file_path, ps_name):
         # 1. Pegar ID da Operação
         res_op = self.con.execute("SELECT id FROM operations WHERE name = ?", [op_name]).fetchone()
@@ -270,196 +306,57 @@ class Database:
             INSERT OR IGNORE INTO param_sets (strat_id, asset_id, name, trades_path)
             VALUES (?, ?, ?, ?)
         """, [strat_id, asset_id, ps_name, file_path])
-            
-    # def sync_results_to_db(self, operation_name: str):
-    #     # O caminho deve bater com a estrutura: Backtest/results/operation_test/trades/
-    #     base_path = Path(f"Backtest/results/{operation_name}/trades")
-        
-    #     if not base_path.exists():
-    #         print(f"     > [DEBUG] ERRO: A pasta {base_path} não existe!")
-    #         return
-        
-    #     files = list(base_path.rglob("*.parquet"))
-    #     print(f"     > [DEBUG] Arquivos encontrados: {len(files)}")
-        
-    #     for f in files:
-    #         print(f"     > [DEBUG] Lendo: {f.name}")
 
-    #     # Pega o ID da operação
-    #     op_id = self.con.execute("SELECT id FROM operations WHERE name = ?", [operation_name]).fetchone()[0]
-
-    #     # Iterar nos Modelos (ex: MA Trend Following)
-    #     for model_dir in base_path.iterdir():
-    #         if not model_dir.is_dir(): continue
-            
-    #         self.con.execute("INSERT INTO models (operation_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING", [op_id, model_dir.name])
-    #         model_id = self.con.execute("SELECT id FROM models WHERE name = ? AND operation_id = ?", [model_dir.name, op_id]).fetchone()[0]
-
-    #         # Iterar nas Estratégias (ex: AT15)
-    #         for strat_dir in model_dir.iterdir():
-    #             if not strat_dir.is_dir(): continue
-                
-    #             self.con.execute("INSERT INTO strats (model_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING", [model_id, strat_dir.name])
-    #             strat_id = self.con.execute("SELECT id FROM strats WHERE name = ? AND model_id = ?", [strat_dir.name, model_id]).fetchone()[0]
-
-    #             # Iterar nos Ativos (ex: EURUSD)
-    #             for asset_dir in strat_dir.iterdir():
-    #                 if not asset_dir.is_dir(): continue
-                    
-    #                 # Garante que o Ativo existe na tabela assets
-    #                 self.con.execute("INSERT INTO assets (name) VALUES (?) ON CONFLICT DO NOTHING", [asset_dir.name])
-    #                 asset_id = self.con.execute("SELECT id FROM assets WHERE name = ?", [asset_dir.name]).fetchone()[0]
-                    
-    #                 # Procura os arquivos de matriz (pnl_matrix.parquet)
-    #                 pnl_path = asset_dir / "pnl_matrix.parquet"
-    #                 pnl_str = str(pnl_path) if pnl_path.exists() else None
-
-    #                 # Iterar nos arquivos de cada Param Set (.parquet que não são matrizes)
-    #                 for ps_file in asset_dir.glob("*.parquet"):
-    #                     if ps_file.name in ["pnl_matrix.parquet", "lot_matrix.parquet"]:
-    #                         continue
-                        
-    #                     # Aqui usamos o nome do arquivo (sem .parquet) como nome do Param Set
-    #                     self.con.execute("""
-    #                         INSERT INTO param_sets (strat_id, asset_id, name, trades_path, pnl_matrix_path)
-    #                         VALUES (?, ?, ?, ?, ?)
-    #                         ON CONFLICT DO NOTHING
-    #                     """, [strat_id, asset_id, ps_file.stem, str(ps_file), pnl_str])
 
     # Dentro do método que cria a operação (ex: populate_operation ou similar)
-    def populate_operation(self, name: str):
-        # Use OR IGNORE para não dar erro se o nome já existir
-        self.con.execute("INSERT OR IGNORE INTO operations (name, status) VALUES (?, ?)", [name, 'completed'])
-        
-        # Busca o ID (seja o novo ou o que já existia)
-        res = self.con.execute("SELECT id FROM operations WHERE name = ?", [name]).fetchone()
-        op_id = res[0]
-        
-        # Agora chama a sincronização de arquivos
-        self.sync_results_to_db(name)
+    def populate_operation(self, operation_name: str) -> int:
+        op_path = RESULTS_PATH / operation_name
+        if not op_path.exists():
+            raise FileNotFoundError(f"Caminho não encontrado: {op_path}")
+
+        # 1. Upsert da Operação
+        self.con.execute("INSERT OR IGNORE INTO operations (name, status) VALUES (?, 'active')", [operation_name])
+        op_id = self.con.execute("SELECT id FROM operations WHERE name = ?", [operation_name]).fetchone()[0]
+
+        trades_path = op_path / "trades"
+        if not trades_path.exists():
+            print(f"     > [AVISO] Pasta 'trades' não encontrada em: {trades_path}")
+            return op_id
+
+        # 2. Itera a estrutura: Models -> Strats -> Assets
+        for model_dir in sorted(trades_path.iterdir()):
+            if not model_dir.is_dir(): continue
+            model_id = self._upsert_model(op_id, model_dir.name)
+
+            for strat_dir in sorted(model_dir.iterdir()):
+                if not strat_dir.is_dir(): continue
+                strat_id = self._upsert_strat(model_id, strat_dir.name)
+
+                for asset_dir in sorted(strat_dir.iterdir()):
+                    if not asset_dir.is_dir(): continue
+                    asset_id = self._get_or_create_asset(asset_dir.name)
+
+                    # --- PARTE 1: Importar Param Sets (.parquet) ---
+                    for ps_file in sorted(asset_dir.glob("*.parquet")):
+                        if "matrix" in ps_file.name.lower():
+                            continue
+                        
+                        self._upsert_param_set(
+                            strat_id=strat_id,
+                            asset_id=asset_id,
+                            name=ps_file.stem,
+                            trades_path=str(ps_file)
+                        )
+
+                    # --- PARTE 2: Importar Walk Forward (.json) se existir nesta pasta ---
+                    wf_json_path = asset_dir / "all_wf_results.json"
+                    if wf_json_path.exists():
+                        print(f"     > [WF] Processando resultados em: {asset_dir.name}")
+                        self._import_walk_forward_logic(operation_name, str(wf_json_path))
+
+        print(f"     > [DB] População da operação '{operation_name}' concluída.")
         return op_id
     
-
-    # def populate_operation(self, name: str):
-    #     print(f"     > [DB] Populating operation: {name}")
-        
-    #     # O RETURNING id já devolve o número gerado pelo banco
-    #     res = self.con.execute("""
-    #         INSERT INTO operations (name, status) 
-    #         VALUES (?, 'active')
-    #         RETURNING id
-    #     """, [name]).fetchone()
-        
-    #     op_id = res[0] if res else None
-
-    #     if not op_id:
-    #             res = self.con.execute("SELECT id FROM operations WHERE name = ?", [name]).fetchone()
-    #             op_id = res[0] if res else 0
-
-    #     return int(op_id) # Retorna explicitamente um inteiro
-
-        # 2. Sincroniza os arquivos do disco com as tabelas
-        # try:
-        #     self.sync_results_to_db(name)
-        #     print(f"     > [DB] Operation '{name}' populated successfully.")
-        #     return {"status": "success", "operation": name}
-        # except Exception as e:
-        #     print(f"     > [DB] Error during sync: {e}")
-        #     return {"status": "error", "message": str(e)}
-
-    # def populate_operation(self, operation_name: str) -> int:
-    #     # Reads results/{operation_name}/ and populates all metadata tables
-    #     # Idempotent - safe to call multiple times, updates existing records
-    #     # Returns the operation id
-
-    #     # Structure expected:
-    #     #       results/{op_name}/
-    #     #               meta/operation_meta.json
-    #     #               trades/{model}/{strat}/{asset}/
-    #     #                       {ps_name}.parquet
-    #     #                       pnl_matrix.parquet
-    #     #                       lot_matrix.parquet
-    #     #                       all_wf_results.json (optional)
-
-    #     op_path = RESULTS_PATH / operation_name
-    #     meta_path = op_path / "meta" / "operation_meta.json"
- 
-    #     if not op_path.exists():
-    #         raise FileNotFoundError(f"Operation path not found: {op_path}")
- 
-    #     # Lê meta da operation
-    #     meta = {}
-    #     if meta_path.exists():
-    #         with open(meta_path) as f:
-    #             meta = json.load(f)
- 
-    #     # Upsert operation
-    #     op_id = self._upsert_operation(
-    #         name=operation_name,
-    #         date_start=meta.get("date_start"),
-    #         date_end=meta.get("date_end"),
-    #         op_timeframe=meta.get("operation_timeframe"),
-    #         results_path=str(op_path),
-    #     )
- 
-    #     trades_path = op_path / "trades"
-    #     if not trades_path.exists():
-    #         print(f"   > No trades found for {operation_name}")
-    #         return op_id
- 
-    #     # Itera models → strats → assets
-    #     for model_name in sorted(trades_path.iterdir()):
-    #         if not model_name.is_dir(): continue
- 
-    #         # Lê exec_tf do meta se disponível
-    #         exec_tf = meta.get("models", {}).get(model_name.name, {}).get("exec_tf")
-    #         model_id = self._upsert_model(op_id, model_name.name, exec_tf)
- 
-    #         for strat_dir in sorted(model_name.iterdir()):
-    #             if not strat_dir.is_dir(): continue
- 
-    #             strat_id = self._upsert_strat(model_id, strat_dir.name)
- 
-    #             for asset_dir in sorted(strat_dir.iterdir()):
-    #                 if not asset_dir.is_dir(): continue
- 
-    #                 asset_name = asset_dir.name
-    #                 # Garante que o asset existe (sem params — usuário cadastra depois)
-    #                 asset_id = self._get_or_create_asset(asset_name)
- 
-    #                 # Liga asset ao model
-    #                 self._upsert_model_asset(model_id, asset_id)
- 
-    #                 # Popula param_sets — todos os .parquet exceto os reservados
-    #                 reserved = {"pnl_matrix.parquet", "lot_matrix.parquet", "wfm_raw.parquet"}
-    #                 pnl_matrix_path = asset_dir / "pnl_matrix.parquet"
-    #                 lot_matrix_path = asset_dir / "lot_matrix.parquet"
- 
-    #                 for ps_file in sorted(asset_dir.glob("*.parquet")):
-    #                     if ps_file.name in reserved: continue
- 
-    #                     ps_name = ps_file.stem
-    #                     n_trades, total_pnl = self._read_trade_metrics(ps_file)
- 
-    #                     self._upsert_param_set(
-    #                         strat_id=strat_id,
-    #                         asset_id=asset_id,
-    #                         name=ps_name,
-    #                         trades_path=str(ps_file),
-    #                         pnl_matrix_path=str(pnl_matrix_path) if pnl_matrix_path.exists() else None,
-    #                         lot_matrix_path=str(lot_matrix_path) if lot_matrix_path.exists() else None,
-    #                         n_trades=n_trades,
-    #                         total_pnl=total_pnl,
-    #                     )
- 
-    #                 # WF results
-    #                 wf_json = asset_dir / "all_wf_results.json"
-    #                 if wf_json.exists():
-    #                     self._upsert_wf_result(strat_id, asset_id, str(wf_json))
- 
-    #     print(f"   > [DB] Operation '{operation_name}' populated (id={op_id})")
-    #     return op_id
-
     # ── Internal upserts ─────────────────────────────────────────────────────
 
     def _upsert_operation(self, name: str, date_start=None, date_end=None, op_timeframe=None, results_path=None) -> int:
@@ -488,57 +385,24 @@ class Database:
             "SELECT id FROM operations WHERE name = ?", [name]
         ).fetchone()[0]
 
-    def _upsert_model(self, op_id: int, name: str, exec_tf: str=None) -> int:
-        existing = self.con_execute(
-            "SELECT id FROM models WHERE operation_id = ? AND name = ?",
-            [op_id, name]
-        ).fetchone()
+    def _upsert_model(self, op_id, name, exec_tf=None):
+        self.con.execute("INSERT OR IGNORE INTO models (operation_id, name, exec_tf) VALUES (?, ?, ?)", [op_id, name, exec_tf])
+        return self.con.execute("SELECT id FROM models WHERE operation_id = ? AND name = ?", [op_id, name]).fetchone()[0]
 
-        if existing: 
-            return existing[0]
+    def _upsert_strat(self, model_id, name):
+        self.con.execute("INSERT OR IGNORE INTO strats (model_id, name) VALUES (?, ?)", [model_id, name])
+        return self.con.execute("SELECT id FROM strats WHERE model_id = ? AND name = ?", [model_id, name]).fetchone()[0]
 
-        self.con.execute(
-            "INSERT INTO models (operation_id, name, exec_tf) VALUES (?, ?, ?)",
-            [op_id, name, exec_tf]
-        )
-        return self.con.execute(
-            "SELECT id FROM models WHERE operation_id = ? AND name = ?",
-            [op_id, name]
-        ).fetchone()[0]
+    def _get_or_create_asset(self, name):
+        self.con.execute("INSERT OR IGNORE INTO assets (name) VALUES (?)", [name])
+        return self.con.execute("SELECT id FROM assets WHERE name = ?", [name]).fetchone()[0]
 
-    def _upsert_strat(self, model_id: int, name: str) -> int:
-        existing = self.con.execute(
-            "SELECT id FROM strats WHERE model_id = ? AND name = ?",
-            [model_id, name]
-        ).fetchone()
- 
-        if existing:
-            return existing[0]
- 
-        self.con.execute(
-            "INSERT INTO strats (model_id, name) VALUES (?, ?)",
-            [model_id, name]
-        )
-        return self.con.execute(
-            "SELECT id FROM strats WHERE model_id = ? AND name = ?",
-            [model_id, name]
-        ).fetchone()[0]
- 
-    def _get_or_create_asset(self, name: str) -> int:
-        existing = self.con.execute(
-            "SELECT id FROM assets WHERE name = ?", [name]
-        ).fetchone()
- 
-        if existing:
-            return existing[0]
- 
-        self.con.execute(
-            "INSERT INTO assets (name) VALUES (?)", [name]
-        )
-        return self.con.execute(
-            "SELECT id FROM assets WHERE name = ?", [name]
-        ).fetchone()[0]
- 
+    def _upsert_param_set(self, strat_id, asset_id, name, trades_path):
+        self.con.execute("""
+            INSERT OR IGNORE INTO param_sets (strat_id, asset_id, name, trades_path)
+            VALUES (?, ?, ?, ?)
+        """, [strat_id, asset_id, name, trades_path])
+        
     def _upsert_model_asset(self, model_id: int, asset_id: int):
         existing = self.con.execute(
             "SELECT 1 FROM model_assets WHERE model_id = ? AND asset_id = ?",
@@ -550,40 +414,6 @@ class Database:
                 "INSERT INTO model_assets (model_id, asset_id) VALUES (?, ?)",
                 [model_id, asset_id]
             )
- 
-    def _upsert_param_set(self, strat_id: int, asset_id: int, name: str,
-                           trades_path: str = None, pnl_matrix_path: str = None,
-                           lot_matrix_path: str = None, n_trades: int = None,
-                           total_pnl: float = None) -> int:
-        existing = self.con.execute(
-            "SELECT id FROM param_sets WHERE strat_id = ? AND asset_id = ? AND name = ?",
-            [strat_id, asset_id, name]
-        ).fetchone()
- 
-        if existing:
-            self.con.execute("""
-                UPDATE param_sets SET
-                    trades_path     = COALESCE(?, trades_path),
-                    pnl_matrix_path = COALESCE(?, pnl_matrix_path),
-                    lot_matrix_path = COALESCE(?, lot_matrix_path),
-                    n_trades        = COALESCE(?, n_trades),
-                    total_pnl       = COALESCE(?, total_pnl)
-                WHERE id = ?
-            """, [trades_path, pnl_matrix_path, lot_matrix_path,
-                  n_trades, total_pnl, existing[0]])
-            return existing[0]
- 
-        self.con.execute("""
-            INSERT INTO param_sets (strat_id, asset_id, name, trades_path,
-                                    pnl_matrix_path, lot_matrix_path,
-                                    n_trades, total_pnl)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, [strat_id, asset_id, name, trades_path,
-              pnl_matrix_path, lot_matrix_path, n_trades, total_pnl])
-        return self.con.execute(
-            "SELECT id FROM param_sets WHERE strat_id = ? AND asset_id = ? AND name = ?",
-            [strat_id, asset_id, name]
-        ).fetchone()[0]
  
     def _upsert_wf_result(self, strat_id: int, asset_id: int,
                            json_path: str) -> int:
@@ -638,41 +468,60 @@ class Database:
 
     # ── Query helpers — used by FastAPI ──────────────────────────────────
 
-    def get_operations(self) -> list[dict]:
-        # Returns all operations with summary counts.
-        rows = self.con.execute("SELECT * FROM v_operations_summary").fetchall()
-        cols = ["id", "name", "date_start", "date_end", "status",
-                "n_models", "n_strats", "n_assets", "n_param_sets", "created_at"]
-        return [dict(zip(cols, r)) for r in rows]
- 
-    def get_param_sets(self, operation_name: str = None,
-                        asset_name: str = None,
-                        strat_name: str = None) -> list[dict]:
-        # Returns param_sets with full context (operation, model, strat, asset).
-        # Filters are optional and combinable.
+    def get_trades(self, ps_id: int) -> Optional[pl.DataFrame]:
+        row = self.con.execute("SELECT trades_path FROM param_sets WHERE id = ?", [ps_id]).fetchone()
+        return pl.read_parquet(row[0]) if row and row[0] else None
 
+    def get_operations(self) -> list[dict]:
+        # Em vez de SELECT * FROM operations, usamos uma query que conta os itens vinculados
+        # Se você já tiver a v_operations_summary no schema.sql, use-a. 
+        # Caso contrário, esta query abaixo resolve:
+        sql = """
+            SELECT 
+                o.*,
+                (SELECT COUNT(*) FROM models m WHERE m.operation_id = o.id) as n_models,
+                (SELECT COUNT(*) FROM strats s JOIN models m ON s.model_id = m.id WHERE m.operation_id = o.id) as n_strats,
+                (SELECT COUNT(*) FROM assets a WHERE a.operation_id = o.id) as n_assets,
+                (SELECT COUNT(*) FROM param_sets ps 
+                 JOIN strats s ON ps.strat_id = s.id 
+                 JOIN models m ON s.model_id = m.id 
+                 WHERE m.operation_id = o.id) as n_param_sets
+            FROM operations o
+            ORDER BY o.created_at DESC
+        """
+        return self.query(sql)
+
+    def query(self, sql: str, params: list = None) -> list[dict]:
+        result = self.con.execute(sql, params or [])
+        cols = [d[0] for d in result.description]
+        return [dict(zip(cols, row)) for row in result.fetchall()]
+
+    def close(self):
+        self.con.close()
+
+    def get_param_sets(self, operation_name: str = None, asset_name: str = None, strat_name: str = None) -> list[dict]:
         filters, params = [], []
         if operation_name:
-            filters.append("o.name = ?")
+            filters.append("operation_name = ?")
             params.append(operation_name)
         if asset_name:
-            filters.append("a.name = ?")
+            filters.append("asset_name = ?")
             params.append(asset_name)
         if strat_name:
-            filters.append("s.name = ?")
+            filters.append("strat_name = ?")
             params.append(strat_name)
- 
+
         where = f"WHERE {' AND '.join(filters)}" if filters else ""
-        rows = self.con.execute(
-            f"SELECT * FROM v_param_sets_full {where}", params
-        ).fetchall()
- 
-        cols = ["id", "ps_name", "param_json", "n_trades", "total_pnl",
-                "trades_path", "pnl_matrix_path", "strat_name", "backtest_mode",
-                "model_name", "exec_tf", "asset_name", "market",
-                "operation_name", "date_start", "date_end",
-                "best_ps_name", "best_wfe", "wf_json_path"]
-        return [dict(zip(cols, r)) for r in rows]
+            
+        try:
+            res = self.con.execute(f"SELECT * FROM v_param_sets_full {where}", params)
+            rows = res.fetchall()
+            # Pega as colunas que REALMENTE vieram do banco
+            cols = [desc[0] for desc in res.description]
+            return [dict(zip(cols, r)) for r in rows]
+        except Exception as e:
+            print(f"  > [DB ERROR] get_param_sets: {e}")
+            return [] # Retorna lista vazia em vez de quebrar a API
  
     def get_pnl_matrix(self, operation_name: str,
                         model_name: str, strat_name: str,
@@ -697,6 +546,30 @@ class Database:
  
         return pl.read_parquet(row[0])
  
+
+ 
+
+
+# ─────────────────────────────────────────────────────────────────────────
+
+
+'''        
+    def get_operations(self) -> list[dict]:
+        # Returns all operations with summary counts.
+        rows = self.con.execute("SELECT * FROM v_operations_summary").fetchall()
+        cols = ["id", "name", "date_start", "date_end", "status",
+                "n_models", "n_strats", "n_assets", "n_param_sets", "created_at"]
+        return [dict(zip(cols, r)) for r in rows]
+ 
+        
+    def query(self, sql: str, params: list = None) -> list[dict]:
+        # Raw SQL query — for custom frontend queries.
+        # Returns list of dicts.
+    
+        result = self.con.execute(sql, params or [])
+        cols = [d[0] for d in result.description]
+        return [dict(zip(cols, row)) for row in result.fetchall()]
+
     def get_trades(self, ps_id: int) -> Optional[pl.DataFrame]:
         # Reads trades parquet for a specific param_set.
 
@@ -708,18 +581,274 @@ class Database:
             return None
  
         return pl.read_parquet(row[0])
+
+    def _create_schema(self):
+        # Creates all tables and views from schema.sql if the don't exist
+        with open(SCHEMA_PATH, 'r', encoding='utf-8') as f:
+            sql = f.read()
+        self.con.execute(sql)
+
+            def _upsert_model(self, op_id: int, name: str, exec_tf: str=None) -> int:
+        existing = self.con_execute(
+            "SELECT id FROM models WHERE operation_id = ? AND name = ?",
+            [op_id, name]
+        ).fetchone()
+
+        if existing: 
+            return existing[0]
+
+        self.con.execute(
+            "INSERT INTO models (operation_id, name, exec_tf) VALUES (?, ?, ?)",
+            [op_id, name, exec_tf]
+        )
+        return self.con.execute(
+            "SELECT id FROM models WHERE operation_id = ? AND name = ?",
+            [op_id, name]
+        ).fetchone()[0]
+
+    def _upsert_param_set(self, strat_id: int, asset_id: int, name: str,
+                           trades_path: str = None, pnl_matrix_path: str = None,
+                           lot_matrix_path: str = None, n_trades: int = None,
+                           total_pnl: float = None) -> int:
+        existing = self.con.execute(
+            "SELECT id FROM param_sets WHERE strat_id = ? AND asset_id = ? AND name = ?",
+            [strat_id, asset_id, name]
+        ).fetchone()
  
-    def query(self, sql: str, params: list = None) -> list[dict]:
-        # Raw SQL query — for custom frontend queries.
-        # Returns list of dicts.
+        if existing:
+            self.con.execute("""
+                UPDATE param_sets SET
+                    trades_path     = COALESCE(?, trades_path),
+                    pnl_matrix_path = COALESCE(?, pnl_matrix_path),
+                    lot_matrix_path = COALESCE(?, lot_matrix_path),
+                    n_trades        = COALESCE(?, n_trades),
+                    total_pnl       = COALESCE(?, total_pnl)
+                WHERE id = ?
+            """, [trades_path, pnl_matrix_path, lot_matrix_path,
+                  n_trades, total_pnl, existing[0]])
+            return existing[0]
+ 
+        self.con.execute("""
+            INSERT INTO param_sets (strat_id, asset_id, name, trades_path,
+                                    pnl_matrix_path, lot_matrix_path,
+                                    n_trades, total_pnl)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, [strat_id, asset_id, name, trades_path,
+              pnl_matrix_path, lot_matrix_path, n_trades, total_pnl])
+        return self.con.execute(
+            "SELECT id FROM param_sets WHERE strat_id = ? AND asset_id = ? AND name = ?",
+            [strat_id, asset_id, name]
+        ).fetchone()[0]
+ 
+
+    def _upsert_strat(self, model_id: int, name: str) -> int:
+        existing = self.con.execute(
+            "SELECT id FROM strats WHERE model_id = ? AND name = ?",
+            [model_id, name]
+        ).fetchone()
+ 
+        if existing:
+            return existing[0]
+ 
+        self.con.execute(
+            "INSERT INTO strats (model_id, name) VALUES (?, ?)",
+            [model_id, name]
+        )
+        return self.con.execute(
+            "SELECT id FROM strats WHERE model_id = ? AND name = ?",
+            [model_id, name]
+        ).fetchone()[0]
+ 
+    def _get_or_create_asset(self, name: str) -> int:
+        existing = self.con.execute(
+            "SELECT id FROM assets WHERE name = ?", [name]
+        ).fetchone()
+ 
+        if existing:
+            return existing[0]
+ 
+        self.con.execute(
+            "INSERT INTO assets (name) VALUES (?)", [name]
+        )
+        return self.con.execute(
+            "SELECT id FROM assets WHERE name = ?", [name]
+        ).fetchone()[0]
+ 
+
+    def sync_results_to_db(self, operation_name: str):
+        # O caminho deve bater com a estrutura: Backtest/results/operation_test/trades/
+        base_path = Path(f"Backtest/results/{operation_name}/trades")
+        
+        if not base_path.exists():
+            print(f"     > [DEBUG] ERRO: A pasta {base_path} não existe!")
+            return
+        
+        files = list(base_path.rglob("*.parquet"))
+        print(f"     > [DEBUG] Arquivos encontrados: {len(files)}")
+        
+        for f in files:
+            print(f"     > [DEBUG] Lendo: {f.name}")
+
+        # Pega o ID da operação
+        op_id = self.con.execute("SELECT id FROM operations WHERE name = ?", [operation_name]).fetchone()[0]
+
+        # Iterar nos Modelos (ex: MA Trend Following)
+        for model_dir in base_path.iterdir():
+            if not model_dir.is_dir(): continue
+            
+            self.con.execute("INSERT INTO models (operation_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING", [op_id, model_dir.name])
+            model_id = self.con.execute("SELECT id FROM models WHERE name = ? AND operation_id = ?", [model_dir.name, op_id]).fetchone()[0]
+
+            # Iterar nas Estratégias (ex: AT15)
+            for strat_dir in model_dir.iterdir():
+                if not strat_dir.is_dir(): continue
+                
+                self.con.execute("INSERT INTO strats (model_id, name) VALUES (?, ?) ON CONFLICT DO NOTHING", [model_id, strat_dir.name])
+                strat_id = self.con.execute("SELECT id FROM strats WHERE name = ? AND model_id = ?", [strat_dir.name, model_id]).fetchone()[0]
+
+                # Iterar nos Ativos (ex: EURUSD)
+                for asset_dir in strat_dir.iterdir():
+                    if not asset_dir.is_dir(): continue
+                    
+                    # Garante que o Ativo existe na tabela assets
+                    self.con.execute("INSERT INTO assets (name) VALUES (?) ON CONFLICT DO NOTHING", [asset_dir.name])
+                    asset_id = self.con.execute("SELECT id FROM assets WHERE name = ?", [asset_dir.name]).fetchone()[0]
+                    
+                    # Procura os arquivos de matriz (pnl_matrix.parquet)
+                    pnl_path = asset_dir / "pnl_matrix.parquet"
+                    pnl_str = str(pnl_path) if pnl_path.exists() else None
+
+                    # Iterar nos arquivos de cada Param Set (.parquet que não são matrizes)
+                    for ps_file in asset_dir.glob("*.parquet"):
+                        if ps_file.name in ["pnl_matrix.parquet", "lot_matrix.parquet"]:
+                            continue
+                        
+                        # Aqui usamos o nome do arquivo (sem .parquet) como nome do Param Set
+                        self.con.execute("""
+                            INSERT INTO param_sets (strat_id, asset_id, name, trades_path, pnl_matrix_path)
+                            VALUES (?, ?, ?, ?, ?)
+                            ON CONFLICT DO NOTHING
+                        """, [strat_id, asset_id, ps_file.stem, str(ps_file), pnl_str])
+
     
-        result = self.con.execute(sql, params or [])
-        cols = [d[0] for d in result.description]
-        return [dict(zip(cols, row)) for row in result.fetchall()]
+    def populate_operation(self, name: str):
+        print(f"     > [DB] Populating operation: {name}")
+        
+        # O RETURNING id já devolve o número gerado pelo banco
+        res = self.con.execute("""
+            INSERT INTO operations (name, status) 
+            VALUES (?, 'active')
+            RETURNING id
+        """, [name]).fetchone()
+        
+        op_id = res[0] if res else None
 
-# ─────────────────────────────────────────────────────────────────────────
+        if not op_id:
+                res = self.con.execute("SELECT id FROM operations WHERE name = ?", [name]).fetchone()
+                op_id = res[0] if res else 0
 
+        return int(op_id) # Retorna explicitamente um inteiro
 
+        2. Sincroniza os arquivos do disco com as tabelas
+        try:
+            self.sync_results_to_db(name)
+            print(f"     > [DB] Operation '{name}' populated successfully.")
+            return {"status": "success", "operation": name}
+        except Exception as e:
+            print(f"     > [DB] Error during sync: {e}")
+            return {"status": "error", "message": str(e)}
 
+    def populate_operation(self, operation_name: str) -> int:
+        # Reads results/{operation_name}/ and populates all metadata tables
+        # Idempotent - safe to call multiple times, updates existing records
+        # Returns the operation id
 
+        # Structure expected:
+        #       results/{op_name}/
+        #               meta/operation_meta.json
+        #               trades/{model}/{strat}/{asset}/
+        #                       {ps_name}.parquet
+        #                       pnl_matrix.parquet
+        #                       lot_matrix.parquet
+        #                       all_wf_results.json (optional)
+
+        op_path = RESULTS_PATH / operation_name
+        meta_path = op_path / "meta" / "operation_meta.json"
+ 
+        if not op_path.exists():
+            raise FileNotFoundError(f"Operation path not found: {op_path}")
+ 
+        # Lê meta da operation
+        meta = {}
+        if meta_path.exists():
+            with open(meta_path) as f:
+                meta = json.load(f)
+ 
+        # Upsert operation
+        op_id = self._upsert_operation(
+            name=operation_name,
+            date_start=meta.get("date_start"),
+            date_end=meta.get("date_end"),
+            op_timeframe=meta.get("operation_timeframe"),
+            results_path=str(op_path),
+        )
+ 
+        trades_path = op_path / "trades"
+        if not trades_path.exists():
+            print(f"   > No trades found for {operation_name}")
+            return op_id
+ 
+        # Itera models → strats → assets
+        for model_name in sorted(trades_path.iterdir()):
+            if not model_name.is_dir(): continue
+ 
+            # Lê exec_tf do meta se disponível
+            exec_tf = meta.get("models", {}).get(model_name.name, {}).get("exec_tf")
+            model_id = self._upsert_model(op_id, model_name.name, exec_tf)
+ 
+            for strat_dir in sorted(model_name.iterdir()):
+                if not strat_dir.is_dir(): continue
+ 
+                strat_id = self._upsert_strat(model_id, strat_dir.name)
+ 
+                for asset_dir in sorted(strat_dir.iterdir()):
+                    if not asset_dir.is_dir(): continue
+ 
+                    asset_name = asset_dir.name
+                    # Garante que o asset existe (sem params — usuário cadastra depois)
+                    asset_id = self._get_or_create_asset(asset_name)
+ 
+                    # Liga asset ao model
+                    self._upsert_model_asset(model_id, asset_id)
+ 
+                    # Popula param_sets — todos os .parquet exceto os reservados
+                    reserved = {"pnl_matrix.parquet", "lot_matrix.parquet", "wfm_raw.parquet"}
+                    pnl_matrix_path = asset_dir / "pnl_matrix.parquet"
+                    lot_matrix_path = asset_dir / "lot_matrix.parquet"
+ 
+                    for ps_file in sorted(asset_dir.glob("*.parquet")):
+                        if ps_file.name in reserved: continue
+ 
+                        ps_name = ps_file.stem
+                        n_trades, total_pnl = self._read_trade_metrics(ps_file)
+ 
+                        self._upsert_param_set(
+                            strat_id=strat_id,
+                            asset_id=asset_id,
+                            name=ps_name,
+                            trades_path=str(ps_file),
+                            pnl_matrix_path=str(pnl_matrix_path) if pnl_matrix_path.exists() else None,
+                            lot_matrix_path=str(lot_matrix_path) if lot_matrix_path.exists() else None,
+                            n_trades=n_trades,
+                            total_pnl=total_pnl,
+                        )
+ 
+                    # WF results
+                    wf_json = asset_dir / "all_wf_results.json"
+                    if wf_json.exists():
+                        self._upsert_wf_result(strat_id, asset_id, str(wf_json))
+ 
+        print(f"   > [DB] Operation '{operation_name}' populated (id={op_id})")
+        return op_id
+'''  
 
