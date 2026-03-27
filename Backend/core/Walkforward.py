@@ -328,6 +328,7 @@ class Walkforward:
                 self.all_wf_results[k]['stability_score'] = final_scores.get(k, 0)
         return self.all_wf_results
 
+
     # Plotting
     def plot_heatmap(self, metric='wfe'):
         plt.style.use('dark_background')
@@ -570,7 +571,7 @@ class Walkforward:
         selected_key = None
         if wf_result and 'config' in wf_result:
             c = wf_result['config']
-            selected_key = f"IS{c[0]}_OS{c[1]}_ST{c[2]}"
+            selected_key = f"{c[0]}_{c[1]}_{c[2]}"
         else:
             selected_key = max(self.all_wf_results, key=lambda k: self.all_wf_results[k]['total_pnl'])
 
