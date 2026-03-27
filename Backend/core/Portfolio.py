@@ -104,6 +104,14 @@ class Portfolio():
         storage = Storage(base_path=self.data_storage_base_path)
 
         for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
+
+            Abandonando JSON, ficar apenas em parquet
+            Walkforward, pnl_matrix, lot_matrix e cada wf_{is}_{os}_{st} individual
+            serão salvos em
+            wfm/
+            matrix/
+            trades/
+
             assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
             a_obj.update(assets_trade_matrix)
             for parset in assets_trade_matrix:

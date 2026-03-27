@@ -60,3 +60,38 @@ class SystemManager():
 
     def __repr__(self):
         return f"<{self.__class__.__name__} name={self.name}>"
+    
+
+
+
+
+
+    # Management Indicators
+    def fama_french(): # Imports all T-Bills, Assets, etc
+        
+        pass
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

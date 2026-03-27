@@ -193,7 +193,7 @@ class Walkforward:
             is_l, os_l, stp = config
             if is_l + os_l > total_rows: continue
 
-            wf_key = f"IS{is_l}_OS{os_l}_ST{stp}"
+            wf_key = f"{is_l}_{os_l}_{stp}"
             wf_data = self.run_wf(is_l, os_l, stp)
             
             if not wf_data or not wf_data["windows"]: continue

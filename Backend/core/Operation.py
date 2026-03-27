@@ -1190,17 +1190,18 @@ class Operation():
         pass
 
     # Saves Model-Strat-Asset-Parset/WF results
+    """
     def _save_and_clean(self):
-        """
-        Salva todos os resultados em Parquet e limpa TUDO da memória.
-        Resolve pivots WFM adiados (wfm_deferred_path) antes de salvar —
-        garante que wfm_matrix está sempre em parquet para etapas seguintes.
+        
+        # Salva todos os resultados em Parquet e limpa TUDO da memória.
+        # Resolve pivots WFM adiados (wfm_deferred_path) antes de salvar —
+        # garante que wfm_matrix está sempre em parquet para etapas seguintes.
  
-        Estrutura salva:
-            trades/  → um parquet por ps_name
-            wfm/     → pnl_matrix.parquet + lot_matrix.parquet por asset
-            meta/    → operation_meta.json
-        """
+        # Estrutura salva:
+        #     trades/  → um parquet por ps_name
+        #     wfm/     → pnl_matrix.parquet + lot_matrix.parquet por asset
+        #     meta/    → operation_meta.json
+        
         import duckdb, os
         from Storage import Storage
         storage = Storage(base_path="results")
@@ -1268,7 +1269,128 @@ class Operation():
                     asset_data["wfm_lot_data"]    = None
  
         print(f"   > Memory cleaned — results available from parquet.")
+    """
     
+    def _save_and_clean(self):
+        # Saves results organized by category (Matrix, WFM, Trades) and cleans RAM memory
+
+        from Storage import Storage
+        storage = Storage(base_path="Backend/results")
+
+        # Prepares Global Metadata of the Operation
+        meta = {
+            "operation_timeframe": self.operation_timeframe,
+            "date_start": self.date_start,
+            "date_end": self.date_end,
+            "models": {}
+        }
+
+        # Iterates over structure to save every result individually
+        models = self._results_map.get(self.name, {}).get("models", {})
+
+        for m_name, m_obj in models.items():
+            meta["models"][m_name] = {}
+            for s_name, s_obj in m_obj.get("strats", {}).items():
+                meta["models"][m_name][s_name] = {"assets": list(s_obj.get("assets", {}).keys())}
+
+                for a_name, a_obj in s_obj.get("assets", {}).items():
+                    # A - Resolves deferred pivot (DuckDB)
+                    self._resolve_deferred_pivots(a_obj, m_name, s_name, a_name)
+
+                    # B - Saves matrixes (PnL and Lot)
+                    storage.save_matrix_data(
+                        op=self.name,
+                        model=m_name,
+                        strat=s_name,
+                        asset=a_name,
+                        pnl_df=a_obj.get("wfm_matrix_data"),
+                        lot_df=a_obj.get("wfm_lot_data")
+                    )
+
+                    # C - Saves individual trades (Parsets)
+                    param_sets = a_obj.get("param_sets", {})
+                    for ps_name, ps_obj in param_sets.items():
+                        trades = ps_obj.get("trades")
+                        if trades is not None:
+                            storage.save_individual_trade(
+                                op=self.name, model=m_name, strat=s_name, asset=a_name,
+                                ps_name=ps_name, trades_df=trades
+                            )
+
+        # Saves global metadata
+        storage.save_operation_meta(self.name, meta)
+
+        # Cleans memory
+        self._deep_clean_memory(models)
+        print(f"   > [Operation] All results saved and memory cleared for {self.name}")
+
+    def _resolve_deferred_pivots(self, asset_data: dict, model_name: str, strat_name: str, asset_name: str):
+        """
+        Transforma os dados brutos de WFM (armazenados em disco pelo DuckDB) 
+        em matrizes Polars prontas para o Storage.
+        """
+        import duckdb, os
+        raw_path = asset_data.get("wfm_deferred_path")
+        
+        if not raw_path or not os.path.exists(raw_path):
+            return
+
+        print(f"   > [DuckDB] Resolving deferred pivot: {model_name} | {asset_name}")
+        
+        try:
+            con = duckdb.connect()
+            # Carrega o arquivo temporário que foi salvo durante a execução dos parsets
+            con.execute(f"CREATE TABLE wfm_raw AS SELECT * FROM read_parquet('{raw_path}')")
+            
+            ps_names = list(asset_data.get("param_sets", {}).keys())
+            
+            # Tenta realizar o pivot (transformar linhas de parsets em colunas)
+            matrix_pnl, matrix_lot = self._try_pivot_with_backoff(con, ps_names, raw_path)
+            con.close()
+
+            if matrix_pnl is not None:
+                # Atualiza o dicionário com as matrizes finais
+                asset_data["wfm_matrix_data"] = matrix_pnl
+                asset_data["wfm_lot_data"]    = matrix_lot
+                
+                # Remove o arquivo bruto temporário para liberar espaço em disco
+                if os.path.exists(raw_path):
+                    os.remove(raw_path)
+                
+                # Limpa a referência do caminho
+                asset_data.pop("wfm_deferred_path", None)
+            else:
+                print(f"   > [Error] Pivot failed for {asset_name}. Raw file preserved.")
+
+        except Exception as e:
+            print(f"   > [Critical] Error during DuckDB pivot for {asset_name}: {e}")
+
+    def _deep_clean_memory(self, models_dict: dict):
+            """
+            Limpeza agressiva de memória para garantir que grandes DataFrames 
+            sejam liberados após o salvamento.
+            """
+            import gc
+            
+            for m_data in models_dict.values():
+                for s_data in m_data.get("strats", {}).values():
+                    for a_data in s_data.get("assets", {}).values():
+                        # 1. Limpa os trades individuais de cada parset
+                        param_sets = a_data.get("param_sets", {})
+                        for ps_data in param_sets.values():
+                            ps_data["trades"] = None
+                        
+                        # 2. Limpa as matrizes pesadas de WFM
+                        a_data["wfm_matrix_data"] = None
+                        a_data["wfm_lot_data"] = None
+                        
+                        # 3. Limpa qualquer cache de sinal ou indicador que possa ter sobrado
+                        a_data.pop("signals", None)
+                        a_data.pop("indicators", None)
+
+            # Força o Garbage Collector do Python a rodar imediatamente
+            gc.collect()
+
     # || ===================================================================== || Metrics Functions || ===================================================================== ||
 
     def _report_pnl_summary(
@@ -1462,20 +1584,12 @@ class Operation():
         model:             Optional[str] = None,
         strat:             Optional[str] = None,
         asset:             Optional[str] = None,
-        load_from_storage: bool = True,
+        load_from_storage: bool = False, # Mudamos o default para False
     ):
         """
-        Plota resultados do Walkforward — todas as configs IS/OS.
- 
-        load_from_storage=False → usa all_wf_results do engine em memória
-        load_from_storage=True  → carrega all_wf_results.json do parquet
- 
-        Filtros: model, strat, asset
+        Plota resultados do Walkforward DIRETAMENTE da memória.
+        Deve ser chamado imediatamente após o _run_walkforward.
         """
-        import json as _json
-        from datetime import datetime as _dt
-        from Storage import Storage
-        storage     = Storage(base_path="results")
         models_dict = self._get_all_models()
  
         for m_name, m_obj in models_dict.items():
@@ -1489,62 +1603,28 @@ class Operation():
                 for a_name in m_obj.assets:
                     if asset and a_name != asset: continue
  
-                    asset_node = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
                     wfm_engine = s_obj.operation
-                    all_wf     = None
-                    wf_result  = None
-                    res_key    = None
+                    all_wf = wfm_engine.all_wf_results
  
-                    if not load_from_storage:
-                        # Usa all_wf_results do engine — ainda em memória após _run_walkforward
-                        all_wf  = wfm_engine.all_wf_results if wfm_engine.all_wf_results else None
-                        wf_data = asset_node.get("walkforward")
-                        if wf_data:
-                            wf_result = wf_data.get("best_result") or wf_data.get("all_results")
-                            metric    = wf_data.get("metric_wf_parset", "wfe")
-                            res_key   = 'total_pnl' if metric == 'pnl' else metric
- 
-                    if all_wf is None:
-                        # Carrega do parquet (sempre se load_from_storage=True, ou fallback)
-                        wf_path = storage.base_path / self.name / "trades" / m_name / s_name / a_name / "all_wf_results.json"
-                        if not wf_path.exists():
-                            print(f"   > [Skip] No walkforward results found for {m_name}/{s_name}/{a_name}")
-                            continue
- 
-                        with open(wf_path, "r") as f:
-                            all_wf = _json.load(f)
- 
-                        # Extrai __meta__ e remove do dict
-                        meta    = all_wf.pop("__meta__", {})
-                        res_key = meta.get("res_key", "wfe")
- 
-                        # Reconverte strings ISO → datetime nos windows
-                        for cfg_data in all_wf.values():
-                            if not isinstance(cfg_data, dict): continue
-                            for win in cfg_data.get("windows", []):
-                                for k in ("is_start", "is_end", "os_start", "os_end"):
-                                    if k in win and isinstance(win[k], str):
-                                        try: win[k] = _dt.fromisoformat(win[k])
-                                        except: pass
- 
-                        # Melhor config como wf_result para plot_timeline
-                        try:
-                            wf_result = max(
-                                all_wf.values(),
-                                key=lambda r: r.get(res_key, -float('inf')) if isinstance(r, dict) else -float('inf')
-                            )
-                        except:
-                            wf_result = next(iter(all_wf.values()))
- 
-                    if all_wf is None or wf_result is None:
-                        print(f"   > [Skip] No walkforward results for {m_name}/{s_name}/{a_name}")
+                    # Se não houver dados em memória, avisa e pula
+                    if not all_wf:
+                        print(f"   > [Skip] No Walkforward data in memory to plot for {a_name}.")
                         continue
  
                     print(f"   > Plotting Walkforward: {m_name} | {s_name} | {a_name}")
  
-                    # Restaura all_wf_results no engine para plots usarem todas as configs
-                    wfm_engine.all_wf_results = all_wf
+                    # Determina a métrica e o melhor resultado para servir de base para a Timeline
+                    try:
+                        metric = str(wfm_engine.wf_selection_metric)
+                        res_key = 'total_pnl' if metric == 'pnl' else metric
+                        wf_result = max(
+                            all_wf.values(),
+                            key=lambda r: r.get(res_key, -float('inf')) if isinstance(r, dict) else -float('inf')
+                        )
+                    except:
+                        wf_result = next(iter(all_wf.values()))
  
+                    # Dispara os plots usando a engine do Walkforward
                     wfm_engine.plot_oos_curves(wf_result=wf_result)
                     wfm_engine.plot_timeline(wf_result=wf_result)
                     if res_key:
@@ -1553,88 +1633,65 @@ class Operation():
     # || ===================================================================== || Walkforward || ===================================================================== ||
 
     def _run_walkforward(self):
-        """
-        Executa WFM para todos os Models → Strats → Assets.
-        Sempre carrega wfm_matrix do parquet — nunca depende de estado em memória.
-        """
-        import builtins
+        # Executa WFM e salva a curva OOS em Parquet na pasta /wfm.
+        
         from Storage import Storage
- 
-        storage     = Storage(base_path="results")
+        storage = Storage(base_path="Backend/results")
         models_dict = self._get_all_models()
- 
+
         for m_name, m_obj in models_dict.items():
             for s_name, s_obj in m_obj.strat.items():
                 if not hasattr(s_obj, 'operation') or not isinstance(s_obj.operation, Walkforward):
                     continue
- 
+
                 for a_name in m_obj.assets:
                     print(f"\n>>> Running Walkforward Analysis: {m_name} | {s_name} | {a_name}")
- 
-                    asset_node = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
- 
-                    # Carrega pnl_matrix do parquet — sempre, independente de memória
-                    pnl_dict        = storage.load_pnl_matrix(self.name, model=m_name, strat=s_name, asset=a_name, kind="pnl")
-                    curr_pnl_matrix = pnl_dict.get(f"{m_name}/{s_name}/{a_name}")
- 
-                    if curr_pnl_matrix is None or curr_pnl_matrix.is_empty():
+
+                    # Carregar matriz de PnL diretamente da nova subpasta /matrix
+                    # Nota: Ajuste o seu storage.load para buscar em /matrix/pnl_matrix.parquet
+                    pnl_matrix = storage.load_matrix_only(self.name, m_name, s_name, a_name)
+
+                    if pnl_matrix is None or pnl_matrix.is_empty():
                         print(f"   > [Skip] No WFM matrix found for {a_name}")
                         continue
- 
-                    wfm_engine        = s_obj.operation
-                    wfm_engine.matrix = curr_pnl_matrix
-                    wf_final_results  = wfm_engine.analyze()
-                    wf_parset_metric  = str(wfm_engine.wf_selection_metric)
-                    res_key           = 'total_pnl' if wf_parset_metric == 'pnl' else wf_parset_metric
- 
+
+                    wfm_engine = s_obj.operation
+                    wfm_engine.matrix = pnl_matrix
+                    wf_final_results = wfm_engine.analyze() # Aqui gera o all_wf_results
+                    
                     if not wf_final_results:
                         print(f"   > [Error] Walkforward failed for {a_name}")
                         continue
- 
-                    if wfm_engine.wf_returns_mode == 'selected':
-                        display_val = wf_final_results.get(res_key, 0.0)
-                        asset_node['walkforward'] = {
-                            "best_result":      wf_final_results,
-                            "mode":             "selected",
-                            "metric_wf_parset": wf_parset_metric,
-                        }
-                    else:
-                        def get_val(k):
-                            res = wf_final_results.get(k, {})
-                            v   = res.get(res_key, 0.0) if isinstance(res, dict) else 0.0
-                            if hasattr(v, "item"): return float(v.item())
-                            try: return float(v)
-                            except: return 0.0
- 
-                        best_key    = builtins.max(wf_final_results.keys(), key=get_val)
-                        display_val = get_val(best_key)
-                        asset_node["walkforward"] = {
-                            "all_results": wf_final_results,
-                            "mode":        "all",
-                        }
- 
-                    print(f"   > Walkforward Complete. Best {wf_parset_metric.upper()}: {display_val:.8f}")
- 
-                    # Injeta __meta__ para _plot_wfm saber qual métrica usar ao carregar
-                    wfm_engine.all_wf_results["__meta__"] = {
-                        "wf_selection_metric": wf_parset_metric,
-                        "res_key":             res_key,
-                    }
- 
-                    # Salva all_wf_results completo (todas as configs IS/OS)
-                    wfm_path = storage.base_path / self.name / "trades" / m_name / s_name / a_name
-                    wfm_path.mkdir(parents=True, exist_ok=True)
-                    storage._save_walkforward(wfm_path, wfm_engine.all_wf_results)
- 
-                    # Remove __meta__ do objeto em memória após salvar
-                    wfm_engine.all_wf_results.pop("__meta__", None)
- 
-                    # Libera memória
-                    wfm_engine.matrix             = None
-                    asset_node["wfm_matrix_data"] = None
- 
+
+                    # Extrair métricas para o log
+                    #wf_parset_metric = str(wfm_engine.wf_selection_metric)
+
+                    # SALVAR VIA STORAGE (Agora usando a nova estrutura de pastas)
+                    # Passamos o dicionário completo de resultados (all_wf_results)
+                    # O Storage vai filtrar o que é série temporal para Parquet e o que é config para JSON
+                    for config_key, config_data in wfm_engine.all_wf_results.items():
+                        if config_key == "__meta__": continue
+                        
+                        runs_list = config_data.get("runs", [])
+                        if not runs_list: continue
+
+                        # Salva apenas o Parquet
+                        storage.save_walkforward(
+                            op=self.name,
+                            model=m_name,
+                            strat=s_name,
+                            asset=a_name,
+                            wf_id=config_key,
+                            all_runs=runs_list
+                        )
+
+                    print(f"   > Walkforward Complete and Saved to /wfm.")
+
+                    # Liberação de RAM
+                    wfm_engine.matrix = None
+        
         return True
-    
+
     # || ======================================================================================================================================================================= ||
                         
     def run(self):
@@ -1645,15 +1702,15 @@ class Operation():
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        self._operation()
+        #self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
         print(f"\n>>> III - Pos-Processing, Saving and Cleaning <<<")
-        self._save_and_clean()
+        #self._save_and_clean()
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        self._run_walkforward()
+        #self._run_walkforward()
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()

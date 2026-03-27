@@ -4,20 +4,6 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 
 class Storage:
-    """
-    Gerencia persistência dos resultados da Operation em Parquet + JSON metadata.
-
-    Estrutura de diretórios:
-        {base_path}/{operation_name}/
-            meta/
-                operation_meta.json     → metadata da operation (datas, assets, params)
-            trades/
-                {model}/{strat}/{asset}/{ps_name}.parquet
-            wfm/
-                {model}/{strat}/{asset}/pnl_matrix.parquet
-                {model}/{strat}/{asset}/lot_matrix.parquet
-    """
-
     def __init__(self, base_path: str = "Backend/results"):
         self.base_path = Path(base_path)
 
@@ -25,53 +11,75 @@ class Storage:
     # Save
     # ─────────────────────────────────────────────────────────────────────────
 
-    def save(self, operation_name: str, results_map: dict, meta: dict = None):
-        """
-        Salva todos os resultados de uma Operation.
-        Chamado por _save_and_clean().
-        """
-        op_path = self.base_path / operation_name
-        op_path.mkdir(parents=True, exist_ok=True)
- 
-        self._save_meta(op_path, operation_name, meta or {})
-        n_trades, n_wfm = 0, 0
- 
-        models = results_map.get(operation_name, {}).get("models", {})
-        for model_name, model_data in models.items():
-            for strat_name, strat_data in model_data.get("strats", {}).items():
-                for asset_name, asset_data in strat_data.get("assets", {}).items():
- 
-                    trades_path = op_path / "trades" / model_name / strat_name / asset_name
-                    trades_path.mkdir(parents=True, exist_ok=True)
- 
-                    # ── Trades individuais ────────────────────────────────────
-                    for ps_name, ps_data in asset_data.get("param_sets", {}).items():
-                        trades = ps_data.get("trades")
-                        if trades is None: continue
-                        if isinstance(trades, pl.DataFrame) and trades.is_empty(): continue
-                        if isinstance(trades, list) and len(trades) == 0: continue
- 
-                        df        = trades if isinstance(trades, pl.DataFrame) else pl.DataFrame(trades)
-                        safe_name = self._safe_filename(ps_name)
-                        df.write_parquet(trades_path / f"{safe_name}.parquet")
-                        n_trades += 1
- 
-                    # ── WFM matrices (pnl + lot) ──────────────────────────────
-                    pnl_matrix = asset_data.get("wfm_matrix_data")
-                    if pnl_matrix is not None and not pnl_matrix.is_empty():
-                        pnl_matrix.write_parquet(trades_path / "pnl_matrix.parquet")
-                        n_wfm += 1
- 
-                    lot_matrix = asset_data.get("wfm_lot_data")
-                    if lot_matrix is not None and not lot_matrix.is_empty():
-                        lot_matrix.write_parquet(trades_path / "lot_matrix.parquet")
- 
-        print(f"   > [Storage] Saved {n_trades} trade files and {n_wfm} WFM matrices")
-        print(f"   > [Storage] Path: {op_path.resolve()}")
+    def _get_asset_path(self, op: str, model: str, strat: str, asset: str) -> Path:
+        return self.base_path / op / model / strat / asset
+    
+    def save_matrix_data(self, op: str, model: str, strat: str, asset: str,
+                         pnl_df: Optional[pl.DataFrame], lot_df: Optional[pl.DataFrame]):
+        path = self._get_asset_path(op, model, strat, asset) / "matrix"
+        path.mkdir(parents=True, exist_ok=True)
+
+        if pnl_df is not None: 
+            pnl_df.write_parquet(path / "pnl_matrix.parquet")
+        if lot_df is not None:
+            lot_df.write_parquet(path / "lot_matrix.parquet")
+
+    def save_walkforward(self, op: str, model: str, strat: str, asset: str, 
+                        wf_id: str, all_runs: list):
+        # Salva cada configuração de WFM como um Parquet independente.
+        # Ex: wf_id = "12_4_4" -> wf_12_4_4.parquet
+        
+        path = self._get_asset_path(op, model, strat, asset) / "wfm"
+        path.mkdir(parents=True, exist_ok=True)
+
+        oos_frames = []
+        for run in all_runs:
+            # Pega o DataFrame do Walkforward
+            if "os_curve" in run and isinstance(run["os_curve"], pl.DataFrame):
+                os_df = run["os_curve"].clone()
+                
+                # Renomeia "ts" para "datetime" para o Portfolio Simulator alinhar depois
+                if "ts" in os_df.columns:
+                    os_df = os_df.rename({"ts": "datetime"})
+                
+                # Injeta qual foi o param set escolhido nesta janela específica
+                best_param = run.get("best_param", "")
+                os_df = os_df.with_columns(pl.lit(best_param).alias("best_param"))
+                
+                oos_frames.append(os_df)
+        
+        if oos_frames:
+            filename = f"wf_{wf_id}.parquet"
+            # Concatena as janelas OOS e salva
+            full_oos_curve = pl.concat(oos_frames).sort("datetime")
+            full_oos_curve.write_parquet(path / filename)
+            #print(f"      > [Storage] Saved WFM: {filename}")
+
+
+    def save_individual_trade(self, op, model, strat, asset, ps_name, trades_df):
+        path = self.base_path / op / model / strat / asset / "trades"
+        path.mkdir(parents=True, exist_ok=True)
+        
+        # Sanitiza o nome do arquivo (remove caracteres que o Windows não gosta)
+        safe_ps_name = "".join([c if c.isalnum() or c in "-_" else "_" for c in ps_name])
+        trades_df.write_parquet(path / f"{safe_ps_name}.parquet")
+
+    def save_operation_meta(self, op_name: str, meta_dict: dict):
+        path = self.base_path / op_name / "operation_meta.json"
+        with open(path, "w") as f:
+            json.dump(meta_dict, f, indent=4)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Load
     # ─────────────────────────────────────────────────────────────────────────
+
+    def load_operation_meta(self, op_name: str) -> dict:
+        path = self.base_path / op_name / "operation_meta.json"
+        if path.exists():
+            with open(path, "r") as f:
+                return json.load(f)
+        return {}
+
 
     def load_trades(
         self,
@@ -82,28 +90,42 @@ class Storage:
         ps_name: Optional[str] = None,
     ) -> pl.DataFrame:
         """
-        Carrega trades filtrados por model/strat/asset/ps_name.
-        Se algum filtro for None, carrega todos os níveis abaixo.
-        Retorna DataFrame único concatenado.
+        Carrega trades filtrados pela nova hierarquia de pastas.
         """
-        trades_root = self.base_path / operation_name / "trades"
-        if not trades_root.exists():
-            print(f"   > [Storage] No trades found at {trades_root}")
+        op_root = self.base_path / operation_name
+        if not op_root.exists():
+            print(f"   > [Storage] Operation root not found: {op_root}")
             return pl.DataFrame()
 
-        files = self._find_parquet_files(trades_root, model, strat, asset, ps_name)
+        files = []
+        # O rglob vai varrer todas as subpastas chamadas "trades"
+        for f in op_root.rglob("trades/*.parquet"):
+            # parts -> model, strat, asset, "trades", filename
+            rel_parts = f.relative_to(op_root).parts 
+            if len(rel_parts) < 5: continue
+
+            m, s, a, folder, fname = rel_parts
+            
+            if model and m != model: continue
+            if strat and s != strat: continue
+            if asset and a != asset: continue
+            if ps_name and f.stem != self._safe_filename(ps_name): continue
+
+            files.append(f)
+
         if not files:
             print(f"   > [Storage] No trade files matched filters.")
             return pl.DataFrame()
 
-        dfs = []
-        for f in files:
-            if f.stem in ("pnl_matrix", "lot_matrix", "walkforward_result"):
-                continue
-            df = pl.read_parquet(f)
-            dfs.append(df)
-
+        dfs = [pl.read_parquet(f) for f in files]
         return pl.concat(dfs, how="diagonal_relaxed") if dfs else pl.DataFrame()
+
+
+    def load_matrix_only(self, op, model, strat, asset):
+        path = self.base_path / op / model / strat / asset / "matrix" / "pnl_matrix.parquet"
+        if path.exists():
+            return pl.read_parquet(path)
+        return None
 
     # For local Walkforward use
     def load_pnl_matrix(
@@ -160,53 +182,36 @@ class Storage:
             return []
         return [f.stem for f in sorted(path.glob("*.parquet"))]
 
-    def load(self, op_name: str, model: str, strat: str, asset: str, 
-            pnl_saved_name="pnl_matrix.parquet",
-            lot_saved_name="lot_matrix.parquet",
-            wf_saved_name="all_wf_results.json"
-            ) -> Dict[str, pl.DataFrame]:
-        folder_path = self.base_path / op_name / "trades" / model / strat / asset
-        asset_container = {}
-       
-        # Creates paths and loads data
-        pnl_path = folder_path / pnl_saved_name
-        lot_path = folder_path / lot_saved_name
-        wf_path = folder_path / wf_saved_name
+    def load(self, op: str, model: str, strat: str, asset: str) -> Dict[str, Any]:
+        asset_path = self._get_asset_path(op, model, strat, asset)
+        asset_data = {}
 
-        if not pnl_path.exists(): 
-            print(f"< [Storage] path: {pnl_path} doesn't exist")
-            return {}
-
-        df_pnl = pl.read_parquet(pnl_path)
-        time_col = df_pnl.columns[0]
-        parsets = [c for c in df_pnl.columns if c != time_col]
-  
-        # Tries loading lots to cross the data
-        df_lot = pl.read_parquet(lot_path) if lot_path.exists() else None
-
-        # Creates one DataFrame per Parset: [datetime, pnl, lot]
-        for ps in parsets:
-            # Selects datetime and the specific columns fo the parset
-            ps_df = df_pnl.select([pl.col(time_col), pl.col(ps).alias("pnl")])
+        # --- LOAD MATRIX (PNL + LOT) ---
+        matrix_path = asset_path / "matrix"
+        if matrix_path.exists():
+            pnl_file = matrix_path / "pnl_matrix.parquet"
+            lot_file = matrix_path / "lot_matrix.parquet"
             
-            # If there lot matrix, joins
-            if df_lot is not None and ps in df_lot.columns:
-                lot_series = df_lot.select([pl.col(time_col), pl.col(ps).alias("lot")])
-                ps_df = ps_df.join(lot_series, on=time_col, how="left")
-            else:
-                ps_df = ps_df.with_columns(pl.lit(0.0).alias("lot"))
+            if pnl_file.exists():
+                df_pnl = pl.read_parquet(pnl_file)
+                df_lot = pl.read_parquet(lot_file) if lot_file.exists() else None
+                time_col = df_pnl.columns[0]
+                
+                for ps in [c for c in df_pnl.columns if c != time_col]:
+                    temp = df_pnl.select([pl.col(time_col), pl.col(ps).alias("pnl")])
+                    if df_lot is not None and ps in df_lot.columns:
+                        temp = temp.join(df_lot.select([time_col, ps]), on=time_col).rename({ps: "lot"})
+                    else:
+                        temp = temp.with_columns(pl.lit(0.0).alias("lot"))
+                    asset_data[ps] = temp
 
-            asset_container[ps] = ps_df
+        # --- LOAD WFM (Individual Parquets) ---
+        wfm_path = asset_path / "wfm"
+        if wfm_path.exists():
+            for wf_file in wfm_path.glob("*.parquet"):
+                asset_data[f"wf_{wf_file.stem}"] = pl.read_parquet(wf_file)
 
-        # Loads Walkorward as DataFrames
-        if wf_path.exists():
-            with open(wf_path, 'r') as f:
-                wf_data = json.load(f)
-                for wf_id, wf_content in wf_data.items():
-                    # Transforms every walkforward's windows in a DataFrame for easier consult
-                    asset_container[f"wf_{wf_id}"] = pl.DataFrame(wf_content)
-
-        return asset_container
+        return asset_data
 
     # ─────────────────────────────────────────────────────────────────────────
     # Internos
@@ -223,31 +228,6 @@ class Storage:
         }
         with open(meta_path / "operation_meta.json", "w") as f:
             json.dump(full_meta, f, indent=2, default=str)
-
-
-    def _save_walkforward(self, wfm_path, all_wf_results: dict, filename: str = "all_wf_results.json"):
-        try:
-            # Remove is_df (pl.DataFrame pesado, reconstruído na próxima rodada)
-            import copy
-            results_to_save = copy.deepcopy(all_wf_results)
-            for cfg_data in results_to_save.values():
-                if not isinstance(cfg_data, dict): continue
-                for run in cfg_data.get("runs", []):
-                    run.pop("is_df", None)
-
-            def _serialize(obj):
-                if isinstance(obj, pl.DataFrame):  return obj.to_dicts()
-                if isinstance(obj, pl.Series):     return obj.to_list()
-                if hasattr(obj, 'isoformat'):       return obj.isoformat()
-                if hasattr(obj, 'tolist'):          return obj.tolist()
-                if hasattr(obj, 'item'):            return obj.item()
-                return str(obj)
-
-            with open(wfm_path / filename, "w") as f:
-                json.dump(results_to_save, f, indent=2, default=_serialize)
-        except Exception as e:
-            print(f"   > [Storage] Warning: could not save walkforward results: {e}")
-
 
     def _find_parquet_files(
         self,
