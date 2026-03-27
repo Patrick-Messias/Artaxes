@@ -1,6 +1,6 @@
 import polars as pl, json
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 class Storage:
@@ -18,7 +18,7 @@ class Storage:
                 {model}/{strat}/{asset}/lot_matrix.parquet
     """
 
-    def __init__(self, base_path: str = "results"):
+    def __init__(self, base_path: str = "Backend/results"):
         self.base_path = Path(base_path)
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -105,6 +105,7 @@ class Storage:
 
         return pl.concat(dfs, how="diagonal_relaxed") if dfs else pl.DataFrame()
 
+    # For local Walkforward use
     def load_pnl_matrix(
         self,
         operation_name: str,
@@ -158,6 +159,54 @@ class Storage:
         if not path.exists():
             return []
         return [f.stem for f in sorted(path.glob("*.parquet"))]
+
+    def load(self, op_name: str, model: str, strat: str, asset: str, 
+            pnl_saved_name="pnl_matrix.parquet",
+            lot_saved_name="lot_matrix.parquet",
+            wf_saved_name="all_wf_results.json"
+            ) -> Dict[str, pl.DataFrame]:
+        folder_path = self.base_path / op_name / "trades" / model / strat / asset
+        asset_container = {}
+       
+        # Creates paths and loads data
+        pnl_path = folder_path / pnl_saved_name
+        lot_path = folder_path / lot_saved_name
+        wf_path = folder_path / wf_saved_name
+
+        if not pnl_path.exists(): 
+            print(f"< [Storage] path: {pnl_path} doesn't exist")
+            return {}
+
+        df_pnl = pl.read_parquet(pnl_path)
+        time_col = df_pnl.columns[0]
+        parsets = [c for c in df_pnl.columns if c != time_col]
+  
+        # Tries loading lots to cross the data
+        df_lot = pl.read_parquet(lot_path) if lot_path.exists() else None
+
+        # Creates one DataFrame per Parset: [datetime, pnl, lot]
+        for ps in parsets:
+            # Selects datetime and the specific columns fo the parset
+            ps_df = df_pnl.select([pl.col(time_col), pl.col(ps).alias("pnl")])
+            
+            # If there lot matrix, joins
+            if df_lot is not None and ps in df_lot.columns:
+                lot_series = df_lot.select([pl.col(time_col), pl.col(ps).alias("lot")])
+                ps_df = ps_df.join(lot_series, on=time_col, how="left")
+            else:
+                ps_df = ps_df.with_columns(pl.lit(0.0).alias("lot"))
+
+            asset_container[ps] = ps_df
+
+        # Loads Walkorward as DataFrames
+        if wf_path.exists():
+            with open(wf_path, 'r') as f:
+                wf_data = json.load(f)
+                for wf_id, wf_content in wf_data.items():
+                    # Transforms every walkforward's windows in a DataFrame for easier consult
+                    asset_container[f"wf_{wf_id}"] = pl.DataFrame(wf_content)
+
+        return asset_container
 
     # ─────────────────────────────────────────────────────────────────────────
     # Internos

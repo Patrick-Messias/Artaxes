@@ -18,7 +18,7 @@ class MoneyManagerParams:
     name: str = field(default_factory=lambda: f'mm_{uuid.uuid4()}')
     
     # Capital Management
-    capital: float = 100000.0
+    capital: float = 0.0
     max_capital_exposure: float = 1.0 # Ex: 1.0 = 100% do capital
     
     # Drawdown Risk (Orientado a valor financeiro ou percentual conforme o método)

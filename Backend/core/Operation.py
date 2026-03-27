@@ -1939,6 +1939,7 @@ if __name__ == "__main__":
 # - Implement tick backtest as data and timeframe [1 tick, 5, 20, etc] for calculations
 
 # - Candlestick chart with trade entry validation
+# - Multi Entry/Exit by turning entry into Dict or List, each SMM should reflect
 
 # - Best leave for PS? Scale in/out of open trade, can use entry/exit signals or new specific signals, must be able to handle market or limit/stop orders, how will this handle in Portfolio Simulator?
 # - Update position in backtest (for multiple entries) must have daily returns update with lot_size update
