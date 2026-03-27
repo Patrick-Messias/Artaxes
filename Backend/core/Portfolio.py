@@ -50,8 +50,8 @@ class Portfolio():
         self._load_saved_data()
 
         # Maps all unique datetimes to use as simulator timeline
-        #print("> Mapping all unique datetimes from Parset, Money and System Manager")
-        #self._map_all_unique_datetimes()
+        print("> Mapping all unique datetimes from Parset, Money and System Manager")
+        self._map_all_unique_datetimes()
 
 
 
@@ -87,15 +87,16 @@ class Portfolio():
         unique_dts = set()
 
         # From Portfolio Data
-        for *_, a_name, a_obj in self._iter_portfolio_data(): 
-            if "pnl" in a_obj and isinstance(a_obj["pnl"], dict):
-                unique_dts.update(a_obj["pnl"]["datetime"])
-            elif "wf" in a_obj and isinstance(a_obj["wf"], dict):
+        for *_, a_name, a_obj in self._iter_portfolio_data():        
+            if "pnl_matrix" in a_obj:
+                unique_dts.update(a_obj["pnl_matrix"]["ts"])
+            elif "wf" in a_obj:
                 unique_dts.update(a_obj["wf"]["datetime"])
             else: 
                 print(f"< [Error] No PnL or Walkforward data found for Asset: {a_name}")
 
         # From System/Money Manager Assets
+        
 
         self.datetime_timeline = sorted(list(unique_dts))
         return True
@@ -104,13 +105,9 @@ class Portfolio():
         storage = Storage(base_path=self.data_storage_base_path)
 
         for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
-
-            Salvar pnl/lot matrix, trades individuais e wf em apenas 1 parquet cada um individual
-
             assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
             a_obj.update(assets_trade_matrix)
-            for parset in assets_trade_matrix:
-                print(parset)
+            #print(assets_trade_matrix['wf'])
         return True
 
     def _iter_portfolio_data(self):

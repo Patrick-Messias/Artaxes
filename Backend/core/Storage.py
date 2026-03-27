@@ -227,26 +227,19 @@ class Storage:
         asset_path = self._asset_path(op, model, strat, asset)
         asset_data = {}
 
-        # --- LOAD MATRIX (PNL + LOT) ---
+        # ── MATRIX ─────────────────────────────────────
         matrix_path = asset_path / "matrix"
-        if matrix_path.exists():
-            pnl_file = matrix_path / "pnl_matrix.parquet"
-            lot_file = matrix_path / "lot_matrix.parquet"
-            
-            if pnl_file.exists():
-                df_pnl = pl.read_parquet(pnl_file)
-                df_lot = pl.read_parquet(lot_file) if lot_file.exists() else None
-                time_col = df_pnl.columns[0]
-                
-                for ps in [c for c in df_pnl.columns if c != time_col]:
-                    temp = df_pnl.select([pl.col(time_col), pl.col(ps).alias("pnl")])
-                    if df_lot is not None and ps in df_lot.columns:
-                        temp = temp.join(df_lot.select([time_col, ps]), on=time_col).rename({ps: "lot"})
-                    else:
-                        temp = temp.with_columns(pl.lit(0.0).alias("lot"))
-                    asset_data[ps] = temp
 
-        # --- LOAD WFM (Individual Parquets) ---
+        pnl_file = matrix_path / "pnl_matrix.parquet"
+        lot_file = matrix_path / "lot_matrix.parquet"
+
+        if pnl_file.exists():
+            asset_data["pnl_matrix"] = pl.read_parquet(pnl_file)
+
+        if lot_file.exists():
+            asset_data["lot_matrix"] = pl.read_parquet(lot_file)
+
+        # ── WFM ────────────────────────────────────────
         wf_file = asset_path / "wfm" / "wf.parquet"
         if wf_file.exists():
             asset_data["wf"] = pl.read_parquet(wf_file)

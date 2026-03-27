@@ -1538,7 +1538,6 @@ class Operation():
         model:             Optional[str] = None,
         strat:             Optional[str] = None,
         asset:             Optional[str] = None,
-        load_from_storage: bool = False, # Mudamos o default para False
     ):
         """
         Plota resultados do Walkforward DIRETAMENTE da memória.
