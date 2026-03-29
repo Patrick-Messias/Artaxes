@@ -1226,56 +1226,43 @@ class Operation():
 
     # Saves Model-Strat-Asset-Parset/WF results  
     def _save_and_clean(self):
-        # Saves results organized by category (Matrix, WFM, Trades) and cleans RAM memory
-
         from Storage import Storage
         storage = Storage(base_path="Backend/results")
 
-        # Prepares Global Metadata of the Operation
+        models_dict = self._get_all_models()  # objetos Model reais
+        models_map  = self._results_map.get(self.name, {}).get("models", {})
+
         meta = {
             "operation_timeframe": self.operation_timeframe,
-            "date_start": self.date_start,
-            "date_end": self.date_end,
-            "models": {}
+            "date_start":          self.date_start,
+            "date_end":            self.date_end,
+            "models":              {},
         }
 
-        # Iterates over structure to save every result individually
-        models = self._results_map.get(self.name, {}).get("models", {})
+        for m_name, m_obj in models_map.items():
+            model_real = models_dict.get(m_name)         
 
-        for m_name, m_obj in models.items():
-            meta["models"][m_name] = {}
+            meta["models"][m_name] = {
+                "execution_timeframe": getattr(model_real, "execution_timeframe", self.operation_timeframe),
+                "date_start":          getattr(model_real, "date_start", self.date_start),
+                "date_end":            getattr(model_real, "date_end",   self.date_end),
+                "strats":              {},
+            }
+
             for s_name, s_obj in m_obj.get("strats", {}).items():
-                meta["models"][m_name][s_name] = {"assets": list(s_obj.get("assets", {}).keys())}
+                asset_names = list(s_obj.get("assets", {}).keys())
+                meta["models"][m_name]["strats"][s_name] = {"assets": asset_names}
 
                 for a_name, a_obj in s_obj.get("assets", {}).items():
-                    # A - Resolves deferred pivot (DuckDB)
                     self._resolve_deferred_pivots(a_obj, m_name, s_name, a_name)
-
-                    # B - Saves matrixes (PnL and Lot)
                     storage.save_matrix_data(
-                        op=self.name,
-                        model=m_name,
-                        strat=s_name,
-                        asset=a_name,
+                        op=self.name, model=m_name, strat=s_name, asset=a_name,
                         pnl_df=a_obj.get("wfm_matrix_data"),
-                        lot_df=a_obj.get("wfm_lot_data")
+                        lot_df=a_obj.get("wfm_lot_data"),
                     )
 
-                    # C - Saves individual trades (Parsets)
-                    # param_sets = a_obj.get("param_sets", {})
-                    # for ps_name, ps_obj in param_sets.items():
-                    #     trades = ps_obj.get("trades")
-                    #     if trades is not None:
-                    #         storage.save_individual_trade(
-                    #             op=self.name, model=m_name, strat=s_name, asset=a_name,
-                    #             ps_name=ps_name, trades_df=trades
-                    #         )
-
-        # Saves global metadata
         storage.save_operation_meta(self.name, meta)
-
-        # Cleans memory
-        self._deep_clean_memory(models)
+        self._deep_clean_memory(models_map)
         print(f"   > [Operation] All results saved and memory cleared for {self.name}")
 
     def _resolve_deferred_pivots(self, asset_data: dict, model_name: str, strat_name: str, asset_name: str):
@@ -1713,10 +1700,10 @@ if __name__ == "__main__":
     #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados')
 
     assets = Asset.load_all()
-    eurusd = assets["EURUSD"]
-    gbpusd = assets["GBPUSD"]
-    usdjpy = assets["USDJPY"]
-
+    eurusd = assets.get("EURUSD")
+    gbpusd = assets.get("GBPUSD")
+    usdjpy = assets.get("USDJPY")
+    
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
     # =======================================================================================================|| Global Above
@@ -1907,7 +1894,7 @@ if __name__ == "__main__":
             assets=global_assets,
             operation_timeframe=model_execution_tf, # Must always be the smaller timeframe among all strat execution_timeframe
             date_start=None, #'2020-01-01',
-            date_end=None, #'2023-01-01',
+            date_end=None, #
             save=True,
             metrics={}
         )

@@ -27,11 +27,12 @@ class PortfolioParams():
     portfolio_money_manager: Optional['PortfolioMoneyManager'] = None
     portfolio_system_manager: Optional['PortfolioSystemManager'] = None
 
-    data_storage_base_path: str="Backend/results"
     datetime_timeline: set=field(default_factory=set)
     portfolio_returns: dict=None
 
+    data_storage_base_path: str="Backend/results"
     use_portfolio_asset_data: bool=True
+    global_datetime_prefix: str="%Y-%m-%d %H:%M:%S"
 
 class Portfolio(): 
     def __init__(self, portfolio_params: PortfolioParams):
@@ -40,11 +41,12 @@ class Portfolio():
         self.portfolio_money_manager = portfolio_params.portfolio_money_manager
         self.portfolio_system_manager = portfolio_params.portfolio_system_manager
 
-        self.data_storage_base_path = portfolio_params.data_storage_base_path
         self.datetime_timeline = portfolio_params.datetime_timeline
         self.portfolio_returns = portfolio_params.portfolio_returns
 
+        self.data_storage_base_path = portfolio_params.data_storage_base_path
         self.use_portfolio_asset_data = portfolio_params.use_portfolio_asset_data
+        self.global_datetime_prefix = portfolio_params.global_datetime_prefix
     
     def _run(self):
         # Data Init - Uses already uploaded data or loads from drive with Storage.py
@@ -89,19 +91,27 @@ class Portfolio():
 
         print("> Datetime sample")
         for dt in self.datetime_timeline[:5] + self.datetime_timeline[-5:]:
-            print(dt.strftime("%d-%m-%y %H:%M:%S"))
+            print(dt.strftime(self.global_datetime_prefix))
         return True
     
-    def _load_all_op_asset_datetimes(self, source="local"):
-        #assets = Asset.load_all() # NOTE Deletar futuramente
+    def _load_all_op_asset_datetimes(self, data_source="local"):
+        assets = Asset.load_all() # NOTE Deletar futuramente
+        storage = Storage(base_path=self.data_storage_base_path)
         unique_assets_dts = set()
 
-        #Como saber os parametros dos models? instanciar? salvar metadado?
+        for op_name, _, m_name, _, _, _, a_name, _ in self._iter_portfolio_data():
+            meta = storage.load_operation_meta(op_name)
+            model_meta = meta.get("models", {}).get(m_name, {})
 
-        for *_, m_obj, _, _, a_name in self._iter_portfolio_data(): 
-            # Loads assets from Operation map
-            assets_class = Asset.load(a_name, m_obj.execution_timeframe, source=source, date_start=m_obj.date_start, date_end=m_obj.date_end) # type: ignore
-            asset_df = assets_class.data_get(a_name) # pl.DataFrame with column "ts"
+            tf = model_meta.get("execution_timeframe", meta.get("operation_timeframe", None))
+            if tf is None:
+                print(f"< [Error] No timeframe found for Operation: {op_name}, Model: {m_name}. Skipping Asset: {a_name}")
+                continue
+            date_start = model_meta.get("date_start")
+            date_end = model_meta.get("date_end")
+
+            asset_obj = assets.get(a_name)
+            asset_df = asset_obj.load(tf, data_source, date_start, date_end)
 
             #Adds to unique
             unique_assets_dts.update(asset_df["datetime"])

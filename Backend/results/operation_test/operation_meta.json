@@ -4,10 +4,15 @@
     "date_end": null,
     "models": {
         "MA Trend Following": {
-            "AT15": {
-                "assets": [
-                    "EURUSD"
-                ]
+            "execution_timeframe": "M15",
+            "date_start": null,
+            "date_end": null,
+            "strats": {
+                "AT15": {
+                    "assets": [
+                        "EURUSD"
+                    ]
+                }
             }
         }
     }
