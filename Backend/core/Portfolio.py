@@ -46,18 +46,18 @@ class Portfolio():
     
     def _run(self):
         # Data Init - Uses already uploaded data or loads from drive with Storage.py
-        print("> Populating Portfolio Data from Database")
+        print("     > Populating Portfolio Data from Database")
         self._load_saved_data()
 
         # Maps all unique datetimes to use as simulator timeline
-        print("> Mapping all unique datetimes from Parset, Money and System Manager")
+        print("     > Mapping all unique datetimes from Portfolio Data")
         self._map_all_unique_datetimes()
 
 
 
 
         # Runs Portfolio Simulation
-        #print("> Executing Portfolio Simulation")
+        #print("     > Executing Portfolio Simulation")
         #self._simulation()
             
 
@@ -96,9 +96,19 @@ class Portfolio():
                 print(f"< [Error] No PnL or Walkforward data found for Asset: {a_name}")
 
         # From System/Money Manager Assets
+
+
+        # -> Resolver problema minutos wf
+        # -> IMPORTANTE -> AO INVÉS DE PEGAR DATETIMES DOS WF/PNL, USAR DOS ASSETS DOS MODELOS, JÁ QUE PROVAVELMENTE VAI USAR NO SYSTEM/MONEY
+        # -> Como vai ficar a estrutura de System/Money? ter uma lista de indicators e assets que vão ser usados?
         
+        # money_manager_equilizer = {"frequency": 0.5 trades per day, "avg_win", "avg_loss"}
 
         self.datetime_timeline = sorted(list(unique_dts))
+
+        print("> Datetime sample")
+        for dt in self.datetime_timeline[:5] + self.datetime_timeline[-5:]:
+            print(dt.strftime("%d-%m-%y %H:%M:%S"))
         return True
 
     def _load_saved_data(self):
@@ -107,7 +117,6 @@ class Portfolio():
         for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
             assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
             a_obj.update(assets_trade_matrix)
-            #print(assets_trade_matrix['wf'])
         return True
 
     def _iter_portfolio_data(self):

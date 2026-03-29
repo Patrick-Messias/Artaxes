@@ -52,9 +52,11 @@ class Walkforward:
         # Unpacks WF Parset selection config
         is_descending = False if self.is_order == 'asc' else True
 
-        # Calculates metrics for all columns (ps_ids)
-        ps_cols = [c for c in is_data.columns if c != "ts"]
-        
+        # Excludes ts, ts_orig_min and ts_orig_max, only numerical columns
+        _exclude = {"ts", "ts_orig_min", "ts_orig_max"}
+        ps_cols = [c for c in is_data.columns if c not in _exclude]
+
+        # Calculates metrics for all columns (ps_ids)        
         if self.is_metric == "pnl":
             stats = is_data.select([pl.col(c).sum().alias(c) for c in ps_cols])
         elif self.is_metric == "pnl_dd": #PnL acumulado / Range da curva (Proxy de Drawdown)
@@ -98,68 +100,70 @@ class Walkforward:
 
     def run_wf(self, is_periods: int, os_periods: int, step_periods: int = None):
         if step_periods is None: step_periods = os_periods
-        df = self._temp_df
+        df = self._temp_df          # colunas: ts (período agregado) | ts_orig_min | ts_orig_max | ps_...
         total_rows = len(df)
         runs = []
         all_oos_returns = []
-
-        start_idx = 0
+ 
+        start_idx        = 0
         current_is_end_idx = is_periods
-
-        _WFE_MIN_DENOMINATOR = 1e-4  # Magnitude mínima do IS para WFE ser válido
-
+ 
+        _WFE_MIN_DENOMINATOR = 1e-4
+ 
         while current_is_end_idx < total_rows:
             current_oos_end_idx = min(current_is_end_idx + os_periods, total_rows)
             os_len = current_oos_end_idx - current_is_end_idx
-
+ 
             is_data = df.slice(start_idx, is_periods)
             os_data = df.slice(current_is_end_idx, os_len)
-            
+ 
             if is_data.is_empty() or os_data.is_empty(): break
-
+ 
             best_ps_id = self._find_best_parameter(is_data)
             if best_ps_id is not None:
                 os_returns = os_data[best_ps_id].to_numpy()
                 all_oos_returns.extend(os_returns.tolist())
-
-                # Cálculo de WFE (Walkforward Efficiency) - normalizado por período
+ 
+                # WFE
                 is_total_pnl = float(is_data[best_ps_id].sum())
                 os_total_pnl = float(os_returns.sum())
-
+ 
                 if abs(is_total_pnl) < _WFE_MIN_DENOMINATOR:
-                    # IS perto de zero: denominador instável, janela excluída da média
                     wfe = float('nan')
                 elif is_total_pnl < 0:
-                    # IS negativo: razão sem interpretação válida (seleção em período perdedor)
                     wfe = 0.0
                 else:
-                    # Normaliza pelo comprimento real de cada janela para comparar configs diferentes
                     is_avg = is_total_pnl / is_periods
                     os_avg = os_total_pnl / os_len
-                    wfe = os_avg / is_avg
-                    # Clamp por janela individual — protege a média agregada de outliers
-                    wfe = float(np.clip(wfe, -2.0, 2.0))
-
-                # Sharpe OOS Simples
-                std_val = os_returns.std()
+                    wfe = float(np.clip(os_avg / is_avg, -2.0, 2.0))
+ 
+                # Sharpe OOS
+                std_val    = os_returns.std()
                 os_avg_pnl = os_returns.mean()
-                os_sharpe = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252)
-
+                os_sharpe  = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252)
+ 
+                # ── os_curve usa ts_orig_min para preservar o datetime completo ──
+                # ts_orig_min = primeiro datetime real dentro de cada período agregado
+                os_curve = os_data.select([
+                    pl.col("ts_orig_min").alias("ts"),   # datetime completo (ex: 2024-03-15 09:30:00)
+                    pl.col(best_ps_id).alias("pnl"),
+                ]).with_columns(pl.lit(best_ps_id).alias("best_param"))
+ 
                 runs.append({
-                    "is_df": is_data,
-                    "os_curve": os_data.select(["ts", best_ps_id]).rename({best_ps_id: "pnl"}),
+                    "is_df":     is_data,
+                    "os_curve":  os_curve,
                     "best_param": best_ps_id,
-                    "wfe": float(wfe) if not np.isnan(wfe) else float('nan'),
-                    "metrics": {
-                        "os_sharpe": float(os_sharpe), 
-                        "is_metric_val": float(is_data[best_ps_id].sum())
+                    "wfe":       wfe if not np.isnan(wfe) else float('nan'),
+                    "metrics":   {
+                        "os_sharpe":      float(os_sharpe),
+                        "is_metric_val":  float(is_data[best_ps_id].sum()),
                     }
                 })
-            
-            start_idx += step_periods
+ 
+            start_idx          += step_periods
             current_is_end_idx += step_periods
             if start_idx + is_periods > total_rows: break
-
+ 
         return {"windows": runs, "cumulative_oos": np.cumsum(all_oos_returns).tolist()}
 
 
@@ -167,91 +171,140 @@ class Walkforward:
         if self.matrix is None or self.matrix.is_empty():
             print("      > [Error] Matrix is empty")
             return None
-
-        self.all_wf_results = {} 
+ 
+        self.all_wf_results = {}
         working_df = self.matrix.clone()
+
+        # ── Garante coluna ts como Datetime ──────────────────────────────────
+        if working_df["ts"].dtype == pl.Date:
+            working_df = working_df.with_columns(
+                pl.col("ts").cast(pl.Datetime)
+            )
+            
+        # ── Agrega preservando ts_orig (datetime completo para o resultado) ───
+        ps_cols = [c for c in working_df.columns if c != "ts"]
         
-        # Ajuste de Resolução
+        # Agregates to daily (sums all daily candles)
+        working_df = (
+            working_df.sort("ts")
+            .group_by_dynamic("ts", every="1d", closed="left")
+            .agg(
+                [pl.col(c).sum() for c in ps_cols] +
+                [pl.col("ts").min().alias("ts_orig_min"),
+                 pl.col("ts").max().alias("ts_orig_max")]
+            )
+        )
+ 
+        # ── calendar_days: preenche lacunas do calendário com 0  ─────────────
+        # Feito ANTES da agregação para que o upsample não infle total_rows
+        # após o group_by_dynamic — upsample aqui só garante que a série diária
+        # não tem buracos, mas o slice vai ocorrer nas linhas APÓS a agregação.
         if self.time_mode == 'calendar_days':
-            working_df = working_df.upsample(time_column="ts", every="1d").fill_null(0)
-
+            working_df = working_df.sort("ts").upsample(time_column="ts", every="1d").fill_null(0)
+ 
         if self.matrix_resolution == 'weekly':
-            working_df = working_df.group_by_dynamic("ts", every="1w", closed="left").agg(pl.all().exclude("ts").sum())
+            working_df = (
+                working_df.sort("ts")
+                .group_by_dynamic("ts", every="1w", closed="left")
+                .agg(
+                    [pl.col(c).sum() for c in ps_cols] +
+                    [pl.col("ts").min().alias("ts_orig_min"),
+                    pl.col("ts").max().alias("ts_orig_max")]
+                )
+            )
         elif self.matrix_resolution == 'monthly':
-            working_df = working_df.group_by_dynamic("ts", every="1mo", closed="left").agg(pl.all().exclude("ts").sum())
-
+            working_df = (
+                working_df.sort("ts")
+                .group_by_dynamic("ts", every="1mo", closed="left")
+                .agg(
+                    [pl.col(c).sum() for c in ps_cols] +
+                    [pl.col("ts").min().alias("ts_orig_min"),
+                    pl.col("ts").max().alias("ts_orig_max")]
+                )
+            )
+        else:
+            # daily — ts já é o datetime completo, apenas cria aliases
+            if "ts_orig_min" not in working_df.columns:
+                working_df = working_df.with_columns([
+                    pl.col("ts").alias("ts_orig_min"),
+                    pl.col("ts").alias("ts_orig_max"),
+                ])
+ 
         self._temp_df = working_df.sort("ts")
-        total_rows = len(self._temp_df)
-
-        # Filtro de Robustez: IS >= OS
+        total_rows    = len(self._temp_df)
+ 
+        # ── Filtro de robustez IS >= OS ───────────────────────────────────────
         configs_to_run = self.wfm_configs
         if is_always_higher_or_equal_to_oos:
             configs_to_run = [c for c in self.wfm_configs if c[0] >= c[1]]
             print(f"      > [WFM] Running {len(configs_to_run)} robust configurations (IS >= OS).")
-
+ 
         for config in configs_to_run:
             is_l, os_l, stp = config
             if is_l + os_l > total_rows: continue
-
-            wf_key = f"{is_l}_{os_l}_{stp}"
+ 
+            wf_key  = f"{is_l}_{os_l}_{stp}"
             wf_data = self.run_wf(is_l, os_l, stp)
-            
+ 
             if not wf_data or not wf_data["windows"]: continue
             runs = wf_data["windows"]
-        
+ 
+            # os_curve agora tem coluna 'ts' = ts_orig_min (datetime completo)
             full_oos_curve = pl.concat([r["os_curve"] for r in runs]).sort("ts")
-            equity_curve = full_oos_curve["pnl"].cum_sum()
-            
+            equity_curve   = full_oos_curve["pnl"].cum_sum()
+ 
             total_pnl = float(full_oos_curve["pnl"].sum() or 0.0)
-            max_dd = float((equity_curve.cum_max() - equity_curve).max() or 0.0)
-            pnl_dd = float(total_pnl / (max_dd + 1e-9) or 0.0)
-            
-            # Agrega WFE excluindo janelas inválidas (nan) antes da média
-            raw_wfes = [r['wfe'] for r in runs]
+            max_dd    = float((equity_curve.cum_max() - equity_curve).max() or 0.0)
+            pnl_dd    = float(total_pnl / (max_dd + 1e-9) or 0.0)
+ 
+            raw_wfes   = [r['wfe'] for r in runs]
             valid_wfes = [v for v in raw_wfes if not np.isnan(v)]
-
+ 
             if valid_wfes:
-                avg_wfe = float(np.mean(valid_wfes))
-                # Clamp final na média como segunda camada de defesa
-                avg_wfe = float(np.clip(avg_wfe, -2.0, 2.0))
+                avg_wfe = float(np.clip(np.mean(valid_wfes), -2.0, 2.0))
                 wfe_std = float(np.std(valid_wfes)) if len(valid_wfes) > 1 else 1.0
             else:
                 avg_wfe = 0.0
                 wfe_std = 1.0
-            
+ 
             pnl_sharpe = float(np.mean([r['metrics']['os_sharpe'] for r in runs]))
-            
+ 
             windows_metadata = []
             current_global_idx = 0
             for r in runs:
-                pnl_data = r["os_curve"]["pnl"].to_numpy()
-                n_points = len(pnl_data)
+                pnl_data       = r["os_curve"]["pnl"].to_numpy()
+                n_points       = len(pnl_data)
                 global_indices = np.arange(current_global_idx, current_global_idx + n_points)
-                prev_cum_pnl = equity_curve[current_global_idx - 1] if current_global_idx > 0 else 0.0
-                window_equity = np.cumsum(pnl_data) + prev_cum_pnl
-
+                prev_cum_pnl   = equity_curve[current_global_idx - 1] if current_global_idx > 0 else 0.0
+                window_equity  = np.cumsum(pnl_data) + prev_cum_pnl
+ 
                 windows_metadata.append({
-                    'is_start': r['is_df']['ts'].min(), 'is_end': r['is_df']['ts'].max(),
-                    'os_start': r['os_curve']['ts'].min(), 'os_end': r['os_curve']['ts'].max(),
+                    # is_start/end usam ts (período agregado) para o plot de timeline
+                    'is_start':   r['is_df']['ts'].min(),
+                    'is_end':     r['is_df']['ts'].max(),
+                    # os_start/end usam ts_orig (datetime completo) para precisão
+                    'os_start':   r['os_curve']['ts'].min(),
+                    'os_end':     r['os_curve']['ts'].max(),
                     'best_param': r.get('best_param', 'N/A'),
                     'metric_val': r['metrics'].get('is_metric_val', 0.0),
-                    'global_x': global_indices.tolist(), 'global_y': window_equity.tolist()
+                    'global_x':   global_indices.tolist(),
+                    'global_y':   window_equity.tolist(),
                 })
                 current_global_idx += n_points
-
+ 
             self.all_wf_results[wf_key] = {
-                "config": config,
-                "equity": equity_curve.to_list(),
-                "total_pnl": total_pnl,
-                "max_dd": max_dd,
-                "pnl_dd": pnl_dd,
+                "config":     config,
+                "equity":     equity_curve.to_list(),
+                "total_pnl":  total_pnl,
+                "max_dd":     max_dd,
+                "pnl_dd":     pnl_dd,
                 "pnl_sharpe": pnl_sharpe,
-                "wfe": avg_wfe,
+                "wfe":        avg_wfe,
                 "wfe_sharpe": avg_wfe / (wfe_std + 1e-9),
-                "runs": runs,
-                "windows": windows_metadata
+                "runs":       runs,
+                "windows":    windows_metadata,
             }
-        
+ 
         return self._finalize()
 
     def _finalize(self):
