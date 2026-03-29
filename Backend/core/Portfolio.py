@@ -66,13 +66,6 @@ class Portfolio():
         self.portfolio_returns = {}
         return True
 
-
-
-
-
-
-
-
     def _map_all_unique_datetimes(self):
         unique_dts = set()
 
@@ -99,14 +92,15 @@ class Portfolio():
             print(dt.strftime("%d-%m-%y %H:%M:%S"))
         return True
     
-    def _load_all_op_asset_datetimes(self):
+    def _load_all_op_asset_datetimes(self, source="local"):
+        #assets = Asset.load_all() # NOTE Deletar futuramente
         unique_assets_dts = set()
 
-        # NOTE After updating Asset storage, update below
+        #Como saber os parametros dos models? instanciar? salvar metadado?
 
-        for *_, a_name in self._iter_portfolio_data(): 
+        for *_, m_obj, _, _, a_name in self._iter_portfolio_data(): 
             # Loads assets from Operation map
-            assets_class = Asset(date_start=None, date_end=None)
+            assets_class = Asset.load(a_name, m_obj.execution_timeframe, source=source, date_start=m_obj.date_start, date_end=m_obj.date_end) # type: ignore
             asset_df = assets_class.data_get(a_name) # pl.DataFrame with column "ts"
 
             #Adds to unique
@@ -129,7 +123,9 @@ class Portfolio():
                     for a_name, a_obj in s_obj.items():
                         yield op_name, op_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj
 
-
+    def _portfolio_walkforward(self):
+        # Iterates over previous results and identifies each combination for OS while running
+        return True
 
 if __name__ == "__main__":
 

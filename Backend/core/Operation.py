@@ -1668,11 +1668,11 @@ class Operation():
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        #self._operation()
+        self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
         print(f"\n>>> III - Pos-Processing, Saving and Cleaning <<<")
-        #self._save_and_clean()
+        self._save_and_clean()
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
@@ -1691,28 +1691,33 @@ class Operation():
 # || ======================================================================================================================================================================= ||
 
 if __name__ == "__main__":
-    eurusd = Asset(
-        name='EURUSD',
-        type='currency_pair',
-        market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
-    gbpusd = Asset(
-        name='GBPUSD',
-        type='currency_pair',
-        market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
-    usdjpy = Asset(
-        name='USDJPY',
-        type='currency_pair',
-        market='forex',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
-    winfut = Asset(
-        name='WIN$',
-        type='futures',
-        market='b3',
-        data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados')
+    # eurusd = Asset(
+    #     name='EURUSD',
+    #     type='currency_pair',
+    #     market='forex',
+    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
+    # gbpusd = Asset(
+    #     name='GBPUSD',
+    #     type='currency_pair',
+    #     market='forex',
+    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
+    # usdjpy = Asset(
+    #     name='USDJPY',
+    #     type='currency_pair',
+    #     market='forex',
+    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
+    # winfut = Asset(
+    #     name='WIN$',
+    #     type='futures',
+    #     market='b3',
+    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados')
 
-    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
+    assets = Asset.load_all()
+    eurusd = assets["EURUSD"]
+    gbpusd = assets["GBPUSD"]
+    usdjpy = assets["USDJPY"]
+
+    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
     # =======================================================================================================|| Global Above
 

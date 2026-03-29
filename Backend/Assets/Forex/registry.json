@@ -1,0 +1,501 @@
+{
+    "market": "forex",
+    "asset_type": "currency_pair",
+    "assets": {
+        "AUDCAD": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-03-30 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5016,
+                    "last_updated": "2026-03-29T02:09:48",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-03-31 00:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:49",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-03-30 12:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25856,
+                    "last_updated": "2026-03-29T02:09:49",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-08 23:45:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:49",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 03:00:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:49",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "AUDNZD": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-03-24 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5016,
+                    "last_updated": "2026-03-29T02:09:50",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-03-24 19:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:50",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-03-24 04:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25855,
+                    "last_updated": "2026-03-29T02:09:50",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 02:00:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:50",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 04:30:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "AUDUSD": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-03-17 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5026,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-03-19 04:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-03-17 12:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25871,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 17:45:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 14:30:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "EURUSD": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-04-01 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5015,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-04-01 20:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:51",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-04-01 12:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25849,
+                    "last_updated": "2026-03-29T02:09:52",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 20:00:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:52",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 18:00:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:52",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "GBPUSD": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-04-01 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5013,
+                    "last_updated": "2026-03-29T02:09:52",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-04-01 11:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:52",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-04-01 04:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25848,
+                    "last_updated": "2026-03-29T02:09:52",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 17:30:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:52",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 13:30:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "NZDUSD": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-03-30 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5012,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-03-31 01:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-03-30 16:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25849,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 05:45:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 07:30:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "USDCAD": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-04-01 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5014,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-04-01 10:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:53",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-04-01 00:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25849,
+                    "last_updated": "2026-03-29T02:09:54",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 14:15:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:54",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 13:00:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:54",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "USDCHF": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-04-01 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5014,
+                    "last_updated": "2026-03-29T02:09:54",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-04-01 13:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:54",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-04-01 00:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25850,
+                    "last_updated": "2026-03-29T02:09:54",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 01:30:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:55",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 05:00:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:55",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        },
+        "USDJPY": {
+            "asset_params": {
+                "tick": 0.0001,
+                "tick_fin_val": 10,
+                "lot_value": 100000.0,
+                "min_lot": 0.01,
+                "lot_step": 0.01,
+                "lot_max": 500,
+                "leverage": 100,
+                "margin_rate": 0.01,
+                "commissions": 1.5,
+                "slippage": 0.75,
+                "spread": 0.75,
+                "swap_long": -0.5,
+                "swap_short": -0.5,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "D1": {
+                    "date_start": "2009-03-19 00:00:00",
+                    "date_end": "2025-04-11 00:00:00",
+                    "rows": 5018,
+                    "last_updated": "2026-03-29T02:09:55",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H1": {
+                    "date_start": "2009-03-20 00:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:55",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2009-03-19 12:00:00",
+                    "date_end": "2025-04-11 20:00:00",
+                    "rows": 25857,
+                    "last_updated": "2026-03-29T02:09:55",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-09 19:30:00",
+                    "date_end": "2025-04-11 20:45:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:55",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2017-04-04 16:00:00",
+                    "date_end": "2025-04-11 20:30:00",
+                    "rows": 100000,
+                    "last_updated": "2026-03-29T02:09:55",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        }
+    }
+}
