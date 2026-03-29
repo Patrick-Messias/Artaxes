@@ -1860,7 +1860,7 @@ if __name__ == "__main__":
         StratParams(
             name="AT15",
             operation=Walkforward(
-                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])],
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
                 wfm_is_always_higher_or_equal_to_oos=True,
                 matrix_resolution='weekly', time_mode = 'calendar_days',
                 is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',

@@ -177,54 +177,53 @@ class Walkforward:
 
         # ── Garante coluna ts como Datetime ──────────────────────────────────
         if working_df["ts"].dtype == pl.Date:
-            working_df = working_df.with_columns(
-                pl.col("ts").cast(pl.Datetime)
-            )
+            working_df = working_df.with_columns(pl.col("ts").cast(pl.Datetime))
             
         # ── Agrega preservando ts_orig (datetime completo para o resultado) ───
         ps_cols = [c for c in working_df.columns if c != "ts"]
-        
+
         # Agregates to daily (sums all daily candles)
-        working_df = (
-            working_df.sort("ts")
-            .group_by_dynamic("ts", every="1d", closed="left")
-            .agg(
-                [pl.col(c).sum() for c in ps_cols] +
-                [pl.col("ts").min().alias("ts_orig_min"),
-                 pl.col("ts").max().alias("ts_orig_max")]
-            )
-        )
- 
-        # ── calendar_days: preenche lacunas do calendário com 0  ─────────────
-        # Feito ANTES da agregação para que o upsample não infle total_rows
-        # após o group_by_dynamic — upsample aqui só garante que a série diária
-        # não tem buracos, mas o slice vai ocorrer nas linhas APÓS a agregação.
         if self.time_mode == 'calendar_days':
+            working_df = (
+                working_df.sort("ts")
+                .group_by_dynamic("ts", every="1d", closed="left")
+                .agg(
+                    [pl.col(c).sum() for c in ps_cols] +
+                    [pl.col("ts").min().alias("ts_orig_min"),
+                    pl.col("ts").max().alias("ts_orig_max")]
+                )
+            )
+
+            # Fills weekends/holidays with 0
             working_df = working_df.sort("ts").upsample(time_column="ts", every="1d").fill_null(0)
  
-        if self.matrix_resolution == 'weekly':
-            working_df = (
-                working_df.sort("ts")
-                .group_by_dynamic("ts", every="1w", closed="left")
-                .agg(
-                    [pl.col(c).sum() for c in ps_cols] +
-                    [pl.col("ts").min().alias("ts_orig_min"),
-                    pl.col("ts").max().alias("ts_orig_max")]
+            if self.matrix_resolution == 'weekly':
+                working_df = (
+                    working_df.sort("ts")
+                    .group_by_dynamic("ts", every="1w", closed="left")
+                    .agg(
+                        [pl.col(c).sum() for c in ps_cols] +
+                        [pl.col("ts").min().alias("ts_orig_min"),
+                        pl.col("ts").max().alias("ts_orig_max")]
+                    )
                 )
-            )
-        elif self.matrix_resolution == 'monthly':
-            working_df = (
-                working_df.sort("ts")
-                .group_by_dynamic("ts", every="1mo", closed="left")
-                .agg(
-                    [pl.col(c).sum() for c in ps_cols] +
-                    [pl.col("ts").min().alias("ts_orig_min"),
-                    pl.col("ts").max().alias("ts_orig_max")]
+            elif self.matrix_resolution == 'monthly':
+                working_df = (
+                    working_df.sort("ts")
+                    .group_by_dynamic("ts", every="1mo", closed="left")
+                    .agg(
+                        [pl.col(c).sum() for c in ps_cols] +
+                        [pl.col("ts").min().alias("ts_orig_min"),
+                        pl.col("ts").max().alias("ts_orig_max")]
+                    )
                 )
-            )
-        else:
-            # daily — ts já é o datetime completo, apenas cria aliases
-            if "ts_orig_min" not in working_df.columns:
+            else: # daily — ts já é o datetime completo, apenas cria aliases
+                if "ts_orig_min" not in working_df.columns:
+                    working_df = working_df.with_columns([
+                        pl.col("ts").alias("ts_orig_min"),
+                        pl.col("ts").alias("ts_orig_max"),
+                    ])
+        else:   # trade_days ignores matrix_resolution, every line = 1 real trade/period
                 working_df = working_df.with_columns([
                     pl.col("ts").alias("ts_orig_min"),
                     pl.col("ts").alias("ts_orig_max"),
