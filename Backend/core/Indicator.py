@@ -1,17 +1,18 @@
 import polars as pl
+from typing import Literal
 
 class Indicator:
-    def __init__(self, asset: str = None, timeframe: str = None, **params):
+    def __init__(self, asset: str = None, timeframe: str = None, when: Literal["pre", "live"]="pre", **params):
         self.asset = asset
         self.timeframe = timeframe
+        self.when = when
         self.params = params
         #self.name = self.__class__.__name__.lower()
 
     def calculate(self, df: pl.DataFrame, param_set_dict: dict = None, ind_name: str = None): 
-        """
-        Resolve as variáveis do indicador (otimização) antes de chamar a lógica real.
-        Recebe e deve retornar objetos do Polars.
-        """
+        # Resolve as variáveis do indicador (otimização) antes de chamar a lógica real.
+        # Recebe e deve retornar objetos do Polars.
+       
         # 1. RESOLUÇÃO DE PARÂMETROS (Mapeia strings para valores da otimização)
         effective_params = self.params.copy()
         if param_set_dict:

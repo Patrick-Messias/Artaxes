@@ -12,6 +12,7 @@ import uuid
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
 from Indicator import Indicator
+from BaseClass import BaseClass
 
 @dataclass
 class MoneyManagerParams:
@@ -33,7 +34,10 @@ class MoneyManagerParams:
     
     # Dados externos para MM (Ex: volatilidade do mercado, regime de juros)
     # Agora usa Polars DataFrame
-    mm_external_data: Dict[str, pl.DataFrame] = field(default_factory=dict)
+    mm_assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
+
+    # Customizable parameters for specific System Managers (Ex: thresholds para desativar modelos, regras de ativação, etc)
+    mm_params: Dict = field(default_factory=dict) 
     
     # Indicadores específicos para balanceamento de ativos/modelos
     mm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) 
@@ -41,7 +45,7 @@ class MoneyManagerParams:
     # Regras customizadas de alocação
     mm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-class MoneyManager(): # Classe base para SMM, MMM e PMM
+class MoneyManager(BaseClass): # Classe base para SMM, MMM e PMM
     def __init__(self, mm_params: MoneyManagerParams):
         super().__init__()
         self.name = mm_params.name
@@ -55,7 +59,8 @@ class MoneyManager(): # Classe base para SMM, MMM e PMM
         self._validate_drawdown_settings()
                 
         # Custom Rules & Data
-        self.mm_external_data = mm_params.mm_external_data
+        self.mm_assets = mm_params.mm_assets
+        self.mm_params = mm_params.mm_params
         self.mm_indicators = mm_params.mm_indicators
         self.mm_rules = mm_params.mm_rules
 
@@ -75,6 +80,12 @@ class MoneyManager(): # Classe base para SMM, MMM e PMM
     def get_allocated_capital(self) -> float:
         """Retorna o capital máximo que este manager pode expor."""
         return self.capital * self.max_capital_exposure
+
+    # =========================================================================================||
+
+    
+
+
 
     def __repr__(self):
         return f"<{self.__class__.__name__} name={self.name} capital={self.capital}>"

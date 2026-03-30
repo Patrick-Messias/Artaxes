@@ -12,6 +12,7 @@ import uuid
 from typing import Dict, Optional, Callable
 from dataclasses import dataclass, field
 from Indicator import Indicator
+from BaseClass import BaseClass
 
 @dataclass
 class SystemManagerParams:
@@ -19,7 +20,10 @@ class SystemManagerParams:
     
     # Dados externos para o System Manager (Ex: Calendário Econômico, Sentimento, CDT)
     # Migrado para usar dicionário de Polars DataFrames
-    sm_external_data: Dict[str, pl.DataFrame] = field(default_factory=dict)
+    sm_assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
+
+    # Customizable parameters for specific System Managers (Ex: thresholds para desativar modelos, regras de ativação, etc)
+    sm_params: Dict = field(default_factory=dict) 
     
     # Indicadores administrativos (Ex: Medidores de Regime de Mercado)
     sm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict)
@@ -27,13 +31,14 @@ class SystemManagerParams:
     # Regras lógicas de ativação/desativação (Filtros de sistema)
     sm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
-class SystemManager(): 
+class SystemManager(BaseClass): 
     def __init__(self, system_params: SystemManagerParams):
         super().__init__()
         self.name = system_params.name
         
         # Custom Data & Rules
-        self.sm_external_data = system_params.sm_external_data
+        self.sm_assets = system_params.sm_assets
+        self.sm_params = system_params.sm_params
         self.sm_indicators = system_params.sm_indicators
         self.sm_rules = system_params.sm_rules
 
@@ -57,6 +62,8 @@ class SystemManager():
         # Exemplo: filter_signals poderia fazer um join_asof com dados externos (CDT)
         # e filtrar linhas onde a flag 'market_is_open' é falsa.
         return signals_df
+
+    # =========================================================================================||
 
     def __repr__(self):
         return f"<{self.__class__.__name__} name={self.name}>"

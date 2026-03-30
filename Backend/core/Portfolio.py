@@ -8,22 +8,11 @@ from Storage import Storage
 from Asset import Asset
 import polars as pl, uuid
 
-"""
-portfolio_data = {
-    "operation_test": {
-        "MA Trend Following": {
-            "AT15": {
-                "EURUSD"
-            }
-        }
-    }
-}
-"""
-
 @dataclass
 class PortfolioParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     portfolio_data: dict=None
+    portfolio_parameters: dict=None 
     portfolio_money_manager: Optional['PortfolioMoneyManager'] = None
     portfolio_system_manager: Optional['PortfolioSystemManager'] = None
 
@@ -38,6 +27,8 @@ class Portfolio():
     def __init__(self, portfolio_params: PortfolioParams):
         self.name = portfolio_params.name
         self.portfolio_data = portfolio_params.portfolio_data
+        self.portfolio_parameters = portfolio_params.portfolio_parameters
+
         self.portfolio_money_manager = portfolio_params.portfolio_money_manager
         self.portfolio_system_manager = portfolio_params.portfolio_system_manager
 
@@ -148,13 +139,20 @@ if __name__ == "__main__":
             }
         }
     }
+
+    portfolio_global_parameters = {
+        "capital": 100000.0,
+    }
     
-    portfolio = Portfolio(PortfolioParams(name="Portfolio_Test", portfolio_data=portfolio_data))
+    portfolio = Portfolio(PortfolioParams("Portfolio_Test", 
+                                          portfolio_data, 
+                                          portfolio_global_parameters,
+                                          ))
     portfolio._run()
 
-    """
-    
 
+
+    """
     # XXX -> Resolver problema minutos wf
     # -> IMPORTANTE -> AO INVÉS DE PEGAR DATETIMES DOS WF/PNL, USAR DOS ASSETS DOS MODELOS, JÁ QUE PROVAVELMENTE VAI USAR NO SYSTEM/MONEY
     # -> Como vai ficar a estrutura de System/Money? ter uma lista de indicators e assets que vão ser usados?

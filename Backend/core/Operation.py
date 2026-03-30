@@ -6,6 +6,7 @@ from typing import Union, Dict, Optional, Any
 from dataclasses import dataclass, field, asdict
 from Model import ModelParams, Model
 from Asset import Asset
+from BaseClass import BaseClass
 from Strat import Strat, StratParams, ExecutionSettings
 from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
 from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
@@ -80,7 +81,7 @@ class OperationParams():
     date_end: str=None
     save: bool=False
     
-class Operation():
+class Operation(BaseClass):
     def __init__(self, op_params: OperationParams):
         super().__init__()
         self.name = op_params.name
@@ -116,20 +117,28 @@ class Operation():
         if meta:
             print(f"   > Found saved results for '{self.name}' — loading structure...")
 
+            # Init results map structure based on saved meta (without loading parquet data yet)
             self._results_map[self.name] = {"models": {}}
 
+            # Iterates over Models
             for model_name, model_data in meta.get("models", {}).items():
                 self._results_map[self.name]["models"][model_name] = {"strats": {}}
 
-                for strat_name, strat_data in model_data.items():
+                # Access "strats" key enside the model
+                strats_dict = model_data.get("strats", {})
+
+                for strat_name, strat_data in strats_dict.items():
                     self._results_map[self.name]["models"][model_name]["strats"][strat_name] = {"assets": {}}
 
-                    for asset_name in strat_data.get("assets", []):
+                    # Iterates over Assets lists
+                    assets_list = strat_data.get("assets", [])
+
+                    for asset_name in assets_list:
                         self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name] = {
-                            "trades": None,              # 🔥 único arquivo trades.parquet
-                            "pnl_matrix": None,          # 🔥 matrix/pnl_matrix.parquet
-                            "lot_matrix": None,          # 🔥 matrix/lot_matrix.parquet
-                            "walkforward": None,         # 🔥 wfm/wf.parquet
+                            "trades": None,              # único arquivo trades.parquet
+                            "pnl_matrix": None,          # matrix/pnl_matrix.parquet
+                            "lot_matrix": None,          # matrix/lot_matrix.parquet
+                            "walkforward": None,         # wfm/wf.parquet
                         }
 
             print(f"   > Structure loaded — ready to load parquet data.")
@@ -1118,34 +1127,34 @@ class Operation():
             parts.append(f"{k}{sep}{_norm(v)}")
         return "_".join(parts)
     
-    def _calculate_param_combinations(self, param_dict, prefix="param_set"): # Recebe um dict de parâmetros e gera todas as combinações possíveis. Retorna um dict estruturado.
-        # Separa parâmetros que variam e parâmetros fixos
-        varying = {}
-        fixed = {}
+    # def _calculate_param_combinations(self, param_dict, prefix="param_set"): # Recebe um dict de parâmetros e gera todas as combinações possíveis. Retorna um dict estruturado.
+    #     # Separa parâmetros que variam e parâmetros fixos
+    #     varying = {}
+    #     fixed = {}
         
-        for key, val in param_dict.items(): # Considera 'valor único' se não for iterável útil (range, list, tuple)
-            if isinstance(val, (list, tuple, range)):
-                varying[key] = list(val)
-            else:
-                fixed[key] = val
+    #     for key, val in param_dict.items(): # Considera 'valor único' se não for iterável útil (range, list, tuple)
+    #         if isinstance(val, (list, tuple, range)):
+    #             varying[key] = list(val)
+    #         else:
+    #             fixed[key] = val
 
-        # Se não houver parâmetros variados, apenas retorna o original
-        if not varying:
-            name = f"{prefix}_{'-'.join(str(v) for v in fixed.values())}"
-            return {name: param_dict}
+    #     # Se não houver parâmetros variados, apenas retorna o original
+    #     if not varying:
+    #         name = f"{prefix}_{'-'.join(str(v) for v in fixed.values())}"
+    #         return {name: param_dict}
 
-        # Gera combinações
-        keys = list(varying.keys())
-        values = [varying[k] for k in keys]
+    #     # Gera combinações
+    #     keys = list(varying.keys())
+    #     values = [varying[k] for k in keys]
 
-        result = {}
+    #     result = {}
 
-        for combo in product(*values):
-            combo_dict = dict(zip(keys, combo)) | fixed # monta dict final
-            combo_name = f"{prefix}-" + "-".join(str(combo_dict[k]) for k in combo_dict) # cria nome único
-            result[combo_name] = combo_dict # add
+    #     for combo in product(*values):
+    #         combo_dict = dict(zip(keys, combo)) | fixed # monta dict final
+    #         combo_name = f"{prefix}-" + "-".join(str(combo_dict[k]) for k in combo_dict) # cria nome único
+    #         result[combo_name] = combo_dict # add
 
-        return result
+    #     return result
 
    
     def transfer_htf_columns(self, ltf_df, htf_df, ind_name):
@@ -1655,15 +1664,15 @@ class Operation():
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        self._operation()
+        #self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
         print(f"\n>>> III - Pos-Processing, Saving and Cleaning <<<")
-        self._save_and_clean()
+        #self._save_and_clean()
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        self._run_walkforward(True)
+        #self._run_walkforward(True)
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()
