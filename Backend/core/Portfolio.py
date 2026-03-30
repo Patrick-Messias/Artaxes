@@ -19,6 +19,8 @@ class PortfolioParams():
     datetime_timeline: set=field(default_factory=set)
     portfolio_returns: dict=None
 
+    date_start: Optional[str] = None
+    date_end: Optional[str] = None
     data_storage_base_path: str="Backend/results"
     use_portfolio_asset_data: bool=True
     global_datetime_prefix: str="%Y-%m-%d %H:%M:%S"
@@ -35,6 +37,8 @@ class Portfolio():
         self.datetime_timeline = portfolio_params.datetime_timeline
         self.portfolio_returns = portfolio_params.portfolio_returns
 
+        self.date_start = portfolio_params.date_start
+        self.date_end = portfolio_params.date_end
         self.data_storage_base_path = portfolio_params.data_storage_base_path
         self.use_portfolio_asset_data = portfolio_params.use_portfolio_asset_data
         self.global_datetime_prefix = portfolio_params.global_datetime_prefix
@@ -63,7 +67,7 @@ class Portfolio():
         unique_dts = set()
 
         if self.use_portfolio_asset_data: # From Portfolio Assets
-            unique_dts.update(self._load_all_op_asset_datetimes())
+            unique_dts.update(self._get_all_op_asset_datetimes())
 
         else: # From Portfolio Operation results data
             for *_, a_name, a_obj in self._iter_portfolio_data():        
@@ -74,9 +78,13 @@ class Portfolio():
                 else: 
                     print(f"< [Error] No PnL or Walkforward data found for Asset: {a_name}")
 
-        # From System/Money Manager Assets
+        # From System Manager Indicators
+        if self.portfolio_system_manager and self.portfolio_system_manager.sm_indicators:
+            unique_dts.update(self._get_all_sm_ind_datetimes())
 
-
+        # From Money Manager Indicators
+        if self.portfolio_money_manager and self.portfolio_money_manager.mm_indicators:
+            unique_dts.update(self._get_all_mm_ind_datetimes())
 
         self.datetime_timeline = sorted(list(unique_dts))
 
@@ -85,7 +93,7 @@ class Portfolio():
             print(dt.strftime(self.global_datetime_prefix))
         return True
     
-    def _load_all_op_asset_datetimes(self, data_source="local"):
+    def _get_all_op_asset_datetimes(self, data_source="local"):
         assets = Asset.load_all() # NOTE Deletar futuramente
         storage = Storage(base_path=self.data_storage_base_path)
         unique_assets_dts = set()
@@ -108,6 +116,44 @@ class Portfolio():
             unique_assets_dts.update(asset_df["datetime"])
 
         return unique_assets_dts
+
+    # PEGAR NOS INDICADORES PORQUE SM_ASSETS SÓ SERVE PRA INDICADORES E TEM TF DEFINIDO JÁ TMB
+    def _get_all_sm_ind_datetimes(self, data_source="local"):
+        assets = Asset.load_all() # NOTE Deletar futuramente
+        unique_ind_dts = set()
+
+        sm_inds = self.portfolio_system_manager.sm_indicators if (self.portfolio_system_manager and self.portfolio_system_manager.sm_indicators) else {}
+        if sm_inds:
+            for ind_name, ind_obj in sm_inds.items():
+                tf = ind_obj.timeframe
+                if tf is None:
+                    print(f"< [Error] No timeframe found for System Manager Indicator: {ind_name}. Skipping.")
+                    continue
+
+                asset_obj = assets.get(ind_obj.asset)
+                asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
+                unique_ind_dts.update(asset_df["datetime"])
+
+        return unique_ind_dts
+    
+    def _get_all_mm_ind_datetimes(self, data_source="local"):
+        assets = Asset.load_all() # NOTE Deletar futuramente
+        unique_ind_dts = set()
+
+        mm_inds = self.portfolio_money_manager.mm_indicators if (self.portfolio_money_manager and self.portfolio_money_manager.mm_indicators) else {}
+        if mm_inds:
+            for ind_name, ind_obj in mm_inds.items():
+                tf = ind_obj.timeframe
+                if tf is None:
+                    print(f"< [Error] No timeframe found for Money Manager Indicator: {ind_name}. Skipping.")
+                    continue
+
+                asset_obj = assets.get(ind_obj.asset)
+                asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
+                unique_ind_dts.update(asset_df["datetime"])
+
+        return unique_ind_dts
+
 
     def _load_selected_saved_returns_data(self): # Loads all data from selected map
         storage = Storage(base_path=self.data_storage_base_path)
