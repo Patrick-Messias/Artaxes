@@ -75,6 +75,11 @@ class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money mana
 
 
 
+# Indicators
+
+# MCMC
+# HMC
+# VaR
 
 
 

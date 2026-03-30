@@ -134,11 +134,13 @@ class Operation(BaseClass):
                     assets_list = strat_data.get("assets", [])
 
                     for asset_name in assets_list:
+                        asset_data = storage.load(self.name, model_name, strat_name, asset_name)
+
                         self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name] = {
-                            "trades": None,              # único arquivo trades.parquet
-                            "pnl_matrix": None,          # matrix/pnl_matrix.parquet
-                            "lot_matrix": None,          # matrix/lot_matrix.parquet
-                            "walkforward": None,         # wfm/wf.parquet
+                            #"trades": asset_data.get("trades"),             # único arquivo trades.parquet
+                            "pnl_matrix": asset_data["pnl_matrix"],          # matrix/pnl_matrix.parquet
+                            "lot_matrix": asset_data["lot_matrix"],          # matrix/lot_matrix.parquet
+                            "walkforward": asset_data["wf"],                 # wfm/wf.parquet
                         }
 
             print(f"   > Structure loaded — ready to load parquet data.")

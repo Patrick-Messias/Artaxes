@@ -16,14 +16,13 @@ class PortfolioParams():
     portfolio_money_manager: Optional['PortfolioMoneyManager'] = None
     portfolio_system_manager: Optional['PortfolioSystemManager'] = None
 
-    datetime_timeline: set=field(default_factory=set)
-    portfolio_returns: dict=None
-
     date_start: Optional[str] = None
     date_end: Optional[str] = None
     data_storage_base_path: str="Backend/results"
     use_portfolio_asset_data: bool=True
     global_datetime_prefix: str="%Y-%m-%d %H:%M:%S"
+
+    datetime_timeline: set=field(default_factory=set)
 
 class Portfolio(): 
     def __init__(self, portfolio_params: PortfolioParams):
@@ -34,34 +33,108 @@ class Portfolio():
         self.portfolio_money_manager = portfolio_params.portfolio_money_manager
         self.portfolio_system_manager = portfolio_params.portfolio_system_manager
 
-        self.datetime_timeline = portfolio_params.datetime_timeline
-        self.portfolio_returns = portfolio_params.portfolio_returns
-
         self.date_start = portfolio_params.date_start
         self.date_end = portfolio_params.date_end
         self.data_storage_base_path = portfolio_params.data_storage_base_path
         self.use_portfolio_asset_data = portfolio_params.use_portfolio_asset_data
         self.global_datetime_prefix = portfolio_params.global_datetime_prefix
+
+        self.datetime_timeline = portfolio_params.datetime_timeline
+        self.portfolio_returns: dict={}
+        self.sim_data: dict= {}
     
-    def _run(self):
-        # Data Init - Uses already uploaded data or loads from drive with Storage.py
-        print("     > Populating Portfolio Data from Database")
-        self._load_selected_saved_returns_data()
 
-        # Maps all unique datetimes to use as simulator timeline
-        print("     > Mapping all unique datetimes from Portfolio Data")
-        self._map_all_unique_datetimes()
-
-        # Runs Portfolio Simulation
-        print("     > Executing Portfolio Simulation")
-        self._simulation()
-            
-        return True
 
     def _simulation(self):
 
-        self.portfolio_returns = {}
+        # I - Populating sim_data with 
+        self._populate_sim_data()
+
+        # II - Run Timeline
+        target_wf = "48_48_48"
+        for step_dt in self.datetime_timeline:
+            instance = self.sim_data.get(step_dt, {})
+  
+            for idf, vals in instance.items():
+                if "wf_pnls" in vals:
+                    pnl_specific = vals["wf_pnls"].get(target_wf, 0.0)
+                    param_utilizado = vals["wf_params"].get(target_wf, "N/A")
+                    print(f"No tempo {step_dt}, o WF {target_wf} rendeu {pnl_specific} com param {param_utilizado}")
         return True
+    
+    # ── Data Handling ───────────────────────────────────────────────
+
+    def _populate_sim_data(self):
+        # Populates sim_data with a dict where each key is a timestamp, with pnl/lot/wf of each dt
+        # self.sim_data = {
+        #     timestamp: {
+        #         (op, mod, strat, asset): {
+        #             "pnls": { "param_set_1": 0.001, "param_set_2": 0.0 },
+        #             "lots": { "param_set_1": 1.0, "param_set_2": 0.0 },
+        #             "wf": { "best_param": "...", "pnl": 0.0 } # Opcional
+        #         }}}
+
+        for o_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
+            key = (o_name, m_name, s_name, a_name)
+            
+            pnl_df = a_obj.get("pnl_matrix")
+            lot_df = a_obj.get("lot_matrix")
+            wf_df  = a_obj.get("wf")
+
+            # 1. Process PnL and Lot, ps_param_set column struct
+            if pnl_df is not None: # Iterates over df and populates global dict
+                for row in pnl_df.iter_rows(named=True):
+                    ts = row.pop('ts')
+                    if ts not in self.sim_data: self.sim_data[ts] = {}
+                    if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
+                    self.sim_data[ts][key]["pnls"] = row
+            if lot_df is not None: # Iterates over df and populates global dict
+                for row in lot_df.iter_rows(named=True):
+                    ts = row.pop('ts')
+                    if ts not in self.sim_data: self.sim_data[ts] = {}
+                    if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
+                    self.sim_data[ts][key]["lots"] = row
+
+            # 2. Process WF, organized by wf_id
+            if wf_df is not None:
+                for row in wf_df.iter_rows(named=True):
+                    ts = row['datetime']
+
+                    # Makes shure timestamp is added to sim_data if already doesn't have
+                    if ts not in self.sim_data: self.sim_data[ts] = {}
+
+                    # Makes shure key of asset/strat already exists for this ts
+                    if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
+                    
+                    # Init wf dicts if doesn't exist for this key
+                    if "wf_pnls" not in self.sim_data[ts][key]:
+                        self.sim_data[ts][key]["wf_pnls"] = {}
+                        self.sim_data[ts][key]["wf_params"] = {}
+
+                    # Maps PnL and Params for specific ID
+                    w_id = row["wf_id"]
+                    self.sim_data[ts][key]["wf_pnls"][w_id] = row["pnl"]
+                    self.sim_data[ts][key]["wf_params"][w_id] = row["best_param"]
+
+        return True
+
+    def _load_selected_saved_returns_data(self): # Loads all data from selected map (wf, pnl, lot)
+        storage = Storage(base_path=self.data_storage_base_path)
+
+        for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
+            assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
+            a_obj.update(assets_trade_matrix)
+            
+        return True
+    
+    def _iter_portfolio_data(self):
+        for op_name, op_obj in self.portfolio_data.items():
+            for m_name, m_obj in op_obj.items():
+                for s_name, s_obj in m_obj.items():
+                    for a_name, a_obj in s_obj.items():
+                        yield op_name, op_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj
+
+    # ── Datetime timeline mapping ───────────────────────────────────────────────
 
     def _map_all_unique_datetimes(self):
         unique_dts = set()
@@ -121,6 +194,7 @@ class Portfolio():
     def _get_all_sm_ind_datetimes(self, data_source="local"):
         assets = Asset.load_all() # NOTE Deletar futuramente
         unique_ind_dts = set()
+        repeated_assets = set()
 
         sm_inds = self.portfolio_system_manager.sm_indicators if (self.portfolio_system_manager and self.portfolio_system_manager.sm_indicators) else {}
         if sm_inds:
@@ -130,15 +204,30 @@ class Portfolio():
                     print(f"< [Error] No timeframe found for System Manager Indicator: {ind_name}. Skipping.")
                     continue
 
-                asset_obj = assets.get(ind_obj.asset)
-                asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
-                unique_ind_dts.update(asset_df["datetime"])
+                # Gets Asset define in ind and not in repeated_assets 
+                if ind_obj.asset is None:
+                    if ind_obj.asset not in repeated_assets:
+                        asset_obj = assets.get(ind_obj.asset)
+                        asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
+                        unique_ind_dts.update(asset_df["datetime"])
+                        repeated_assets.add(ind_obj.asset)
+
+                # Else gets each asset defined in sm_assets and not in repeated_assets
+                else:
+                    sm_assets = self.portfolio_system_manager.sm_assets if self.portfolio_system_manager and self.portfolio_system_manager.sm_assets else []
+                    for asset_name in sm_assets:
+                        if asset_name not in repeated_assets:
+                            asset_obj = assets.get(asset_name)
+                            asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
+                            unique_ind_dts.update(asset_df["datetime"])
+                            repeated_assets.add(ind_obj.asset)
 
         return unique_ind_dts
     
     def _get_all_mm_ind_datetimes(self, data_source="local"):
         assets = Asset.load_all() # NOTE Deletar futuramente
         unique_ind_dts = set()
+        repeated_assets = set()
 
         mm_inds = self.portfolio_money_manager.mm_indicators if (self.portfolio_money_manager and self.portfolio_money_manager.mm_indicators) else {}
         if mm_inds:
@@ -148,30 +237,47 @@ class Portfolio():
                     print(f"< [Error] No timeframe found for Money Manager Indicator: {ind_name}. Skipping.")
                     continue
 
-                asset_obj = assets.get(ind_obj.asset)
-                asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
-                unique_ind_dts.update(asset_df["datetime"])
+                # Gets Asset define in ind and not in repeated_assets 
+                if ind_obj.asset is None:
+                    if ind_obj.asset not in repeated_assets:
+                        asset_obj = assets.get(ind_obj.asset)
+                        asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
+                        unique_ind_dts.update(asset_df["datetime"])
+                        repeated_assets.add(ind_obj.asset)
+
+                # Else gets each asset defined in mm_assets and not in repeated_assets
+                else:
+                    mm_assets = self.portfolio_money_manager.mm_assets if self.portfolio_money_manager and self.portfolio_money_manager.mm_assets else []
+                    for asset_name in mm_assets:
+                        if asset_name not in repeated_assets:
+                            asset_obj = assets.get(asset_name)
+                            asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
+                            unique_ind_dts.update(asset_df["datetime"])
+                            repeated_assets.add(ind_obj.asset)
 
         return unique_ind_dts
 
+    # ── Portfolio Optimization ───────────────────────────────────────────────
 
-    def _load_selected_saved_returns_data(self): # Loads all data from selected map
-        storage = Storage(base_path=self.data_storage_base_path)
-
-        for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
-            assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
-            a_obj.update(assets_trade_matrix)
+    def _portfolio_optimization(self):
+        # Iterates over previous results and identifies each combination for OS while running
         return True
 
-    def _iter_portfolio_data(self):
-        for op_name, op_obj in self.portfolio_data.items():
-            for m_name, m_obj in op_obj.items():
-                for s_name, s_obj in m_obj.items():
-                    for a_name, a_obj in s_obj.items():
-                        yield op_name, op_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj
+    # ──────────────────────────────────────────────────────────────────────────── 
 
-    def _portfolio_walkforward(self):
-        # Iterates over previous results and identifies each combination for OS while running
+    def _run(self):
+        # Data Init - Uses already uploaded data or loads from drive with Storage.py
+        print("     > Populating Portfolio Data from Database")
+        self._load_selected_saved_returns_data()
+
+        # Maps all unique datetimes to use as simulator timeline
+        print("     > Mapping all unique datetimes from Portfolio Data")
+        self._map_all_unique_datetimes()
+
+        # Runs Portfolio Simulation
+        print("     > Executing Portfolio Simulation")
+        self._simulation()
+            
         return True
 
 if __name__ == "__main__":
