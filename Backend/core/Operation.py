@@ -1611,18 +1611,20 @@ class Operation(BaseClass):
                     
                     # ── Data  ─────────────────────────────
                     if load_from_storage: 
-                        pnl_matrix = storage.load_matrix_only(self.name, m_name, s_name, a_name)
-
-                        lot_path = storage._asset_path(self.name, m_name, s_name, a_name) / "matrix" / "lot_matrix.parquet"
-                        lot_matrix = pl.read_parquet(lot_path) if lot_path.exists() else None
+                        asset_data = storage.load(self.name, m_name, s_name, a_name)
+                        pnl_matrix = asset_data.get("pnl_matrix")
+                        lot_matrix = asset_data.get("lot_matrix") # WIP
                     else:
                         a_obj = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
                         pnl_matrix = a_obj.get("pnl_matrix")
-                        lot_matrix = a_obj.get("lot_matrix")
+                        lot_matrix = a_obj.get("lot_matrix") # WIP
 
                     if pnl_matrix is None or pnl_matrix.is_empty():
                         print("   > Skip: no matrix")
                         continue
+
+                    if "datetime" in pnl_matrix.columns and "ts" not in pnl_matrix.columns:
+                        pnl_matrix = pnl_matrix.rename({"datetime": "ts"}) # wip change ts->datetime
 
                     # ── RUN WF ─────────────────────────────────────
                     wfm_engine = s_obj.operation
@@ -1651,9 +1653,8 @@ class Operation(BaseClass):
                         )
 
                     print(f"   > WF saved")
-
                     wfm_engine.matrix = None
-
+                    
         return True
 
     # || ======================================================================================================================================================================= ||
@@ -1674,7 +1675,7 @@ class Operation(BaseClass):
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        #self._run_walkforward(True)
+        self._run_walkforward(True)
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()

@@ -171,40 +171,50 @@ class Walkforward:
         if self.matrix is None or self.matrix.is_empty():
             print("      > [Error] Matrix is empty")
             return None
- 
+
         self.all_wf_results = {}
         working_df = self.matrix.clone()
 
         # ── Garante coluna ts como Datetime ──────────────────────────────────
         if working_df["ts"].dtype == pl.Date:
             working_df = working_df.with_columns(pl.col("ts").cast(pl.Datetime))
-            
-        # ── Agrega preservando ts_orig (datetime completo para o resultado) ───
+
+        # ── ps_cols = todas as colunas menos ts ──────────────────────────────
         ps_cols = [c for c in working_df.columns if c != "ts"]
 
-        # Agregates to daily (sums all daily candles)
+        # ── Agregação e resolução ─────────────────────────────────────────────
         if self.time_mode == 'calendar_days':
+
+            # 1. Agrega M15 → daily, cria ts_orig pela primeira vez a partir de "ts"
             working_df = (
                 working_df.sort("ts")
                 .group_by_dynamic("ts", every="1d", closed="left")
                 .agg(
                     [pl.col(c).sum() for c in ps_cols] +
-                    [pl.col("ts").min().alias("ts_orig_min"),
-                    pl.col("ts").max().alias("ts_orig_max")]
+                    [pl.col("ts").min().alias("ts_orig_min"),   # primeiro datetime real do dia
+                     pl.col("ts").max().alias("ts_orig_max")]   # último datetime real do dia
                 )
             )
 
-            # Fills weekends/holidays with 0
-            working_df = working_df.sort("ts").upsample(time_column="ts", every="1d").fill_null(0)
- 
+            # 2. Upsample: preenche fins de semana/feriados
+            #    fill_null(0) APENAS nas colunas PnL — ts_orig fica null nesses dias (intencional)
+            ps_cols_only = [c for c in working_df.columns
+                            if c not in {"ts", "ts_orig_min", "ts_orig_max"}]
+
+            working_df = working_df.sort("ts").upsample(time_column="ts", every="1d")
+            working_df = working_df.with_columns(
+                [pl.col(c).fill_null(0) for c in ps_cols_only]
+            )
+
+            # 3. Agrega daily → weekly / monthly / mantém daily
             if self.matrix_resolution == 'weekly':
                 working_df = (
                     working_df.sort("ts")
                     .group_by_dynamic("ts", every="1w", closed="left")
                     .agg(
-                        [pl.col(c).sum() for c in ps_cols] +
-                        [pl.col("ts").min().alias("ts_orig_min"),
-                        pl.col("ts").max().alias("ts_orig_max")]
+                        [pl.col(c).sum() for c in ps_cols_only] +
+                        [pl.col("ts_orig_min").drop_nulls().min().alias("ts_orig_min"),
+                         pl.col("ts_orig_max").drop_nulls().max().alias("ts_orig_max")]
                     )
                 )
             elif self.matrix_resolution == 'monthly':
@@ -212,62 +222,58 @@ class Walkforward:
                     working_df.sort("ts")
                     .group_by_dynamic("ts", every="1mo", closed="left")
                     .agg(
-                        [pl.col(c).sum() for c in ps_cols] +
-                        [pl.col("ts").min().alias("ts_orig_min"),
-                        pl.col("ts").max().alias("ts_orig_max")]
+                        [pl.col(c).sum() for c in ps_cols_only] +
+                        [pl.col("ts_orig_min").drop_nulls().min().alias("ts_orig_min"),
+                         pl.col("ts_orig_max").drop_nulls().max().alias("ts_orig_max")]
                     )
                 )
-            else: # daily — ts já é o datetime completo, apenas cria aliases
-                if "ts_orig_min" not in working_df.columns:
-                    working_df = working_df.with_columns([
-                        pl.col("ts").alias("ts_orig_min"),
-                        pl.col("ts").alias("ts_orig_max"),
-                    ])
-        else:   # trade_days ignores matrix_resolution, every line = 1 real trade/period
-                working_df = working_df.with_columns([
-                    pl.col("ts").alias("ts_orig_min"),
-                    pl.col("ts").alias("ts_orig_max"),
-                ])
- 
+            # else daily: ts_orig já foi criado no step 1, nada a fazer
+
+        else:  # trade_days — ignora matrix_resolution, cada linha = 1 período real
+            working_df = working_df.with_columns([
+                pl.col("ts").alias("ts_orig_min"),
+                pl.col("ts").alias("ts_orig_max"),
+            ])
+
         self._temp_df = working_df.sort("ts")
         total_rows    = len(self._temp_df)
- 
+
         # ── Filtro de robustez IS >= OS ───────────────────────────────────────
         configs_to_run = self.wfm_configs
         if is_always_higher_or_equal_to_oos:
             configs_to_run = [c for c in self.wfm_configs if c[0] >= c[1]]
             print(f"      > [WFM] Running {len(configs_to_run)} robust configurations (IS >= OS).")
- 
+
         for config in configs_to_run:
             is_l, os_l, stp = config
             if is_l + os_l > total_rows: continue
- 
+
             wf_key  = f"{is_l}_{os_l}_{stp}"
             wf_data = self.run_wf(is_l, os_l, stp)
- 
+
             if not wf_data or not wf_data["windows"]: continue
             runs = wf_data["windows"]
- 
-            # os_curve agora tem coluna 'ts' = ts_orig_min (datetime completo)
+
+            # os_curve tem coluna 'ts' = ts_orig_min (datetime completo)
             full_oos_curve = pl.concat([r["os_curve"] for r in runs]).sort("ts")
             equity_curve   = full_oos_curve["pnl"].cum_sum()
- 
+
             total_pnl = float(full_oos_curve["pnl"].sum() or 0.0)
             max_dd    = float((equity_curve.cum_max() - equity_curve).max() or 0.0)
             pnl_dd    = float(total_pnl / (max_dd + 1e-9) or 0.0)
- 
+
             raw_wfes   = [r['wfe'] for r in runs]
             valid_wfes = [v for v in raw_wfes if not np.isnan(v)]
- 
+
             if valid_wfes:
                 avg_wfe = float(np.clip(np.mean(valid_wfes), -2.0, 2.0))
                 wfe_std = float(np.std(valid_wfes)) if len(valid_wfes) > 1 else 1.0
             else:
                 avg_wfe = 0.0
                 wfe_std = 1.0
- 
+
             pnl_sharpe = float(np.mean([r['metrics']['os_sharpe'] for r in runs]))
- 
+
             windows_metadata = []
             current_global_idx = 0
             for r in runs:
@@ -276,12 +282,10 @@ class Walkforward:
                 global_indices = np.arange(current_global_idx, current_global_idx + n_points)
                 prev_cum_pnl   = equity_curve[current_global_idx - 1] if current_global_idx > 0 else 0.0
                 window_equity  = np.cumsum(pnl_data) + prev_cum_pnl
- 
+
                 windows_metadata.append({
-                    # is_start/end usam ts (período agregado) para o plot de timeline
                     'is_start':   r['is_df']['ts'].min(),
                     'is_end':     r['is_df']['ts'].max(),
-                    # os_start/end usam ts_orig (datetime completo) para precisão
                     'os_start':   r['os_curve']['ts'].min(),
                     'os_end':     r['os_curve']['ts'].max(),
                     'best_param': r.get('best_param', 'N/A'),
@@ -290,7 +294,7 @@ class Walkforward:
                     'global_y':   window_equity.tolist(),
                 })
                 current_global_idx += n_points
- 
+
             self.all_wf_results[wf_key] = {
                 "config":     config,
                 "equity":     equity_curve.to_list(),
@@ -303,7 +307,7 @@ class Walkforward:
                 "runs":       runs,
                 "windows":    windows_metadata,
             }
- 
+
         return self._finalize()
 
     def _finalize(self):
