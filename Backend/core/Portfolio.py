@@ -47,19 +47,86 @@ class Portfolio():
 
     def _simulation(self):
 
-        # I - Populating sim_data with 
+        # 1 - Init, populating sim_data
         self._populate_sim_data()
+        sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
 
-        # II - Run Timeline
-        target_wf = "48_48_48"
+        # {(op, mod, strat, asset): {"weight": 0.1, "id": "48_48_48"}} / "id": "parset..."
+        active_positions = {} 
+        self.portfolio_returns = {}
+
+        # 2 - Run Timeline
         for step_dt in self.datetime_timeline:
             instance = self.sim_data.get(step_dt, {})
-  
-            for idf, vals in instance.items():
-                if "wf_pnls" in vals:
-                    pnl_specific = vals["wf_pnls"].get(target_wf, 0.0)
-                    param_utilizado = vals["wf_params"].get(target_wf, "N/A")
-                    print(f"No tempo {step_dt}, o WF {target_wf} rendeu {pnl_specific} com param {param_utilizado}")
+            if not instance: continue
+
+            # Init step data
+            self.portfolio_returns[step_dt] = {"assets": {}}
+            step_perc_total        =     0.0
+            step_pnl_nominal_total =  0.0
+
+            # A - Updates PnL of open positions in previous step
+            for idf, pos_info in active_positions.items():
+                # ifs       = (op, mod, strat, asset)
+                # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
+                tid = pos_info["id"]
+                wht = pos_info["weight"] # Defined by Money Manager (capital allocated)
+
+                asset_data = instance.get(idf, {})
+
+                # Lógic to decide where PnL comes from (wf or pnl_matrix)
+                if "wf_pnls" in asset_data and tid in asset_data["wf_pnls"]:
+                    inst_ret = asset_data["wf_pnls"][tid]
+                else: 
+                    inst_ret = asset_data.get("pnls", {}).get(tid, 0.0)
+                inst_lot = asset_data.get("lots", {}).get(tid, 1.0)
+
+                # perc
+                trade_perc = inst_ret * inst_lot    # Raw trade percentage weighted with lot_size
+                pos_perc_port = trade_perc * wht    # trade percentage in relation to portfolio
+                step_perc_total += pos_perc_port    # perc accumulated in this datetime
+
+                # PnL
+                pos_pnl_port = sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
+                step_pnl_nominal_total += pos_pnl_port # pnl accumulated in this datetime
+
+                # Strat Returns
+                self.portfolio_returns[step_dt][idf] = {
+                    "trade_perc": trade_perc,
+                    "pos_perc_port": pos_perc_port,
+                    "pos_pnl_port": pos_pnl_port,
+                    "weight": wht
+                }
+
+            # Updates global
+            sim_current_equity += step_pnl_nominal_total
+            self.portfolio_returns[step_dt] = {
+                "portfolio_perc":    step_perc_total,
+                "portfolio_pnl": step_pnl_nominal_total
+            }
+
+
+
+            # B - System Manager - WIP
+            if self.portfolio_system_manager:
+                active_positions = self.portfolio_system_manager.rebalance(active_positions, sim_current_equity)
+
+
+
+            # C - Money Manager - WIP
+
+            # NOTE Deve calcular o lote baseado no pnl_matrix, weight (cap alocado) e metadado do asset
+            # Pode usar dados de [:i] para calcular para i+1 (prox iter) para evitar leakage
+
+            if self.portfolio_money_manager:
+                active_positions = self.portfolio_money_manager.rebalance(active_positions, sim_current_equity)
+
+        print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:..2f}")
+
+
+
+
+
         return True
     
     # ── Data Handling ───────────────────────────────────────────────
@@ -124,7 +191,7 @@ class Portfolio():
         for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
             assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
             a_obj.update(assets_trade_matrix)
-            
+ 
         return True
     
     def _iter_portfolio_data(self):
