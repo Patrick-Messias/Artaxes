@@ -158,18 +158,15 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
 
 
-    """
-    def update_model_hierarchy(self): # Updates the hierarchy of the models enside the portfolio
+    """ Dt execution framework
 
-        # Checks pma_rules on how to rebalance
+    1. Check current tradable Models
+    -> REBALANCE
 
-        # Analyses current hierarchy and models performance based on rebalancing rules
-
-        # Updates hierachy
-
-        return 
-
-
+    2. New Rank generated with updated data
+    3. Needs to remove any Models? if yes then close or keep positions open by SM rules? != MM rules
+    4. Needs to add any Models? 
+    
 
     """
 

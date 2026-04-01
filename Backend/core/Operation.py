@@ -1623,6 +1623,9 @@ class Operation(BaseClass):
                         print("   > Skip: no matrix")
                         continue
 
+                    if lot_matrix is not None:
+                        pnl_matrix = self.multiply_matrices(pnl_matrix, lot_matrix)
+
                     if "datetime" in pnl_matrix.columns and "ts" not in pnl_matrix.columns:
                         pnl_matrix = pnl_matrix.rename({"datetime": "ts"}) # wip change ts->datetime
 
@@ -1656,6 +1659,28 @@ class Operation(BaseClass):
                     wfm_engine.matrix = None
                     
         return True
+    
+    def multiply_matrices(self, pnl_df, lot_df):
+        if lot_df is None:
+            return pnl_df
+
+        # Filtra colunas de parâmetros (ex: ps_param_set...)
+        param_cols = [c for c in pnl_df.columns if c.startswith("ps_")]
+
+        # Check de eficiência: se todos os valores forem 1.0, retorna o original
+        # Isso evita criar um novo DF na memória sem necessidade
+        is_all_ones = lot_df.select(param_cols).select(
+            pl.all().eq(1.0).all()
+        ).to_series()[0]
+
+        if is_all_ones:
+            return pnl_df
+
+        # Multiplicação vetorizada (SIMD) do Polars
+        return pnl_df.with_columns([
+            (pl.col(c) * lot_df.get_column(c)).alias(c) 
+            for c in param_cols
+        ])
 
     # || ======================================================================================================================================================================= ||
                         
