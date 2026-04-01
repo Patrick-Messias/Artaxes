@@ -28,23 +28,23 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     fn_should_execute:  Optional[Callable] = None   # (model_name: str, context: dict) -> bool
 
 class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarchy 
-    def __init__(self, pm_params: PortfolioSystemManagerParams):
-        super().__init__(pm_params)
+    def __init__(self, sm_params: PortfolioSystemManagerParams):
+        super().__init__(sm_params)
 
-        self.reb_metric                         = pm_params.reb_metric
-        self.model_hierarchy                    = dict(pm_params.model_hierarchy)
-        self.max_active_models                  = pm_params.max_active_models
-        self.reb_method                         = pm_params.reb_method
-        self.reb_frequency                      = pm_params.reb_frequency
-        self.reb_lookback_n                     = pm_params.reb_lookback_n
-        self.reb_close_open_trades_on_rebalance = pm_params.reb_close_open_trades_on_rebalance
+        self.reb_metric                         = sm_params.reb_metric
+        self.model_hierarchy                    = dict(sm_params.model_hierarchy)
+        self.max_active_models                  = sm_params.max_active_models
+        self.reb_method                         = sm_params.reb_method
+        self.reb_frequency                      = sm_params.reb_frequency
+        self.reb_lookback_n                     = sm_params.reb_lookback_n
+        self.reb_close_open_trades_on_rebalance = sm_params.reb_close_open_trades_on_rebalance
 
         # Funções plugáveis — usa custom se passado, senão usa default interno
-        self._fn_pre_compute    = pm_params.fn_pre_compute
-        self._fn_rank           = pm_params.fn_rank
-        self._fn_filter         = pm_params.fn_filter
-        self._fn_rebalance      = pm_params.fn_rebalance
-        self._fn_should_execute = pm_params.fn_should_execute
+        self._fn_pre_compute    = sm_params.fn_pre_compute
+        self._fn_rank           = sm_params.fn_rank
+        self._fn_filter         = sm_params.fn_filter
+        self._fn_rebalance      = sm_params.fn_rebalance
+        self._fn_should_execute = sm_params.fn_should_execute
 
         self._pre_cache: Dict = {}   # cache de indicadores pre-calculados
         self._active_models: List[str] = []

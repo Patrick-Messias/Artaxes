@@ -53,7 +53,9 @@ class Portfolio():
 
         # {(op, mod, strat, asset): {"weight": 0.1, "id": "48_48_48"}} / "id": "parset..."
         active_positions = {} 
+        hierarchy = {}
         self.portfolio_returns = {}
+        
 
         # 2 - Run Timeline
         for step_dt in self.datetime_timeline:
@@ -65,7 +67,23 @@ class Portfolio():
             step_perc_total        =     0.0
             step_pnl_nominal_total =  0.0
 
-            # A - Updates PnL of open positions in previous step
+            #||=====================================================================================||#
+            
+            # A - Exits at [i] open
+            for idf, pos_info in active_positions.items():
+                pass
+
+            #||=====================================================================================||#
+            
+            # B - Entries at [i] open - MM Tactical Level (MM can change with exit/entry)
+            
+                # Must recalculate position sizes if the rules call for it, else use E defined
+                # First-Come First-Served - Allocates 10% until 100% is hit, following hierarchy
+                # Static Hierarchy - Limits to how much each level can use margin/capital
+
+            #||=====================================================================================||#
+            
+            # C - Updates PnL of open positions at [i] ends in previous step
             for idf, pos_info in active_positions.items():
                 # ifs       = (op, mod, strat, asset)
                 # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
@@ -105,29 +123,73 @@ class Portfolio():
                 "portfolio_pnl": step_pnl_nominal_total
             }
 
+            #||=====================================================================================||#
+            
+            # D - Updates System Managers - at [i] ends
+            hierarchy = self._system_managers(step_dt, hierarchy)
 
+            #||=====================================================================================||#
+            
+            # E - Updates Money Managers - at [i] ends - Strategic Level
+            hierarchy = self._money_managers(step_dt, hierarchy)
 
-            # B - System Manager - WIP
-            if self.portfolio_system_manager:
-                active_positions = self.portfolio_system_manager.rebalance(active_positions, sim_current_equity)
-
-
-
-            # C - Money Manager - WIP
-
-            # NOTE Deve calcular o lote baseado no pnl_matrix, weight (cap alocado) e metadado do asset
-            # Pode usar dados de [:i] para calcular para i+1 (prox iter) para evitar leakage
-
-            if self.portfolio_money_manager:
-                active_positions = self.portfolio_money_manager.rebalance(active_positions, sim_current_equity)
+            #||=====================================================================================||#
 
         print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:..2f}")
 
-
-
-
-
         return True
+
+    # ── Portfolio Defs ───────────────────────────────────────────────
+
+    def _system_managers(self, dt, hierarchy):
+        for o_name, o_obj in self._iter_portfolio_data():
+            operation_key = (o_name)
+            operation_data = self.sim_data[:dt][operation_key]
+
+            if self.portfolio_system_manager:
+                hierarchy = self.portfolio_system_manager.rebalance(hierarchy, operation_data, self.portfolio_returns)
+
+            for m_name, m_obj in o_obj.items():
+                model_key = (o_name, m_name)
+                model_data = self.sim_data[:dt][model_key]
+
+                if m_obj.model_system_manager:
+                    hierarchy = m_obj.model_system_manager.rebalance(hierarchy, model_data, self.portfolio_returns)
+
+                for s_name, s_obj in m_obj.items():
+                    strat_key = (o_name, m_name, s_name)
+                    strat_data = self.sim_data[:dt][strat_key]
+
+                    if s_obj.strat_system_manager:
+                        hierarchy = s_obj.strat_system_manager.rebalance(hierarchy, strat_data, self.portfolio_returns)
+
+        return hierarchy    
+
+    def _money_managers(self, dt, hierarchy): # Updates self.sim_data enside each MM
+        # NOTE Deve calcular o lote baseado no pnl_matrix, weight (cap alocado) e metadado do asset
+        # Pode usar dados de [:i] para calcular para i+1 (prox iter) para evitar leakage
+        for o_name, o_obj in self._iter_portfolio_data():
+            operation_key = (o_name)
+            operation_data = self.sim_data[:dt][operation_key]
+
+            if self.portfolio_money_manager:
+                self.sim_data, hierarchy = self.portfolio_money_manager.calculate_model_position_sizes(hierarchy, operation_data, self.portfolio_returns)
+
+            for m_name, m_obj in o_obj.items():
+                model_key = (o_name, m_name)
+                model_data = self.sim_data[:dt][model_key]
+
+                if m_obj.model_money_manager:
+                    self.sim_data, hierarchy = m_obj.model_money_manager.calculate_asset_strat_position_sizes(hierarchy, model_data, self.portfolio_returns)
+
+                for s_name, s_obj in m_obj.items():
+                    strat_key = (o_name, m_name, s_name)
+                    strat_data = self.sim_data[:dt][strat_key]
+
+                    if s_obj.strat_money_manager:
+                        self.sim_data, hierarchy = s_obj.strat_money_manager.calculate_trade_position_sizes(hierarchy, strat_data, self.portfolio_returns)
+
+        return hierarchy  
     
     # ── Data Handling ───────────────────────────────────────────────
 

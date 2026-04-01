@@ -151,6 +151,9 @@ class StratMoneyManager(MoneyManager):
     # Interface Portfolio Simulator — escalar com capital externo
     # ─────────────────────────────────────────────────────────────────────────
  
+    def calculate_strat_position_sizes(self, strat_data):
+        return None
+
     def calc_lot_size(
         self,
         capital:           float,
