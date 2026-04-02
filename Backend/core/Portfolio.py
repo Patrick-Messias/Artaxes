@@ -40,10 +40,10 @@ class Portfolio():
         self.global_datetime_prefix = portfolio_params.global_datetime_prefix
 
         self.datetime_timeline = portfolio_params.datetime_timeline
+
         self.portfolio_returns: dict={}
         self.sim_data: dict= {}
     
-
 
     def _simulation(self):
 
@@ -55,7 +55,17 @@ class Portfolio():
         active_positions = {} 
         hierarchy = {}
         self.portfolio_returns = {}
-        
+
+        # Checks if is going to simulate portfolio with strat backtest results or asset positions
+        has_pnl = any("pnls" in str(key).lower() for key in self.sim_data.keys())
+        has_wf = any("wf_pnls" in str(key).lower() for key in self.sim_data.keys())
+        portfolio_simulation_with_backtest_results = (has_pnl or has_wf)
+        update_func_to_use = self._update_pos_with_backtest_ret if portfolio_simulation_with_backtest_results else self._update_pos_with_assets_ret
+
+        # SM and MM Rebalance Schedule
+        psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, \
+        smm_sch = self._calculate_rebalance_schedule()
+
 
         # 2 - Run Timeline
         for step_dt in self.datetime_timeline:
@@ -75,7 +85,17 @@ class Portfolio():
 
             #||=====================================================================================||#
             
-            # B - Entries at [i] open - MM Tactical Level (MM can change with exit/entry)
+            # B - Entries at [i] open - MM Tactical Level - Bottom Up (MM can change with exit/entry)
+            for idf, pos_info in hierarchy.items():
+                if portfolio_simulation_with_backtest_results: pass
+                    
+                    # B.1. Calculates All SM and MM for each item in hierarchy
+
+                    # B.2. Checks for open positions that can be accomodated in active_positions with current margin and capital
+   
+                # SSM/SMM -> MSM/MMM -> PSM/PMM
+
+                # -> NOTE Para System e Money M colocar opção de seprar long (lot_size > 0) de short
             
                 # Must recalculate position sizes if the rules call for it, else use E defined
                 # First-Come First-Served - Allocates 10% until 100% is hit, following hierarchy
@@ -84,53 +104,16 @@ class Portfolio():
             #||=====================================================================================||#
             
             # C - Updates PnL of open positions at [i] ends in previous step
-            for idf, pos_info in active_positions.items():
-                # ifs       = (op, mod, strat, asset)
-                # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
-                tid = pos_info["id"]
-                wht = pos_info["weight"] # Defined by Money Manager (capital allocated)
-
-                asset_data = instance.get(idf, {})
-
-                # Lógic to decide where PnL comes from (wf or pnl_matrix)
-                if "wf_pnls" in asset_data and tid in asset_data["wf_pnls"]:
-                    inst_ret = asset_data["wf_pnls"][tid]
-                else: 
-                    inst_ret = asset_data.get("pnls", {}).get(tid, 0.0)
-                inst_lot = asset_data.get("lots", {}).get(tid, 1.0)
-
-                # perc
-                trade_perc = inst_ret * inst_lot    # Raw trade percentage weighted with lot_size
-                pos_perc_port = trade_perc * wht    # trade percentage in relation to portfolio
-                step_perc_total += pos_perc_port    # perc accumulated in this datetime
-
-                # PnL
-                pos_pnl_port = sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
-                step_pnl_nominal_total += pos_pnl_port # pnl accumulated in this datetime
-
-                # Strat Returns
-                self.portfolio_returns[step_dt][idf] = {
-                    "trade_perc": trade_perc,
-                    "pos_perc_port": pos_perc_port,
-                    "pos_pnl_port": pos_pnl_port,
-                    "weight": wht
-                }
-
-            # Updates global
-            sim_current_equity += step_pnl_nominal_total
-            self.portfolio_returns[step_dt] = {
-                "portfolio_perc":    step_perc_total,
-                "portfolio_pnl": step_pnl_nominal_total
-            }
+            update_func_to_use(step_dt, active_positions, instance)
 
             #||=====================================================================================||#
             
-            # D - Updates System Managers - at [i] ends
-            hierarchy = self._system_managers(step_dt, hierarchy)
+            # D - Updates System Managers - Top Down - at [i] ends
+            hierarchy = self._system_managers(step_dt, hierarchy, psm_sch, msm_sch, ssm_sch)
 
             #||=====================================================================================||#
             
-            # E - Updates Money Managers - at [i] ends - Strategic Level
+            # E - Updates Money Managers - Top Down - at [i] ends - Strategic Level
             hierarchy = self._money_managers(step_dt, hierarchy)
 
             #||=====================================================================================||#
@@ -139,58 +122,143 @@ class Portfolio():
 
         return True
 
+    """
+    - If no pnl_matrix or wf then uses the structure up to model and then selects the model strats based on MSM and MMM to simulate Asset Portfolio
+    - Se pnl_matrix e not wf então pode fazer walkforward em cada nível em tempo real
+    
+    """
+
     # ── Portfolio Defs ───────────────────────────────────────────────
 
-    def _system_managers(self, dt, hierarchy):
+    def _system_managers(self, dt, hierarchy, psm_sch, msm_sch, ssm_sch):
         for o_name, o_obj in self._iter_portfolio_data():
             operation_key = (o_name)
             operation_data = self.sim_data[:dt][operation_key]
 
-            if self.portfolio_system_manager:
-                hierarchy = self.portfolio_system_manager.rebalance(hierarchy, operation_data, self.portfolio_returns)
+            if dt in psm_sch and self.portfolio_system_manager:
+                hierarchy = self.portfolio_system_manager.main(hierarchy, operation_data, self.portfolio_returns)
 
             for m_name, m_obj in o_obj.items():
                 model_key = (o_name, m_name)
                 model_data = self.sim_data[:dt][model_key]
 
-                if m_obj.model_system_manager:
-                    hierarchy = m_obj.model_system_manager.rebalance(hierarchy, model_data, self.portfolio_returns)
+                if dt in msm_sch and m_obj.model_system_manager:
+                    hierarchy = m_obj.model_system_manager.main(hierarchy, model_data, self.portfolio_returns)
 
                 for s_name, s_obj in m_obj.items():
                     strat_key = (o_name, m_name, s_name)
                     strat_data = self.sim_data[:dt][strat_key]
 
-                    if s_obj.strat_system_manager:
-                        hierarchy = s_obj.strat_system_manager.rebalance(hierarchy, strat_data, self.portfolio_returns)
+                    if dt in ssm_sch.get((m_name, s_name)) and s_obj.strat_system_manager:
+                        hierarchy = s_obj.strat_system_manager.main(hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy    
 
-    def _money_managers(self, dt, hierarchy): # Updates self.sim_data enside each MM
+    def _money_managers(self, dt, hierarchy, pmm_sch, mmm_sch, smm_sch): # Updates self.sim_data enside each MM
         # NOTE Deve calcular o lote baseado no pnl_matrix, weight (cap alocado) e metadado do asset
         # Pode usar dados de [:i] para calcular para i+1 (prox iter) para evitar leakage
         for o_name, o_obj in self._iter_portfolio_data():
             operation_key = (o_name)
             operation_data = self.sim_data[:dt][operation_key]
 
-            if self.portfolio_money_manager:
+            if dt in pmm_sch and self.portfolio_money_manager:
                 self.sim_data, hierarchy = self.portfolio_money_manager.calculate_model_position_sizes(hierarchy, operation_data, self.portfolio_returns)
 
             for m_name, m_obj in o_obj.items():
                 model_key = (o_name, m_name)
                 model_data = self.sim_data[:dt][model_key]
 
-                if m_obj.model_money_manager:
+                if dt in mmm_sch and m_obj.model_money_manager:
                     self.sim_data, hierarchy = m_obj.model_money_manager.calculate_asset_strat_position_sizes(hierarchy, model_data, self.portfolio_returns)
 
                 for s_name, s_obj in m_obj.items():
                     strat_key = (o_name, m_name, s_name)
                     strat_data = self.sim_data[:dt][strat_key]
 
-                    if s_obj.strat_money_manager:
+                    if dt in smm_sch.get((m_name, s_name)) and s_obj.strat_money_manager:
                         self.sim_data, hierarchy = s_obj.strat_money_manager.calculate_trade_position_sizes(hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy  
     
+    def _update_pos_with_backtest_ret(self, step_dt, active_positions, instance):
+        for idf, pos_info in active_positions.items():
+            # ifs       = (op, mod, strat, asset)
+            # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
+            tid = pos_info["id"]
+            wht = pos_info["weight"] # Defined by Money Manager (capital allocated)
+
+            asset_data = instance.get(idf, {})
+
+            # Lógic to decide where PnL comes from (wf or pnl_matrix)
+            if "wf_pnls" in asset_data and tid in asset_data["wf_pnls"]:
+                inst_ret = asset_data["wf_pnls"][tid]
+            else: 
+                inst_ret = asset_data.get("pnls", {}).get(tid, 0.0)
+            inst_lot = asset_data.get("lots", {}).get(tid, 1.0)
+
+            # perc
+            trade_perc = inst_ret * inst_lot    # Raw trade percentage weighted with lot_size
+            pos_perc_port = trade_perc * wht    # trade percentage in relation to portfolio
+            step_perc_total += pos_perc_port    # perc accumulated in this datetime
+
+            # PnL
+            pos_pnl_port = sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
+            step_pnl_nominal_total += pos_pnl_port # pnl accumulated in this datetime
+
+            # Strat Returns
+            self.portfolio_returns[step_dt][idf] = {
+                "trade_perc": trade_perc,
+                "pos_perc_port": pos_perc_port,
+                "pos_pnl_port": pos_pnl_port,
+                "weight": wht
+            }
+
+        # Updates global
+        sim_current_equity += step_pnl_nominal_total
+        self.portfolio_returns[step_dt] = {
+            "portfolio_perc":    step_perc_total,
+            "portfolio_pnl": step_pnl_nominal_total
+        }
+
+    def _update_pos_with_assets_ret(self, step_dt, active_positions, instance):
+        pass
+
+    def _calculate_rebalance_schedule(self):
+        psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
+        timeline = self.datetime_timeline
+
+        # Portfolio
+        if self.portfolio_system_manager:
+            psm_sch['root'] = self.portfolio_system_manager.get_schedule(timeline)
+        if self.portfolio_money_manager:
+            psm_sch['root'] = self.portfolio_money_manager.get_schedule(timeline)
+
+        for _, _, m_name, m_obj in self._iter_portfolio_data():
+            if m_obj.model_system_manager():
+                msm_sch[m_name] = m_obj.model_system_manager.get_schedule(timeline)
+            if m_obj.model_money_manager():
+                mmm_sch[m_name] = m_obj.model_money_manager.get_schedule(timeline)
+
+            for s_name, s_obj in m_obj.strats.items():
+                s_key = (m_name, s_name)
+                if s_obj.strat_system_manager:
+                    ssm_sch[s_key] = s_obj.strat_system_manager.get_schedule(timeline)
+                if s_obj.strat_money_manager:
+                    smm_sch[s_key] = s_obj.strat_money_manager.get_schedule(timeline)
+
+        # # Exemplo para o Strat System Manager no ponto D
+        # for s_name, s_obj in m_obj.items():
+        #     s_key = (m_name, s_name)
+        #     schedule = ssm_sch.get(s_key)
+            
+        #     # Roda se: schedule é None (sempre) OU o tempo atual está no set
+        #     if schedule is None or step_dt in schedule:
+        #         hierarchy = s_obj.strat_system_manager.main(hierarchy, ...)
+
+        return psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
+    
+
+
     # ── Data Handling ───────────────────────────────────────────────
 
     def _populate_sim_data(self):
@@ -253,7 +321,7 @@ class Portfolio():
         for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
             assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
             a_obj.update(assets_trade_matrix)
- 
+
         return True
     
     def _iter_portfolio_data(self):

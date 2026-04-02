@@ -134,7 +134,7 @@ def CorrelationClusteringMC(
         data = np.array(returns)
         n_days = len(data)
         
-        # 2. Janelamento (Rolling Windows)
+        # 2. Janelamento (Rolling Windows)w
         windows = []
         for i in range(0, n_days - resolution_days + 1, resolution_days):
             window_slice = data[i : i + resolution_days]
@@ -201,8 +201,21 @@ def CorrelationClusteringMC(
     return linkage_matrix, corr_matrix
 
 
-# Permutation Test - How model compares to random data sample?
+# Parameter Sensibility Test - Takes parest or wf curve and does another operation with smallest and most numerous parsets possible for each param_set at each time
+"""
+"""
 
+
+# Permutation Test - How my model compares to random data sample from a synthetic data set?
+""" - Take OHLC add and subtract random ammounts of volatility from it, creating thousands of synthetic data series
+    - Then backtest each parset of optimization the strategy on these random data series
+    - If backtest results have tight grouping then it's not curve fitted?
+""" 
+
+# Random Strategy Test - Backtests random strategies on same data set, if my strategy is worst then "p-val > 0.05" then it's probably just lucky random overfit
+""" - Creates random entry rules strategy, keeps all other rules, backtests on same data-set, optimize real strategy and optimize all others
+    - P-Value is defined by how many random curves are worst than my strategy, p_var = 0.95
+""" 
 
 # In Sample - Out Sample Test
 def ISOS_TEST(data: pl.DataFrame, os_start_datetime=None, os_end_datetime=None, metrics: list=['pnl', 'dd', 'pnl_dd'], mc_runs: int=1000, mc_shuffle: bool=True, mc_col: str='wfm_matrix_data', datetime_format: str="%Y-%m-%d %H:%M:%S"):

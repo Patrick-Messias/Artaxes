@@ -12,7 +12,7 @@ class PortfolioMoneyManagerParams(MoneyManagerParams):
     # Rebalancing
     reb_metric: Literal["pnl", "pnl_dd", "sharpe"] = "pnl" # Metric used for performance-based rebalancing (if reb_method == "performance")
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
-    reb_frequency: Literal["daily", "weekly", "monthly", "quarterly", "yearly","never"] = "weekly"
+    reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
     reb_lookback_n: int = 1
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Function that defines the deviation threshold needed for rebalancing (e.g., 5% deviation from target allocation)
 
@@ -67,6 +67,30 @@ class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money mana
         # fixed — retorna alocação definida
         return self.model_allocation or {}
 
+    def get_schedule(self, timeline: list) -> set:
+        freq = self.reb_frequency
+
+        if not freq or freq == "never": 
+            return pl.DataFrame({"ts": None}) # Updates every datetime
+
+        df = pl.DataFrame({"ts": timeline})
+
+        if freq == "tick":
+            return df # Will always run
+
+        if freq == "daily":
+            condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
+        if freq == "weekly":
+            condition = pl.col("ts").dt.week() != pl.col("ts").dt.week().shift(1)
+        elif freq == "monthly":
+            condition = pl.col("ts").dt.month() != pl.col("ts").dt.month().shift(1)
+        elif freq == "yearly":
+            condition = pl.col("ts").dt.year() != pl.col("ts").dt.year().shift(1)
+        else:
+            return set()
+
+        # Fist candle is always a point of rebalance (start)
+        return set(df.filter(condition | pl.col("ts").is_first())["ts"].to_list())
 
 
 

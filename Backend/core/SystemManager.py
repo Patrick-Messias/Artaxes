@@ -42,26 +42,26 @@ class SystemManager(BaseClass):
         self.sm_indicators = system_params.sm_indicators
         self.sm_rules = system_params.sm_rules
 
-    def should_execute(self, asset_name: str, strategy_name: str, context_df: Optional[pl.DataFrame] = None) -> bool:
-        """
-        Método central para decidir se uma operação deve prosseguir.
-        Pode ser expandido nas subclasses para checar regras globais.
-        """
-        # Exemplo de lógica base: se não houver regras, libera geral (True)
-        if not self.sm_rules:
-            return True
+    # def should_execute(self, asset_name: str, strategy_name: str, context_df: Optional[pl.DataFrame] = None) -> bool:
+    #     """
+    #     Método central para decidir se uma operação deve prosseguir.
+    #     Pode ser expandido nas subclasses para checar regras globais.
+    #     """
+    #     # Exemplo de lógica base: se não houver regras, libera geral (True)
+    #     if not self.sm_rules:
+    #         return True
         
-        # Aqui as subclasses (ex: ModelSystemManager) implementariam a iteração sobre sm_rules
-        return True
+    #     # Aqui as subclasses (ex: ModelSystemManager) implementariam a iteração sobre sm_rules
+    #     return True
 
-    def filter_signals(self, signals_df: pl.DataFrame) -> pl.DataFrame:
-        """
-        Aplica filtros em massa sobre um DataFrame de sinais usando Polars.
-        Útil para desativar sinais em horários de notícias ou regimes específicos.
-        """
-        # Exemplo: filter_signals poderia fazer um join_asof com dados externos (CDT)
-        # e filtrar linhas onde a flag 'market_is_open' é falsa.
-        return signals_df
+    # def filter_signals(self, signals_df: pl.DataFrame) -> pl.DataFrame:
+    #     """
+    #     Aplica filtros em massa sobre um DataFrame de sinais usando Polars.
+    #     Útil para desativar sinais em horários de notícias ou regimes específicos.
+    #     """
+    #     # Exemplo: filter_signals poderia fazer um join_asof com dados externos (CDT)
+    #     # e filtrar linhas onde a flag 'market_is_open' é falsa.
+    #     return signals_df
 
     # =========================================================================================||
 

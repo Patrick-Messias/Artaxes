@@ -35,15 +35,15 @@ class ModelSystemManager(SystemManager): # Manages portfolio's model hierarchy
 
 
 
+    """ # NOTE Não deletar abaixo, exemplo de MSM
+        FinancialWisdom_Explosive_Stock_Asset_Rank_System
 
+        - price < 100.0
+        - market_cap < 10 Billion
+        - Tech and Biotech Sectors (Sector Allocation Distribution)
+        - Momentum Precedes Explosive Moves (Forecasts and Technical Indicators)
+        - Weekly Timeframe
 
-
-
-
-
-
-
-
-
+    """
 
 

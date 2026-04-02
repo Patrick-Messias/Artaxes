@@ -15,7 +15,7 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     # Rebalancing
     reb_metric: Literal["pnl", "pnl_dd", "sharpe"] = "pnl" # Metric used for performance-based rebalancing (if reb_method == "performance")
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
-    reb_frequency: Literal["daily", "weekly", "monthly", "quarterly", "yearly","never"] = "weekly"
+    reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
     reb_lookback_n: int = 1
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Function that defines the deviation threshold needed for rebalancing (e.g., 5% deviation from target allocation)
     reb_close_open_trades_on_rebalance: bool = False
@@ -25,7 +25,7 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     fn_rank:            Optional[Callable] = None   # (context: dict) -> Dict[str, float]
     fn_filter:          Optional[Callable] = None   # (context: dict) -> List[str]
     fn_rebalance:       Optional[Callable] = None   # (context: dict) -> List[str]
-    fn_should_execute:  Optional[Callable] = None   # (model_name: str, context: dict) -> bool
+    fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
 
 class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarchy 
     def __init__(self, sm_params: PortfolioSystemManagerParams):
@@ -44,7 +44,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         self._fn_rank           = sm_params.fn_rank
         self._fn_filter         = sm_params.fn_filter
         self._fn_rebalance      = sm_params.fn_rebalance
-        self._fn_should_execute = sm_params.fn_should_execute
+        self._fn_main           = sm_params.fn_main
 
         self._pre_cache: Dict = {}   # cache de indicadores pre-calculados
         self._active_models: List[str] = []
@@ -80,6 +80,32 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
                         asset_df = asset_class.data_get(ind_obj.timeframe) if asset_class else None
                         if asset_class is not None and asset_df is not None:
                                 self._pre_cache[ind_name] = ind_obj.calculate(asset_df)
+
+    # NOTE mover para classe base SystemManager
+    def get_schedule(self, timeline: list) -> set:
+        freq = self.reb_frequency
+
+        if not freq or freq == "never": 
+            return pl.DataFrame({"ts": None}) # Updates every datetime
+
+        df = pl.DataFrame({"ts": timeline})
+
+        if freq == "tick":
+            return df # Will always run
+
+        if freq == "daily":
+            condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
+        if freq == "weekly":
+            condition = pl.col("ts").dt.week() != pl.col("ts").dt.week().shift(1)
+        elif freq == "monthly":
+            condition = pl.col("ts").dt.month() != pl.col("ts").dt.month().shift(1)
+        elif freq == "yearly":
+            condition = pl.col("ts").dt.year() != pl.col("ts").dt.year().shift(1)
+        else:
+            return set()
+
+        # Fist candle is always a point of rebalance (start)
+        return set(df.filter(condition | pl.col("ts").is_first())["ts"].to_list())
 
     # ── Every reb_frequency ───────────────────────────────────────────
 
@@ -140,23 +166,19 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def should_execute(self, model_name: str, context: dict) -> bool:
+    def main(self, step_dt, hierarchy: dict, operation_data: dict, portfolio_returns: dict) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
-        return self._call(self._fn_should_execute, self._default_should_execute, model_name, context)
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, operation_data, portfolio_returns)
     
-    def _default_should_execute(self, model_name: str, context: dict) -> bool:
-
-        # WIP live indicators implementation
-
-        for name, ind in (self.sm_indicators or {}).items():
-            if getattr(ind, "when", "pre") == "live":
-                result = ind.calculate(context.get("live_data"))
-                if not result: 
-                    return False
-        return True
+    def _default_main(self, step_dt, hierarchy: dict, operation_data: dict, portfolio_returns: dict) -> bool:
 
 
+
+        return hierarchy
+   
+
+    # ─────────────────────────────────────────────────────────────────────────
 
     """ Dt execution framework
 
