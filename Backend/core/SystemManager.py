@@ -9,7 +9,7 @@ Atua sobre os níveis superiores (controla quem “fala” com o PMM e o TM).
 
 import polars as pl
 import uuid
-from typing import Dict, Optional, Callable
+from typing import Literal, Dict, Optional, Callable
 from dataclasses import dataclass, field
 from Indicator import Indicator
 from BaseClass import BaseClass
@@ -17,6 +17,8 @@ from BaseClass import BaseClass
 @dataclass
 class SystemManagerParams:
     name: str = field(default_factory=lambda: f'sm_{uuid.uuid4()}')
+
+    reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
     
     # Dados externos para o System Manager (Ex: Calendário Econômico, Sentimento, CDT)
     # Migrado para usar dicionário de Polars DataFrames
@@ -28,19 +30,42 @@ class SystemManagerParams:
     # Indicadores administrativos (Ex: Medidores de Regime de Mercado)
     sm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict)
     
-    # Regras lógicas de ativação/desativação (Filtros de sistema)
-    sm_rules: Optional[Dict[str, Callable]] = field(default_factory=dict)
 
 class SystemManager(BaseClass): 
     def __init__(self, system_params: SystemManagerParams):
         super().__init__()
         self.name = system_params.name
+        self.reb_frequency = system_params.reb_frequency
         
         # Custom Data & Rules
         self.sm_assets = system_params.sm_assets
         self.sm_params = system_params.sm_params
         self.sm_indicators = system_params.sm_indicators
-        self.sm_rules = system_params.sm_rules
+
+    def get_schedule(self, timeline: list) -> set:
+        freq = self.reb_frequency 
+
+        if not freq or freq == "never": 
+            return pl.DataFrame({"ts": None}) # Updates every datetime
+
+        df = pl.DataFrame({"ts": timeline})
+
+        if freq == "tick":
+            return df # Will always run
+
+        if freq == "daily":
+            condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
+        if freq == "weekly":
+            condition = pl.col("ts").dt.week() != pl.col("ts").dt.week().shift(1)
+        elif freq == "monthly":
+            condition = pl.col("ts").dt.month() != pl.col("ts").dt.month().shift(1)
+        elif freq == "yearly":
+            condition = pl.col("ts").dt.year() != pl.col("ts").dt.year().shift(1)
+        else:
+            return set()
+
+        # Fist candle is always a point of rebalance (start)
+        return set(df.filter(condition | pl.col("ts").is_first())["ts"].to_list())
 
     # def should_execute(self, asset_name: str, strategy_name: str, context_df: Optional[pl.DataFrame] = None) -> bool:
     #     """

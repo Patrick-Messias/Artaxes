@@ -46,9 +46,8 @@ class Portfolio():
     
 
     def _simulation(self):
-
         # 1 - Init, populating sim_data
-        self._populate_sim_data()
+        aggr_assets_ret, aggr_strats_ret, aggr_models_ret = self._populate_sim_data()
         sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
 
         # {(op, mod, strat, asset): {"weight": 0.1, "id": "48_48_48"}} / "id": "parset..."
@@ -62,10 +61,17 @@ class Portfolio():
         portfolio_simulation_with_backtest_results = (has_pnl or has_wf)
         update_func_to_use = self._update_pos_with_backtest_ret if portfolio_simulation_with_backtest_results else self._update_pos_with_assets_ret
 
-        # SM and MM Rebalance Schedule
-        psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, \
-        smm_sch = self._calculate_rebalance_schedule()
 
+        # ->>>>>> MODIFICAR _populate_sim_data
+        # 1. _populate_sim_data aproveita e calcula os resultados agregados da soma dos parsets/wf para cada ts
+        # 2. envia os resultados agregados para pre_compute, onde vai calcular metricas e indicadores
+        # 3. Na timeline vai usar as métricas de rebalance para verificar esses dados 
+
+
+        # SM and MM Pre-Compute Metrics, Indicators and Rebalance Schedule
+        indicator_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, \
+        smm_sch = self._pre_compute_and_calc_rebalance_schedule(self.sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret)
+        # NOTE Se não for usar em mais nenhum outro lugar, zerar os aggr
 
         # 2 - Run Timeline
         for step_dt in self.datetime_timeline:
@@ -132,24 +138,21 @@ class Portfolio():
 
     def _system_managers(self, dt, hierarchy, psm_sch, msm_sch, ssm_sch):
         for o_name, o_obj in self._iter_portfolio_data():
-            operation_key = (o_name)
-            operation_data = self.sim_data[:dt][operation_key]
-
             if dt in psm_sch and self.portfolio_system_manager:
-                hierarchy = self.portfolio_system_manager.main(hierarchy, operation_data, self.portfolio_returns)
+                op_key = (o_name)
+                op_data = self.sim_data[:dt][op_key]
+                hierarchy = self.portfolio_system_manager.main(hierarchy, op_data, self.portfolio_returns)
 
             for m_name, m_obj in o_obj.items():
-                model_key = (o_name, m_name)
-                model_data = self.sim_data[:dt][model_key]
-
                 if dt in msm_sch and m_obj.model_system_manager:
-                    hierarchy = m_obj.model_system_manager.main(hierarchy, model_data, self.portfolio_returns)
+                    mod_key = (o_name, m_name)
+                    mod_data = self.sim_data[:dt][mod_key]
+                    hierarchy = m_obj.model_system_manager.main(hierarchy, mod_data, self.portfolio_returns)
 
                 for s_name, s_obj in m_obj.items():
-                    strat_key = (o_name, m_name, s_name)
-                    strat_data = self.sim_data[:dt][strat_key]
-
                     if dt in ssm_sch.get((m_name, s_name)) and s_obj.strat_system_manager:
+                        strat_key = (o_name, m_name, s_name)
+                        strat_data = self.sim_data[:dt][strat_key]
                         hierarchy = s_obj.strat_system_manager.main(hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy    
@@ -179,6 +182,49 @@ class Portfolio():
                         self.sim_data, hierarchy = s_obj.strat_money_manager.calculate_trade_position_sizes(hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy  
+
+    def _pre_compute_and_calc_rebalance_schedule(self, sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret):
+        indicator_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}, {}
+        timeline = self.datetime_timeline
+
+        # Portfolio
+        if self.portfolio_system_manager:
+            self.portfolio_system_manager.pre_compute(timeline, sim_data, aggr_models_ret, indicator_pool)
+            psm_sch['root'] = self.portfolio_system_manager.get_schedule(timeline)
+        if self.portfolio_money_manager:
+            self.portfolio_money_manager.pre_compute(timeline, sim_data, aggr_models_ret, indicator_pool)
+            psm_sch['root'] = self.portfolio_money_manager.get_schedule(timeline)
+
+        for _, _, m_name, m_obj, *_ in self._iter_portfolio_data():
+            if m_obj.model_system_manager():
+                self.model_system_manager.pre_compute(timeline, sim_data, aggr_strats_ret, indicator_pool)
+                msm_sch[m_name] = m_obj.model_system_manager.get_schedule(timeline)
+            if m_obj.model_money_manager():
+                self.model_money_manager.pre_compute(timeline, sim_data, aggr_strats_ret, indicator_pool)
+                mmm_sch[m_name] = m_obj.model_money_manager.get_schedule(timeline)
+
+            for s_name, s_obj in m_obj.strats.items():
+                s_key = (m_name, s_name)
+                if s_obj.strat_system_manager:
+                    self.strat_system_manager.pre_compute(timeline, sim_data, aggr_assets_ret, indicator_pool)
+                    ssm_sch[s_key] = s_obj.strat_system_manager.get_schedule(timeline)
+                if s_obj.strat_money_manager:
+                    self.strat_money_manager.pre_compute(timeline, sim_data, aggr_assets_ret, indicator_pool)
+                    smm_sch[s_key] = s_obj.strat_money_manager.get_schedule(timeline)
+
+        # # Exemplo para o Strat System Manager no ponto D
+        # for s_name, s_obj in m_obj.items():
+        #     s_key = (m_name, s_name)
+        #     schedule = ssm_sch.get(s_key)
+            
+        #     # Roda se: schedule é None (sempre) OU o tempo atual está no set
+        #     if schedule is None or step_dt in schedule:
+        #         hierarchy = s_obj.strat_system_manager.main(hierarchy, ...)
+
+        return indicator_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
+    
+
+
     
     def _update_pos_with_backtest_ret(self, step_dt, active_positions, instance):
         for idf, pos_info in active_positions.items():
@@ -223,42 +269,6 @@ class Portfolio():
     def _update_pos_with_assets_ret(self, step_dt, active_positions, instance):
         pass
 
-    def _calculate_rebalance_schedule(self):
-        psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
-        timeline = self.datetime_timeline
-
-        # Portfolio
-        if self.portfolio_system_manager:
-            psm_sch['root'] = self.portfolio_system_manager.get_schedule(timeline)
-        if self.portfolio_money_manager:
-            psm_sch['root'] = self.portfolio_money_manager.get_schedule(timeline)
-
-        for _, _, m_name, m_obj in self._iter_portfolio_data():
-            if m_obj.model_system_manager():
-                msm_sch[m_name] = m_obj.model_system_manager.get_schedule(timeline)
-            if m_obj.model_money_manager():
-                mmm_sch[m_name] = m_obj.model_money_manager.get_schedule(timeline)
-
-            for s_name, s_obj in m_obj.strats.items():
-                s_key = (m_name, s_name)
-                if s_obj.strat_system_manager:
-                    ssm_sch[s_key] = s_obj.strat_system_manager.get_schedule(timeline)
-                if s_obj.strat_money_manager:
-                    smm_sch[s_key] = s_obj.strat_money_manager.get_schedule(timeline)
-
-        # # Exemplo para o Strat System Manager no ponto D
-        # for s_name, s_obj in m_obj.items():
-        #     s_key = (m_name, s_name)
-        #     schedule = ssm_sch.get(s_key)
-            
-        #     # Roda se: schedule é None (sempre) OU o tempo atual está no set
-        #     if schedule is None or step_dt in schedule:
-        #         hierarchy = s_obj.strat_system_manager.main(hierarchy, ...)
-
-        return psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
-    
-
-
     # ── Data Handling ───────────────────────────────────────────────
 
     def _populate_sim_data(self):
@@ -271,49 +281,85 @@ class Portfolio():
         #             "wf": { "best_param": "...", "pnl": 0.0 } # Opcional
         #         }}}
 
+        aggr_assets_ret, aggr_strats_ret, aggr_models_ret = {}, {}, {}
+
+        # Timeline template to make shure it aligns 
+        timeline_df = pl.DataFrame({"ts": self.datetime_timeline})
+
+        # Temporary Dict to group strat series by model
+        strat_accumulator, model_accumulator = {}, {}
+
         for o_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
             key = (o_name, m_name, s_name, a_name)
+            asset_key = (m_name, s_name, a_name)
+            strat_key = (m_name, s_name)
             
             pnl_df = a_obj.get("pnl_matrix")
             lot_df = a_obj.get("lot_matrix")
             wf_df  = a_obj.get("wf")
 
-            # 1. Process PnL and Lot, ps_param_set column struct
-            if pnl_df is not None: # Iterates over df and populates global dict
-                for row in pnl_df.iter_rows(named=True):
-                    ts = row.pop('ts')
-                    if ts not in self.sim_data: self.sim_data[ts] = {}
-                    if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
-                    self.sim_data[ts][key]["pnls"] = row
-            if lot_df is not None: # Iterates over df and populates global dict
-                for row in lot_df.iter_rows(named=True):
-                    ts = row.pop('ts')
-                    if ts not in self.sim_data: self.sim_data[ts] = {}
-                    if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
-                    self.sim_data[ts][key]["lots"] = row
+            # Vectorized Asset Aggregation
+            if pnl_df is not None:
+                param_cols = [c for c in pnl_df.columns if c != "ts"]
 
-            # 2. Process WF, organized by wf_id
-            if wf_df is not None:
-                for row in wf_df.iter_rows(named=True):
-                    ts = row['datetime']
+                # Join garantees that assets with missing date stay aligned to datetime
+                agg_pnl = timeline_df.join(pnl_df, on="ts", how="left").fill_null(0.0)
+                asset_series = agg_pnl.select(pl.mean_horizontal(param_cols)).to_series()
 
-                    # Makes shure timestamp is added to sim_data if already doesn't have
-                    if ts not in self.sim_data: self.sim_data[ts] = {}
+                aggr_assets_ret[asset_key] = asset_series
 
-                    # Makes shure key of asset/strat already exists for this ts
-                    if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
-                    
-                    # Init wf dicts if doesn't exist for this key
-                    if "wf_pnls" not in self.sim_data[ts][key]:
-                        self.sim_data[ts][key]["wf_pnls"] = {}
-                        self.sim_data[ts][key]["wf_params"] = {}
+                # Sums to Strategy level
+                if strat_key not in strat_accumulator:
+                    strat_accumulator[strat_key] = []
+                strat_accumulator[strat_key].append(asset_series)
 
-                    # Maps PnL and Params for specific ID
-                    w_id = row["wf_id"]
-                    self.sim_data[ts][key]["wf_pnls"][w_id] = row["pnl"]
-                    self.sim_data[ts][key]["wf_params"][w_id] = row["best_param"]
+        # Populates sim_data (Quick search dict)
+        if pnl_df is not None:
+            for row in pnl_df.iter_rows(named=True):
+                ts = row.pop('ts')
+                if ts not in self.sim_data: self.sim_data[ts] = {}
+                if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
+                self.sim_data[ts][key]["pnls"] = row
+                
+        if lot_df is not None:
+            for row in lot_df.iter_rows(named=True):
+                ts = row.pop('ts')
+                if ts not in self.sim_data: self.sim_data[ts] = {}
+                if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
+                self.sim_data[ts][key]["lots"] = row
 
-        return True
+        if wf_df is not None:
+            for row in wf_df.iter_rows(named=True):
+                ts = row['datetime']
+                if ts not in self.sim_data: self.sim_data[ts] = {}
+                if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
+                if "wf_pnls" not in self.sim_data[ts][key]:
+                    self.sim_data[ts][key]["wf_pnls"] = {}
+                    self.sim_data[ts][key]["wf_params"] = {}
+                
+                w_id = row["wf_id"]
+                self.sim_data[ts][key]["wf_pnls"][w_id] = row["pnl"]
+                self.sim_data[ts][key]["wf_params"][w_id] = row["best_param"]
+     
+        # 3. Final Hierarchical Consolidation
+        # Consolidates Strats (Avg of Assets)
+        for s_k, list_of_asset_series in strat_accumulator.items():
+            strat_df = pl.DataFrame(list_of_asset_series)
+            final_strat_series = strat_df.select(pl.mean_horizontal(pl.all())).to_series()
+            aggr_strats_ret[s_k] = final_strat_series
+
+            # Feeds Models accumulator
+            m_n = s_k[0]
+            if m_n not in model_accumulator:
+                model_accumulator[m_n] = []
+            model_accumulator[m_n].append(final_strat_series)
+
+        # Consolidates Models
+        for m_n, list_of_strat_series in model_accumulator.items():
+            model_df = pl.DataFrame(list_of_strat_series)
+            aggr_models_ret[m_n] = model_df.select(pl.mean_horizontal(pl.all())).to_series()
+
+        return aggr_assets_ret, aggr_strats_ret, aggr_models_ret
 
     def _load_selected_saved_returns_data(self): # Loads all data from selected map (wf, pnl, lot)
         storage = Storage(base_path=self.data_storage_base_path)

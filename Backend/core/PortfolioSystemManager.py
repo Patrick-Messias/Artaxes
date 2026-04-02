@@ -15,9 +15,8 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     # Rebalancing
     reb_metric: Literal["pnl", "pnl_dd", "sharpe"] = "pnl" # Metric used for performance-based rebalancing (if reb_method == "performance")
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
-    reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
-    reb_lookback_n: int = 1
-    reb_deviation_func: Optional[Dict[str, Callable]] = None # Function that defines the deviation threshold needed for rebalancing (e.g., 5% deviation from target allocation)
+    reb_lookback_n: int = 252 # If len < lookback then [:idx]
+    reb_deviation_func: Optional[Dict[str, Callable]] = None # Only rebalance if (ex: Portfolio std deviated "x" std from mean)
     reb_close_open_trades_on_rebalance: bool = False
 
     # Plugin functions for custom model hierarchy rules and rebalancing logic
@@ -35,7 +34,6 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         self.model_hierarchy                    = dict(sm_params.model_hierarchy)
         self.max_active_models                  = sm_params.max_active_models
         self.reb_method                         = sm_params.reb_method
-        self.reb_frequency                      = sm_params.reb_frequency
         self.reb_lookback_n                     = sm_params.reb_lookback_n
         self.reb_close_open_trades_on_rebalance = sm_params.reb_close_open_trades_on_rebalance
 
@@ -46,8 +44,14 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         self._fn_rebalance      = sm_params.fn_rebalance
         self._fn_main           = sm_params.fn_main
 
-        self._pre_cache: Dict = {}   # cache de indicadores pre-calculados
-        self._active_models: List[str] = []
+        self._pre_cache: Dict = {}   # Metrics and Indicators
+        # self._pre_cache = {
+        #     "models": {
+        #         "Model_A": {
+        #             "metrics": {"sharpe": [...], "pnl_dd": [...]}, # Alinhado à timeline
+        #             "indicators": {"rsi_equity": [...]}
+        #         }},
+        #     "strats": { ... }}
 
     # ── Helper central ───────────────────────────────────────────────────────
 
@@ -57,15 +61,19 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
     
     # ── Pre-Simulation ───────────────────────────────────────────────────────
 
-    def pre_compute(self, history: Dict[str, pl.DataFrame]) -> None:
+    def pre_compute(self, timeline, sim_data, aggr_models_ret, indicator_pool) -> None:
         # Runs only unce at the beginning of the simulation, can be used to pre-calculate indicators or do any setup needed before the simulation starts. 
-        self._call(self._fn_pre_compute, self._default_pre_compute, history)
+        self._call(self._fn_pre_compute, self._default_pre_compute, timeline, sim_data, aggr_models_ret, indicator_pool)
 
-    def _default_pre_compute(self, context: Dict[str, pl.DataFrame]) -> None:
+    def _default_pre_compute(self, timeline, sim_data, aggr_models_ret, indicator_pool) -> None:
 
-        # NEEDS ADAPTATION TO PS_PARAMR
+        # Defines PSM parsets from sm_params
+        param_sets = self._calculate_param_combinations(self.sm_params)
+        print(param_sets)
 
-        # Calculates sm_indicators defined as when="pre" 
+        # Calculates Indicators - Limits to timeline size
+
+        # Calculates Indicators - Asset size 
         assets = context.get("assets", {})
         for ind_name, ind_obj in (self.sm_indicators or {}).items():
             if getattr(ind_obj,"when", "pre") == "pre":
@@ -81,31 +89,10 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
                         if asset_class is not None and asset_df is not None:
                                 self._pre_cache[ind_name] = ind_obj.calculate(asset_df)
 
-    # NOTE mover para classe base SystemManager
-    def get_schedule(self, timeline: list) -> set:
-        freq = self.reb_frequency
 
-        if not freq or freq == "never": 
-            return pl.DataFrame({"ts": None}) # Updates every datetime
+        # Calculates Models metrics
 
-        df = pl.DataFrame({"ts": timeline})
-
-        if freq == "tick":
-            return df # Will always run
-
-        if freq == "daily":
-            condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
-        if freq == "weekly":
-            condition = pl.col("ts").dt.week() != pl.col("ts").dt.week().shift(1)
-        elif freq == "monthly":
-            condition = pl.col("ts").dt.month() != pl.col("ts").dt.month().shift(1)
-        elif freq == "yearly":
-            condition = pl.col("ts").dt.year() != pl.col("ts").dt.year().shift(1)
-        else:
-            return set()
-
-        # Fist candle is always a point of rebalance (start)
-        return set(df.filter(condition | pl.col("ts").is_first())["ts"].to_list())
+        # Saves to _pre_cache
 
     # ── Every reb_frequency ───────────────────────────────────────────
 
@@ -166,14 +153,16 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def main(self, step_dt, hierarchy: dict, operation_data: dict, portfolio_returns: dict) -> bool:
+    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, operation_data, portfolio_returns)
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
     
-    def _default_main(self, step_dt, hierarchy: dict, operation_data: dict, portfolio_returns: dict) -> bool:
+    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
 
+        # Calculates Live Indicators
 
+        # Rebalances
 
         return hierarchy
    
