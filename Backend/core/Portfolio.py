@@ -63,20 +63,13 @@ class Portfolio():
         portfolio_simulation_with_backtest_results = (has_pnl or has_wf)
         update_func_to_use = self._update_pos_with_backtest_ret if portfolio_simulation_with_backtest_results else self._update_pos_with_assets_ret
 
-
-        # ->>>>>> MODIFICAR _populate_sim_data
-        # 1. _populate_sim_data aproveita e calcula os resultados agregados da soma dos parsets/wf para cada ts
-        # 2. envia os resultados agregados para pre_compute, onde vai calcular metricas e indicadores
-        # 3. Na timeline vai usar as métricas de rebalance para verificar esses dados 
-
-
         # SM and MM Pre-Compute Metrics, Indicators and Rebalance Schedule
         indicator_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, \
         smm_sch = self._pre_compute_and_calc_rebalance_schedule(self.sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret)
         # NOTE Se não for usar em mais nenhum outro lugar, zerar os aggr
 
         # 2 - Run Timeline
-        for step_dt in self.datetime_timeline:
+        for i, step_dt in enumerate(self.datetime_timeline):
             instance = self.sim_data.get(step_dt, {})
             if not instance: continue
 
@@ -556,9 +549,9 @@ if __name__ == "__main__":
             "param2": range(20, 50+1, 30),
         },
         sm_indicators={
-            'atr': VAR(asset=None, timeframe="M15", window='param2'),
-            'var': VAR(asset="model", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
-            'var_all': VAR(asset="models", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            'atr': VAR(asset=None, timeframe="M15", when="pre", window='param2'),
+            'var': VAR(asset="model", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            'var_all': VAR(asset="models", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
         },
         sm_assets={'EURUSD': eurusd},
     ))

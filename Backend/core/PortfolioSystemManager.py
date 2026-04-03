@@ -53,97 +53,22 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         #         }},
         #     "strats": { ... }}
 
-    # ── Helper central ───────────────────────────────────────────────────────
 
-    def _call(self, custom_fn: Optional[Callable], default_fn: Callable, *args, **kwargs):
-        # Calls custom_fn if exists, else default
-        return custom_fn(*args, **kwargs) if custom_fn else default_fn(*args, **kwargs)
-    
-    # ── Pre-Simulation ───────────────────────────────────────────────────────
-
-    def pre_compute(self, timeline, sim_data, aggr_models_ret, indicator_pool) -> None:
-        # Runs only unce at the beginning of the simulation, can be used to pre-calculate indicators or do any setup needed before the simulation starts. 
-        self._call(self._fn_pre_compute, self._default_pre_compute, timeline, sim_data, aggr_models_ret, indicator_pool)
-
-    def _default_pre_compute(self, timeline, sim_data, aggr_models_ret, indicator_pool) -> None:
+    def _default_pre_compute(self, timeline, sim_data, aggr_ret, indicator_pool) -> dict:
 
         # Defines PSM parsets from sm_params
         param_sets = self._calculate_param_combinations(self.sm_params)
 
         # Calculates Indicators 
-        if self.sm_indicators: 
-            indicator_pool = self._calculate_indicators(timeline, sim_data, aggr_models_ret, indicator_pool, param_sets)
+        if self.sm_indicators: indicator_pool = self._calculate_and_map_indicators(aggr_ret, indicator_pool, param_sets)
 
         # Calculates Models metrics
+        
 
         # Saves to _pre_cache
-                       
-    def _calculate_indicators(self, timeline, sim_data, aggr_models_ret, indicator_pool, param_sets):
-        # Creates 1 dataframe with all models results
-        if aggr_models_ret:
-            all_models_df = pl.DataFrame(aggr_models_ret)
-            portfolio_series = all_models_df.select(pl.mean_horizontal(pl.all())).to_series()
 
-        for _, ps_dict in param_sets.items():
-            for ind_key, ind_obj in self.sm_indicators.items():
-                eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
-                ind_p_hash = self.param_suffix(eff_params)
-
-                if ind_obj.asset is None: # Calculates for each Asset in sm_assets
-                    if self.sm_assets is None: continue
-                    
-                    for a_name, a_obj in self.sm_assets:
-                        unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-                        if unique_key not in indicator_pool: 
-                            asset_df = a_obj.data_get(ind_obj.timeframe)
-                            if asset_df is not None: 
-                                indicator_pool[unique_key] = self._calculate_indicator(asset_df, ind_obj, eff_params)
-                else:
-                    if aggr_models_ret is None: continue
-
-                    if ind_obj.asset == "model": # Calculates for each model in aggr_models_ret
-                        for m_name, m_obj_series in aggr_models_ret.items():
-                            unique_key = f"model_{m_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-                            if unique_key not in indicator_pool: 
-                                indicator_pool[unique_key] = self._calculate_indicator(m_obj_series, ind_obj, eff_params)
-
-                    elif ind_obj.asset == "models": # Calculates with sum of all models in aggr_models_ret
-                        unique_key = f"portfolio_total_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-                        if unique_key not in indicator_pool: 
-                            indicator_pool[unique_key] = self._calculate_indicator(portfolio_series, ind_obj, eff_params)
-                
         return indicator_pool
-    
-    def _calculate_indicator(self, data, ind_obj, eff_params):
-        # data: Can be pl.DataFrame (OHLC) or pl.Series (PnL Aggregated / Tick)
-        # eff_params: Dict with params that only this indicator uses
-
-        # Executes Indicator, ind_obj must be able to accept Series + params
-        ind_results = ind_obj.calculate(data, eff_params)
-
-        if isinstance(ind_results, pl.Series):
-            return {"main": ind_results}
-
-        return ind_results
-
-    # ── Every reb_frequency ───────────────────────────────────────────
-
-    def rank(self, context: dict) -> Dict[str, float]:
-        # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
-        return self._call(self._fn_rank, self._default_rank, context)
-
-    def filter(self, context: dict) -> List[str]:
-        # Removes models that don't pass the filter function
-        # Returns list of model_names that are active
-        return self._call(self._fn_filter, self._default_filter, context)
-
-    def rebalance(self, context: dict) -> List[str]:
-        # Orchestrates rank -> filter -> selection
-        # Returns ordered list of active models
-        return self._call(self._fn_rebalance, self._default_rebalance, context)
-
-    # Default implementations (used if no custom function is passed in the params)
-
+                       
     def _default_rank(self, context: dict) -> Dict[str, float]:
         history  = context.get("history", {})
         lookback = self.reb_lookback_n

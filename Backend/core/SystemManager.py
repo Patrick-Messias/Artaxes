@@ -7,12 +7,11 @@ Pode implementar lógica de auto-adaptação (ex: desativar modelos com drawdown
 Atua sobre os níveis superiores (controla quem “fala” com o PMM e o TM).
 """
 
-import polars as pl
-import uuid
-from typing import Literal, Dict, Optional, Callable
+import polars as pl, uuid
+from typing import Literal, Dict, Optional
 from dataclasses import dataclass, field
 from Indicator import Indicator
-from BaseClass import BaseClass
+from BaseClass import BaseClass, BaseManager
 
 @dataclass
 class SystemManagerParams:
@@ -31,7 +30,7 @@ class SystemManagerParams:
     sm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict)
     
 
-class SystemManager(BaseClass): 
+class SystemManager(BaseClass, BaseManager): 
     def __init__(self, system_params: SystemManagerParams):
         super().__init__()
         self.name = system_params.name
@@ -42,61 +41,17 @@ class SystemManager(BaseClass):
         self.sm_params = system_params.sm_params
         self.sm_indicators = system_params.sm_indicators
 
-    def get_schedule(self, timeline: list) -> set:
-        freq = self.reb_frequency 
-
-        if not freq or freq == "never": 
-            return pl.DataFrame({"ts": None}) # Updates every datetime
-
-        df = pl.DataFrame({"ts": timeline})
-
-        if freq == "tick":
-            return df # Will always run
-
-        if freq == "daily":
-            condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
-        if freq == "weekly":
-            condition = pl.col("ts").dt.week() != pl.col("ts").dt.week().shift(1)
-        elif freq == "monthly":
-            condition = pl.col("ts").dt.month() != pl.col("ts").dt.month().shift(1)
-        elif freq == "yearly":
-            condition = pl.col("ts").dt.year() != pl.col("ts").dt.year().shift(1)
-        else:
-            return set()
-
-        # Fist candle is always a point of rebalance (start)
-        return set(df.filter(condition | pl.col("ts").is_first())["ts"].to_list())
-
-    # def should_execute(self, asset_name: str, strategy_name: str, context_df: Optional[pl.DataFrame] = None) -> bool:
-    #     """
-    #     Método central para decidir se uma operação deve prosseguir.
-    #     Pode ser expandido nas subclasses para checar regras globais.
-    #     """
-    #     # Exemplo de lógica base: se não houver regras, libera geral (True)
-    #     if not self.sm_rules:
-    #         return True
-        
-    #     # Aqui as subclasses (ex: ModelSystemManager) implementariam a iteração sobre sm_rules
-    #     return True
-
-    # def filter_signals(self, signals_df: pl.DataFrame) -> pl.DataFrame:
-    #     """
-    #     Aplica filtros em massa sobre um DataFrame de sinais usando Polars.
-    #     Útil para desativar sinais em horários de notícias ou regimes específicos.
-    #     """
-    #     # Exemplo: filter_signals poderia fazer um join_asof com dados externos (CDT)
-    #     # e filtrar linhas onde a flag 'market_is_open' é falsa.
-    #     return signals_df
-
-    # =========================================================================================||
-
     def __repr__(self):
         return f"<{self.__class__.__name__} name={self.name}>"
-    
 
 
 
 
+
+
+
+
+    #||=========================================================================================||
 
     # Management Indicators
     def fama_french(): # Imports all T-Bills, Assets, etc

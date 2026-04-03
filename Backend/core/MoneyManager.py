@@ -9,10 +9,10 @@ PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio
 
 import polars as pl
 import uuid
-from typing import Literal, Dict, Optional, Callable
+from typing import Literal, Dict, Optional
 from dataclasses import dataclass, field
 from Indicator import Indicator
-from BaseClass import BaseClass
+from BaseClass import BaseClass, BaseManager
 
 @dataclass
 class MoneyManagerParams:
@@ -44,7 +44,7 @@ class MoneyManagerParams:
     # Indicadores específicos para balanceamento de ativos/modelos
     mm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) 
 
-class MoneyManager(BaseClass): # Classe base para SMM, MMM e PMM
+class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
     def __init__(self, mm_params: MoneyManagerParams):
         super().__init__()
         self.name = mm_params.name
@@ -62,31 +62,6 @@ class MoneyManager(BaseClass): # Classe base para SMM, MMM e PMM
         self.mm_assets = mm_params.mm_assets
         self.mm_params = mm_params.mm_params
         self.mm_indicators = mm_params.mm_indicators
-
-    def get_schedule(self, timeline: list) -> set:
-        freq = self.reb_frequency 
-
-        if not freq or freq == "never": 
-            return pl.DataFrame({"ts": None}) # Updates every datetime
-
-        df = pl.DataFrame({"ts": timeline})
-
-        if freq == "tick":
-            return df # Will always run
-
-        if freq == "daily":
-            condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
-        if freq == "weekly":
-            condition = pl.col("ts").dt.week() != pl.col("ts").dt.week().shift(1)
-        elif freq == "monthly":
-            condition = pl.col("ts").dt.month() != pl.col("ts").dt.month().shift(1)
-        elif freq == "yearly":
-            condition = pl.col("ts").dt.year() != pl.col("ts").dt.year().shift(1)
-        else:
-            return set()
-
-        # Fist candle is always a point of rebalance (start)
-        return set(df.filter(condition | pl.col("ts").is_first())["ts"].to_list())
 
 
 
@@ -111,7 +86,7 @@ class MoneyManager(BaseClass): # Classe base para SMM, MMM e PMM
         """Retorna o capital máximo que este manager pode expor."""
         return self.capital * self.max_capital_exposure
 
-    # =========================================================================================||
+    #||=========================================================================================||
 
     
 
