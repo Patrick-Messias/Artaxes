@@ -34,6 +34,41 @@ class BaseClass():
 
             return result
 
+    def param_suffix(self, params: dict, sep: str = "-", pair_sep: str = "") -> str:
+        # Gera um sufixo determinístico a partir de `params`.
+        # - Ordena chaves para garantir determinismo.
+        # - Normaliza listas/tuplas/range/dict para representações consistentes.
+        # - Retorna uma string segura para usar como key/cache/lookup.
+     
+        def _norm(v):
+            if v is None:
+                return "None"
+            if isinstance(v, range):
+                return f"range({v.start},{v.stop},{v.step})"
+            if isinstance(v, (list, tuple)):
+                return "[" + ",".join(str(x) for x in v) + "]"
+            if isinstance(v, dict):
+                return json.dumps(v, sort_keys=True, separators=(",", ":"))
+            # Fallback: booleans, numbers, strings, objects
+            return str(v)
+
+        parts = []
+        for k in sorted(params.keys()):
+            v = params[k]
+            parts.append(f"{k}{sep}{_norm(v)}")
+        return "_".join(parts)
+    
+    def effective_params_from_global(self, ind_defaults, global_ps):
+        eff = {}
+        for k, v in ind_defaults.items():
+            if isinstance(v, str) and v in global_ps:
+                eff[k] = global_ps[v]
+            elif k in global_ps:
+                eff[k] = global_ps[k]
+            else:
+                eff[k] = v
+        return eff
+    
 
 # def main():
 #     # 1. Instancia a base

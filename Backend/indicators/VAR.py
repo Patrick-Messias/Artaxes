@@ -19,23 +19,26 @@ class VAR(Indicator):
         super().__init__(asset, timeframe, **params)
         self.name = "var"
 
-    def _calculate_logic(self, df: pl.DataFrame, **kwargs) -> pl.Series:
+    def _calculate_logic(self, data, **kwargs) -> pl.Series:
         window    = int(kwargs.get('window',    20))
         alpha     = float(kwargs.get('alpha',   0.05))
         var_type  = str(kwargs.get('var_type',  'historical')).lower()
         price_col = str(kwargs.get('price_col', 'close'))
 
-        if price_col not in df.columns:
-            actual_col = next((c for c in df.columns if c.lower() == price_col.lower()), None)
-            if actual_col:
-                price_col = actual_col
-            else:
-                raise ValueError(f"Coluna '{price_col}' não encontrada. Colunas: {df.columns}")
+        # Series extraction
+        if isinstance(data, pl.Series):
+            df = data
+            is_returns = True
+        elif isinstance(data, pl.DataFrame):
+            if price_col not in data.columns:
+                price_col = next((c for c in data.columns if c.lower() not in ['ts', 'datetime']), data.columns[0])
+            df = data.get_column(price_col)
+            is_returns = False
+        else:
+            raise ValueError(f"VAR: Type not supported: {type(data)}")
 
-        # Calcula pct_change (retornos) se price_col for 'close' ou similar
-        returns = df.select(
-            pl.col(price_col).pct_change().fill_null(0.0)
-        ).to_series()
+        # Calculates pct_change if only brute price
+        returns = df if is_returns else df.pct_change().fill_null(0.0)
 
         if var_type == 'historical': # rolling_quantile nativo — sem overhead Python por janela
             var_series = returns.rolling_quantile(
@@ -43,7 +46,6 @@ class VAR(Indicator):
                 interpolation='linear',
                 window_size=window,
             )
-
         elif var_type == 'parametric':
             from scipy.stats import norm
             z_score = float(norm.ppf(1 - alpha))
@@ -55,6 +57,6 @@ class VAR(Indicator):
             var_series = rolling_mean - (rolling_std * z_score)
 
         else:
-            raise ValueError(f"var_type não suportado: '{var_type}'. Use 'historical' ou 'parametric'.")
+            raise ValueError(f"Type of VaR not supported: '{var_type}'. Use 'historical' or 'parametric'.")
 
         return var_series.fill_null(0.0).alias("var")

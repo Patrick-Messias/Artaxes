@@ -9,7 +9,7 @@ class Indicator:
         self.params = params
         #self.name = self.__class__.__name__.lower()
 
-    def calculate(self, df: pl.DataFrame, param_set_dict: dict = None, ind_name: str = None): 
+    def calculate(self, df, param_set_dict: dict = None, ind_name: str = None): 
         # Resolve as variáveis do indicador (otimização) antes de chamar a lógica real.
         # Recebe e deve retornar objetos do Polars.
        
@@ -29,7 +29,7 @@ class Indicator:
             
         return result
 
-    def _calculate_logic(self, df: pl.DataFrame, **kwargs):
+    def _calculate_logic(self, df, **kwargs):
         """
         Este método deve ser sobrescrito em cada indicador (ex: MA.py, RSI.py).
         Deve conter apenas cálculos usando expressões do Polars.

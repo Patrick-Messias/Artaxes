@@ -69,30 +69,62 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
         # Defines PSM parsets from sm_params
         param_sets = self._calculate_param_combinations(self.sm_params)
-        print(param_sets)
 
-        # Calculates Indicators - Limits to timeline size
-
-        # Calculates Indicators - Asset size 
-        assets = context.get("assets", {})
-        for ind_name, ind_obj in (self.sm_indicators or {}).items():
-            if getattr(ind_obj,"when", "pre") == "pre":
-                if ind_obj.asset is not None: # Computes ind for specific asset only
-                    asset_class = assets.get(ind_obj.asset)
-                    asset_df = asset_class.data_get(ind_obj.timeframe) if asset_class else None
-                    if asset_class is not None and asset_df is not None:
-                        self._pre_cache[ind_name] = ind_obj.calculate(asset_df)
-                else: # Computes ind for all assets 
-                   for asset_name in self.sm_assets.items():
-                        asset_class = assets.get(asset_name) # history has assets class
-                        asset_df = asset_class.data_get(ind_obj.timeframe) if asset_class else None
-                        if asset_class is not None and asset_df is not None:
-                                self._pre_cache[ind_name] = ind_obj.calculate(asset_df)
-
+        # Calculates Indicators 
+        if self.sm_indicators: 
+            indicator_pool = self._calculate_indicators(timeline, sim_data, aggr_models_ret, indicator_pool, param_sets)
 
         # Calculates Models metrics
 
         # Saves to _pre_cache
+                       
+    def _calculate_indicators(self, timeline, sim_data, aggr_models_ret, indicator_pool, param_sets):
+        # Creates 1 dataframe with all models results
+        if aggr_models_ret:
+            all_models_df = pl.DataFrame(aggr_models_ret)
+            portfolio_series = all_models_df.select(pl.mean_horizontal(pl.all())).to_series()
+
+        for _, ps_dict in param_sets.items():
+            for ind_key, ind_obj in self.sm_indicators.items():
+                eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
+                ind_p_hash = self.param_suffix(eff_params)
+
+                if ind_obj.asset is None: # Calculates for each Asset in sm_assets
+                    if self.sm_assets is None: continue
+                    
+                    for a_name, a_obj in self.sm_assets:
+                        unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+                        if unique_key not in indicator_pool: 
+                            asset_df = a_obj.data_get(ind_obj.timeframe)
+                            if asset_df is not None: 
+                                indicator_pool[unique_key] = self._calculate_indicator(asset_df, ind_obj, eff_params)
+                else:
+                    if aggr_models_ret is None: continue
+
+                    if ind_obj.asset == "model": # Calculates for each model in aggr_models_ret
+                        for m_name, m_obj_series in aggr_models_ret.items():
+                            unique_key = f"model_{m_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+                            if unique_key not in indicator_pool: 
+                                indicator_pool[unique_key] = self._calculate_indicator(m_obj_series, ind_obj, eff_params)
+
+                    elif ind_obj.asset == "models": # Calculates with sum of all models in aggr_models_ret
+                        unique_key = f"portfolio_total_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+                        if unique_key not in indicator_pool: 
+                            indicator_pool[unique_key] = self._calculate_indicator(portfolio_series, ind_obj, eff_params)
+                
+        return indicator_pool
+    
+    def _calculate_indicator(self, data, ind_obj, eff_params):
+        # data: Can be pl.DataFrame (OHLC) or pl.Series (PnL Aggregated / Tick)
+        # eff_params: Dict with params that only this indicator uses
+
+        # Executes Indicator, ind_obj must be able to accept Series + params
+        ind_results = ind_obj.calculate(data, eff_params)
+
+        if isinstance(ind_results, pl.Series):
+            return {"main": ind_results}
+
+        return ind_results
 
     # ── Every reb_frequency ───────────────────────────────────────────
 

@@ -15,6 +15,7 @@ class PortfolioParams():
     portfolio_parameters: dict=None 
     portfolio_money_manager: Optional['PortfolioMoneyManager'] = None
     portfolio_system_manager: Optional['PortfolioSystemManager'] = None
+    sm_mm_map: dict = field(default_factory=dict) # SM/MM for all levels
 
     date_start: Optional[str] = None
     date_end: Optional[str] = None
@@ -32,6 +33,7 @@ class Portfolio():
 
         self.portfolio_money_manager = portfolio_params.portfolio_money_manager
         self.portfolio_system_manager = portfolio_params.portfolio_system_manager
+        self.sm_mm_map = portfolio_params.sm_mm_map
 
         self.date_start = portfolio_params.date_start
         self.date_end = portfolio_params.date_end
@@ -524,6 +526,79 @@ class Portfolio():
         return True
 
 if __name__ == "__main__":
+    from ModelMoneyManager  import ModelMoneyManager,  ModelMoneyManagerParams
+    from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
+    from StratMoneyManager  import StratMoneyManager,  StratMoneyManagerParams
+    from StratSystemManager import StratSystemManager, StratSystemManagerParams
+    from PortfolioMoneyManager  import PortfolioMoneyManager,  PortfolioMoneyManagerParams
+    from PortfolioSystemManager import PortfolioSystemManager, PortfolioSystemManagerParams
+    from Model import Model, ModelParams
+    from Strat import Strat, StratParams
+    from MA import MA # type: ignore
+    from VAR import VAR # type: ignore
+    from ATR_SL import ATR_SL # type: ignore
+
+    # ── Portfolio level ───────────────────────────────────────────────────────
+    assets = Asset.load_all()
+    eurusd = assets.get("EURUSD")
+    gbpusd = assets.get("GBPUSD")
+    usdjpy = assets.get("USDJPY")
+    
+    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
+
+    psm = PortfolioSystemManager(PortfolioSystemManagerParams(
+        reb_frequency="weekly",
+        reb_metric="pnl",
+        reb_method="fixed",
+        max_active_models=None,
+        sm_params={
+            "param1": range(2, 4+1, 1),
+            "param2": range(20, 50+1, 30),
+        },
+        sm_indicators={
+            'atr': VAR(asset=None, timeframe="M15", window='param2'),
+            'var': VAR(asset="model", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            'var_all': VAR(asset="models", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+        },
+        sm_assets={'EURUSD': eurusd},
+    ))
+
+    pmm = PortfolioMoneyManager(PortfolioMoneyManagerParams(
+        capital=100_000.0,
+        max_capital_exposure=1.0,
+        reb_method="fixed",
+        alo_allocation={"MA Trend Following": 1.0},  # 100% para o único model
+        mm_params={
+            "param1": range(4, 12+1, 4),
+            "param2": range(20, 80+1, 50),
+        },
+    ))
+
+    # ── Model level ───────────────────────────────────────────────────────────
+    msm = ModelSystemManager(ModelSystemManagerParams(
+        reb_frequency="weekly",
+    ))
+
+    mmm = ModelMoneyManager(ModelMoneyManagerParams(
+        capital=100_000.0,
+        max_capital_exposure=1.0,
+    ))
+
+    # ── Strat level ───────────────────────────────────────────────────────────
+    ssm = StratSystemManager(StratSystemManagerParams(
+        reb_frequency="weekly",
+    ))
+
+    smm = StratMoneyManager(StratMoneyManagerParams(
+        sizing_method="neutral",
+        capital_method="fixed",
+        capital=100_000.0,
+    ))
+
+    # ── portfolio_data com SM/MM em cada nível ────────────────────────────────
+    # O portfolio_data carrega os resultados do storage.
+    # SM/MM ficam num dict separado mapeado por (model, strat)
+    # para não poluir a estrutura de dados de resultados.
 
     portfolio_data = {
         "operation_test": {
@@ -535,16 +610,40 @@ if __name__ == "__main__":
         }
     }
 
+    # SM/MM mapeados por nível — referenciados durante a simulação
+    sm_mm_map = {
+        "portfolio": {
+            "psm": psm,
+            "pmm": pmm,
+        },
+        "models": {
+            "MA Trend Following": {
+                "msm": msm,
+                "mmm": mmm,
+                "strats": {
+                    "AT15": {
+                        "ssm": ssm,
+                        "smm": smm,
+                    }
+                }
+            }
+        }
+    }
+
     portfolio_global_parameters = {
         "capital": 100000.0,
     }
-    
-    portfolio = Portfolio(PortfolioParams("Portfolio_Test", 
-                                          portfolio_data, 
-                                          portfolio_global_parameters,
-                                          ))
-    portfolio._run()
 
+    portfolio = Portfolio(PortfolioParams(
+        name="Portfolio_Test",
+        portfolio_data=portfolio_data,
+        portfolio_parameters=portfolio_global_parameters,
+        portfolio_money_manager=pmm,
+        portfolio_system_manager=psm,
+        sm_mm_map=sm_mm_map,  
+    ))
+
+    portfolio._run()
 
 
     """
