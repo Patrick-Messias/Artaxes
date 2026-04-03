@@ -21,13 +21,13 @@ class SystemManagerParams:
     
     # Dados externos para o System Manager (Ex: Calendário Econômico, Sentimento, CDT)
     # Migrado para usar dicionário de Polars DataFrames
-    sm_assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
+    assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
 
     # Customizable parameters for specific System Managers (Ex: thresholds para desativar modelos, regras de ativação, etc)
-    sm_params: Dict = field(default_factory=dict) 
+    params: Dict = field(default_factory=dict) 
     
     # Indicadores administrativos (Ex: Medidores de Regime de Mercado)
-    sm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict)
+    indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict)
     
 
 class SystemManager(BaseClass, BaseManager): 
@@ -37,9 +37,9 @@ class SystemManager(BaseClass, BaseManager):
         self.reb_frequency = system_params.reb_frequency
         
         # Custom Data & Rules
-        self.sm_assets = system_params.sm_assets
-        self.sm_params = system_params.sm_params
-        self.sm_indicators = system_params.sm_indicators
+        self.assets = system_params.assets
+        self.params = system_params.params
+        self.indicators = system_params.indicators
 
     def __repr__(self):
         return f"<{self.__class__.__name__} name={self.name}>"
@@ -54,11 +54,10 @@ class SystemManager(BaseClass, BaseManager):
     #||=========================================================================================||
 
     # Management Indicators
-    def fama_french(): # Imports all T-Bills, Assets, etc
+    def fama_french(): pass # Imports all T-Bills, Assets, etc
         
-        pass
-
-
+    def mae_mpe(): pass # 
+    
 
 
 

@@ -82,8 +82,8 @@ class BaseManager():
     
     # ── Pre-Simulation ───────────────────────────────────────────────────────
 
-    def pre_compute(self, timeline, sim_data, aggr_ret, indicator_pool) -> None:
-        self._call(self._fn_pre_compute, self._default_pre_compute, timeline, sim_data, aggr_ret, indicator_pool)
+    def pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool) -> None:
+        self._call(self._fn_pre_compute, self._default_pre_compute, global_assets, timeline, sim_data, aggr_ret, indicator_pool)
 
     # ── Rebalance Func ───────────────────────────────────────────────────────
 
@@ -103,73 +103,197 @@ class BaseManager():
 
     # ── Indicators ───────────────────────────────────────────────────────
 
-    def _calculate_and_map_indicators(self, aggr_ret, indicator_pool, param_sets):
-        # USE EXAMPLE
-        # def check_entry(self, i, ps_name, indicator_pool):
-        #     # Acessa pelo nome que você deu na definição, sem se preocupar com o hash
-        #     u_key = self._pre_cache[ps_name]["trend_ma"]
-        #     current_ma = indicator_pool[u_key]["main"][i]
-        #     if current_pnl > current_ma: return True
-        #
-        # u_key = self.psm._pre_cache[ps_name]["rsi"]
-        # rsi_val = indicator_pool[u_key]["main"][i]
+    def get_ind(self, ind_key: str, target: str, i: int, indicator_pool: dict, ps_name: str, col: str = "main"):
+        """
+        Searches in O(1) indicator value aligned to the current iteration
+        
+        :param ind_key: Indicator name (ex: "rsi", "trend_ma")
+        :param target: Asset/Model name (ex: "BTC"), model (ex: "Model_A") or "total"
+        :param i: Timeline iteration current index 
+        :param indicator_pool: Global dictionary that holds aligned dfs
+        :param ps_name: Parset name (ex: "default")
+        :param col: Indicator column to select (default is "main")
+        """
+        try:
+            # 1. Recovers unique cache hash
+            u_key = self._pre_cache[ps_name][ind_key][target]
+            
+            # 2. Polars DataFrame Access line 'i' of the selected column
+            return indicator_pool[u_key][col][i]
+            
+        except KeyError: # Case indicator doesn't exist for this combination
+            return None
+        except IndexError: # Case iteration higher then array size
+            return None
+
+    def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets):
+
+        # Discovers dynamically time column
+        time_col = next((c for c in timeline.columns if c.lower() in ['ts', 'datetime', 'time', 'date']), timeline.columns[0])
 
         # Creates 1 dataframe with all models results
+        portfolio_series= None
         if aggr_ret:
             all_models_df = pl.DataFrame(aggr_ret)
-            portfolio_series = all_models_df.select(pl.mean_horizontal(pl.all())).to_series()
+            portfolio_series = pl.DataFrame({
+                time_col: timeline.get_column(time_col),
+                "main": all_models_df.select(pl.mean_horizontal(pl.all())).to_series()
+            })
 
-        for _, ps_dict in param_sets.items():
-            for ind_key, ind_obj in self.sm_indicators.items():
+        for ps_name, ps_dict in param_sets.items():
+            self._pre_cache[ps_name] = {}
+
+            for ind_key, ind_obj in self.indicators.items():
                 eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                 ind_p_hash = self.param_suffix(eff_params)
 
-                if ind_obj.asset is None: # Calculates for each Asset in sm_assets
-                    if self.sm_assets is None: continue
+                self._pre_cache[ps_name][ind_key] = {}
+
+                if ind_obj.asset is None: # Calculates for each Asset in assets
+                    if self.assets is None: continue
                     
-                    for a_name, a_obj in self.sm_assets:
+                    for a_name, a_obj in self.assets:
                         unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+
+                        self._pre_cache[ps_name][ind_key][a_name] = unique_key
+                        
                         if unique_key not in indicator_pool: 
                             asset_df = a_obj.data_get(ind_obj.timeframe)
                             if asset_df is not None: 
-                                indicator_pool[unique_key] = self._calculate_indicator(asset_df, ind_obj, eff_params)
+                                ind_result = self._calculate_indicator(asset_df, ind_obj, eff_params)
+                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
+                                indicator_pool[unique_key] = ind_result_aligned
+
+                elif ind_obj.asset not in ["model", "models"]: # Calculates for one specific Asset
+                    if global_assets is None: continue
+                    
+                    a_name = ind_obj.asset
+                    a_class = global_assets.get(a_name)
+                    a_df = a_class.load(ind_obj.timeframe)
+
+                    if a_df is not None:
+                        unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+
+                        self._pre_cache[ps_name][ind_key][a_name] = unique_key
+
+                        if unique_key not in indicator_pool:
+                            ind_result = self._calculate_indicator(a_df, ind_obj, eff_params)
+                            ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
+                            indicator_pool[unique_key] = ind_result_aligned
+                    
                 else:
                     if aggr_ret is None: continue
 
-                    if ind_obj.asset == "model": # Calculates for each model in aggr_models_ret
+                    if ind_obj.asset == "each_aggr": # Calculates for each model/strat/asset in aggr_models_ret
                         for m_name, m_obj_series in aggr_ret.items():
-                            unique_key = f"model_{m_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+                            unique_key = f"each_aggr_{m_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+
+                            self._pre_cache[ps_name][ind_key][m_name] = unique_key
+
                             if unique_key not in indicator_pool: 
-                                indicator_pool[unique_key] = self._calculate_indicator(m_obj_series, ind_obj, eff_params)
+                                m_df = pl.DataFrame({
+                                    time_col: timeline.get_column(time_col),
+                                    "main": m_obj_series
+                                })
+                                ind_result = self._calculate_indicator(m_df, ind_obj, eff_params)
+                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
+                                indicator_pool[unique_key] = ind_result_aligned
 
-                    elif ind_obj.asset == "models": # Calculates with sum of all models in aggr_models_ret
-                        unique_key = f"portfolio_total_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+                    elif ind_obj.asset == "all_aggr": # Calculates with sum of all models in aggr_models_ret
+                        unique_key = f"all_aggr_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+
+                        self._pre_cache[ps_name][ind_key]["total"] = unique_key
+
                         if unique_key not in indicator_pool: 
-                            indicator_pool[unique_key] = self._calculate_indicator(portfolio_series, ind_obj, eff_params)
+                            ind_result = self._calculate_indicator(portfolio_series, ind_obj, eff_params)
+                            ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
+                            indicator_pool[unique_key] = ind_result_aligned
                 
-        # Maps Indicators to _pre_cache with all parsets
-        for ps_name, ps_dict in param_sets.items():
-            self._pre_cache[ps_name] = {}
-            for ind_key, ind_obj in self.sm_indicators.items():
-                eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
-                ind_p_hash = self.param_suffix(eff_params)
-
-                u_key = f"model_{self.name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-                self._pre_cache[ps_name][ind_key] = u_key
-
         return indicator_pool
     
     def _calculate_indicator(self, data, ind_obj, eff_params):
         # data: Can be pl.DataFrame (OHLC) or pl.Series (PnL Aggregated / Tick)
         # eff_params: Dict with params that only this indicator uses
 
+        if isinstance(data, pl.DataFrame):
+            time_col = next(c for c in data.columns if c.lower() in ['ts', 'datetime', 'time', 'date'])
+            ts_series = data.get_column(time_col)
+        else: #
+            raise ValueError("data must countain time reference (ts/datetime/date/time)")
+        
         # Executes Indicator, ind_obj must be able to accept Series + params
-        ind_results = ind_obj.calculate(data, eff_params)
+        ind_results = ind_obj._calculate_logic(data, eff_params)
 
-        if isinstance(ind_results, pl.Series):
-            return {"main": ind_results}
-
+        if isinstance(ind_results, pl.Series): # Stitches results with ts in a final DataFrame
+            ind_results = ind_results.alias("main") if ind_results.name == "" else ind_results
+            return pl.DataFrame({time_col: ts_series, ind_results.name: ind_results})
+        elif isinstance(ind_results, dict): # Case of indicator returning multiple lines
+            df_dict = {time_col: ts_series}
+            df_dict.update(ind_results)
+            return pl.DataFrame(df_dict)
+        elif isinstance(ind_results, pl.DataFrame): # Indicator already returned a DataFrame, just makes shure ts is present
+            if time_col not in ind_results.columns:
+                ind_results = ind_results.with_columns(ts_series)
         return ind_results
+
+    def _align_IND_to_TIMELINE(self, timeline_df: pl.DataFrame, indicator_df: pl.DataFrame, time_col="datetime", fills_nulls="forward") -> pl.DataFrame:
+        
+        if time_col not in indicator_df.columns:
+            raise f"{time_col} not in Indicator DataFrame columns"
+
+        # Applies shift to avoid lookahead bias
+        indicator_shifted = indicator_df.with_columns(
+            pl.all().exclude(time_col).shift(1)
+        )
+
+        # Join Asof (Backward) each timeline date gets last indicator value lower or equal to him
+        aligned_df = timeline_df.join_asof(
+            indicator_shifted,
+            on=time_col,
+            strategy="backward"
+        )
+
+        # Fills nulls with zero
+        if fills_nulls == 0: return aligned_df.fill_null(0)
+        elif fills_nulls == "forward": return aligned_df.fill_null(strategy="forward")
+
+    # Tow below for other use, _calculate_and_map_indicators already handles Indicator Data to Timeline
+    def align_HTF_to_LTF(timeline_df, higher_tf_df): 
+        # timeline_df: DataFrame com a coluna 'ts' (ex: 1 min ou ticks)
+        # higher_tf_df: DataFrame com o indicador calculado (ex: 1 hora)
+
+        # 1. Aplicamos o shift no indicador de TF maior
+        # O valor calculado na vela que FECHA às 02:00 só é válido para o futuro
+        higher_tf_prepared = higher_tf_df.with_columns(
+            pl.all().exclude("ts").shift(1)
+        )
+
+        # 2. Join Asof: Une os dados onde timeline['ts'] >= higher_tf['ts']
+        # Ele pega o último valor disponível (backward fill automático)
+        aligned_df = timeline_df.join_asof(
+            higher_tf_prepared,
+            on="ts",
+            strategy="backward"
+        )
+        
+        return aligned_df.fill_null(strategy="forward") # Opcional: preenche o início do histórico
+    
+    def align_LTF_to_HTF(df_ltf, htf_period="1h", method="last"): 
+        # Consolida dados do menor timeframe para o maior.
+        # method: "last", "mean", "sum", "max", "min"
+        
+        aggs = {
+            "last": pl.col("valor").last(),
+            "mean": pl.col("valor").mean(),
+            "sum":  pl.col("valor").sum(),
+            "max":  pl.col("valor").max()
+        }
+        
+        return df_ltf.group_by_dynamic(
+            "ts", 
+            every=htf_period, 
+            closed="right" # Garante que a vela das 02:00 inclua o dado de 02:00
+        ).agg(aggs.get(method, pl.col("valor").last()))
 
     # ── Global Func ───────────────────────────────────────────────────────
 

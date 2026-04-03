@@ -45,6 +45,7 @@ class Portfolio():
 
         self.portfolio_returns: dict={}
         self.sim_data: dict= {}
+        self.global_assets = Asset.load_all()
     
 
     def _simulation(self):
@@ -65,7 +66,7 @@ class Portfolio():
 
         # SM and MM Pre-Compute Metrics, Indicators and Rebalance Schedule
         indicator_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, \
-        smm_sch = self._pre_compute_and_calc_rebalance_schedule(self.sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret)
+        smm_sch = self._pre_compute_and_calc_rebalance_schedule(self.global_assets, self.sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret)
         # NOTE Se não for usar em mais nenhum outro lugar, zerar os aggr
 
         # 2 - Run Timeline
@@ -178,34 +179,41 @@ class Portfolio():
 
         return hierarchy  
 
-    def _pre_compute_and_calc_rebalance_schedule(self, sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret):
+    def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret):
         indicator_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}, {}
         timeline = self.datetime_timeline
 
         # Portfolio
         if self.portfolio_system_manager:
-            self.portfolio_system_manager.pre_compute(timeline, sim_data, aggr_models_ret, indicator_pool)
-            psm_sch['root'] = self.portfolio_system_manager.get_schedule(timeline)
+            self.portfolio_system_manager.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
+            psm_sch[self.name] = self.portfolio_system_manager.get_schedule(timeline)
+            
         if self.portfolio_money_manager:
-            self.portfolio_money_manager.pre_compute(timeline, sim_data, aggr_models_ret, indicator_pool)
-            psm_sch['root'] = self.portfolio_money_manager.get_schedule(timeline)
+            self.portfolio_money_manager.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
+            psm_sch[self.name] = self.portfolio_money_manager.get_schedule(timeline)
 
         for _, _, m_name, m_obj, *_ in self._iter_portfolio_data():
-            if m_obj.model_system_manager():
-                self.model_system_manager.pre_compute(timeline, sim_data, aggr_strats_ret, indicator_pool)
-                msm_sch[m_name] = m_obj.model_system_manager.get_schedule(timeline)
-            if m_obj.model_money_manager():
-                self.model_money_manager.pre_compute(timeline, sim_data, aggr_strats_ret, indicator_pool)
-                mmm_sch[m_name] = m_obj.model_money_manager.get_schedule(timeline)
+            msm = m_obj.model_system_manager()
+            if msm:
+                msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
+                msm_sch[m_name] = msm.get_schedule(timeline)
+
+            msm = m_obj.model_money_manager()
+            if msm:
+                msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
+                mmm_sch[m_name] = msm.get_schedule(timeline)
 
             for s_name, s_obj in m_obj.strats.items():
                 s_key = (m_name, s_name)
-                if s_obj.strat_system_manager:
-                    self.strat_system_manager.pre_compute(timeline, sim_data, aggr_assets_ret, indicator_pool)
-                    ssm_sch[s_key] = s_obj.strat_system_manager.get_schedule(timeline)
-                if s_obj.strat_money_manager:
-                    self.strat_money_manager.pre_compute(timeline, sim_data, aggr_assets_ret, indicator_pool)
-                    smm_sch[s_key] = s_obj.strat_money_manager.get_schedule(timeline)
+                ssm = s_obj.strat_system_manager
+                if ssm:
+                    ssm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
+                    ssm_sch[s_key] = ssm.get_schedule(timeline)
+
+                smm = s_obj.strat_money_manager
+                if smm:
+                    smm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
+                    smm_sch[s_key] = smm.get_schedule(timeline)
 
         # # Exemplo para o Strat System Manager no ponto D
         # for s_name, s_obj in m_obj.items():

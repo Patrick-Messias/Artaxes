@@ -36,13 +36,13 @@ class MoneyManagerParams:
     
     # Dados externos para MM (Ex: volatilidade do mercado, regime de juros)
     # Agora usa Polars DataFrame
-    mm_assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
+    assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
 
     # Customizable parameters for specific System Managers (Ex: thresholds para desativar modelos, regras de ativação, etc)
-    mm_params: Dict = field(default_factory=dict) 
+    params: Dict = field(default_factory=dict) 
     
     # Indicadores específicos para balanceamento de ativos/modelos
-    mm_indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) 
+    indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) 
 
 class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
     def __init__(self, mm_params: MoneyManagerParams):
@@ -59,9 +59,9 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         self._validate_drawdown_settings()
                 
         # Custom Rules & Data
-        self.mm_assets = mm_params.mm_assets
-        self.mm_params = mm_params.mm_params
-        self.mm_indicators = mm_params.mm_indicators
+        self.assets = mm_params.assets
+        self.params = mm_params.params
+        self.indicators = mm_params.indicators
 
 
 

@@ -27,22 +27,22 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
 
 class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarchy 
-    def __init__(self, sm_params: PortfolioSystemManagerParams):
-        super().__init__(sm_params)
+    def __init__(self, params: PortfolioSystemManagerParams):
+        super().__init__(params)
 
-        self.reb_metric                         = sm_params.reb_metric
-        self.model_hierarchy                    = dict(sm_params.model_hierarchy)
-        self.max_active_models                  = sm_params.max_active_models
-        self.reb_method                         = sm_params.reb_method
-        self.reb_lookback_n                     = sm_params.reb_lookback_n
-        self.reb_close_open_trades_on_rebalance = sm_params.reb_close_open_trades_on_rebalance
+        self.reb_metric                         = params.reb_metric
+        self.model_hierarchy                    = dict(params.model_hierarchy)
+        self.max_active_models                  = params.max_active_models
+        self.reb_method                         = params.reb_method
+        self.reb_lookback_n                     = params.reb_lookback_n
+        self.reb_close_open_trades_on_rebalance = params.reb_close_open_trades_on_rebalance
 
         # Funções plugáveis — usa custom se passado, senão usa default interno
-        self._fn_pre_compute    = sm_params.fn_pre_compute
-        self._fn_rank           = sm_params.fn_rank
-        self._fn_filter         = sm_params.fn_filter
-        self._fn_rebalance      = sm_params.fn_rebalance
-        self._fn_main           = sm_params.fn_main
+        self._fn_pre_compute    = params.fn_pre_compute
+        self._fn_rank           = params.fn_rank
+        self._fn_filter         = params.fn_filter
+        self._fn_rebalance      = params.fn_rebalance
+        self._fn_main           = params.fn_main
 
         self._pre_cache: Dict = {}   # Metrics and Indicators
         # self._pre_cache = {
@@ -54,13 +54,13 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         #     "strats": { ... }}
 
 
-    def _default_pre_compute(self, timeline, sim_data, aggr_ret, indicator_pool) -> dict:
+    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool) -> dict:
 
-        # Defines PSM parsets from sm_params
-        param_sets = self._calculate_param_combinations(self.sm_params)
+        # Defines PSM parsets from params
+        param_sets = self._calculate_param_combinations(self.params)
 
         # Calculates Indicators 
-        if self.sm_indicators: indicator_pool = self._calculate_and_map_indicators(aggr_ret, indicator_pool, param_sets)
+        if self.indicators: indicator_pool = self._calculate_and_map_indicators(global_assets, timeline, aggr_ret, indicator_pool, param_sets)
 
         # Calculates Models metrics
         
