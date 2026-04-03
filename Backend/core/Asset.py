@@ -434,7 +434,6 @@ class Asset:
         source:     SourceType = "local",
         date_start: Optional[str] = None,
         date_end:   Optional[str] = None,
-        cache:      bool = True,
         **kwargs,
     ) -> pl.DataFrame:
         """
@@ -457,14 +456,13 @@ class Asset:
         """
         ds  = date_start or self.date_start
         de  = date_end   or self.date_end
-        key = f"{timeframe}_{source}_{ds}_{de}"
-
-        if cache and key in self._cache:
-            return self._cache[key]
 
         handler = _SOURCE_REGISTRY.get(source)
         if handler is None:
-            raise ValueError(f"Unknown source '{source}'. Available: {list(_SOURCE_REGISTRY)}")
+            raise ValueError(
+                f"Unknown source '{source}'. "
+                f"Available: {list(_SOURCE_REGISTRY.keys())}"
+            )
 
         df = handler.load(
             name=self.name,
@@ -474,9 +472,6 @@ class Asset:
             market=self.market,
             **kwargs,
         )
-
-        if cache:
-            self._cache[key] = df
 
         return df
 
