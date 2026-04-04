@@ -218,6 +218,7 @@ SimulationOutput Backtest::run_simulation(
         bool hedge_enabled = exec_settings.value("hedge",     false);
         bool is_daytrade   = exec_settings.value("day_trade", false);
         std::string order_type = exec_settings.at("order_type").get<std::string>();
+        std::string trade_pnl_resolution = exec_settings.at("trade_pnl_resolution").get<std::string>();
 
         size_t lus = header.find_last_of('_');
         std::string asset_name = (lus != std::string::npos) ? header.substr(lus+1) : header;
@@ -618,7 +619,7 @@ SimulationOutput Backtest::run_simulation(
             }
  
             // ── 5. DAILY PnL UPDATE ───────────────────────────────────────────
-            if (day_switched || dt_final || is_last_bar) {
+            if (trade_pnl_resolution=="daily" && (day_switched || dt_final || is_last_bar)) {
                 for (auto& trade : active_trades) {
                     bool is_long = (trade.lot_size > 0);
                     double dv;

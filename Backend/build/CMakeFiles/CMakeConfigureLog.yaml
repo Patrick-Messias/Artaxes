@@ -38,6 +38,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -51,6 +53,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -58,6 +62,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
     kind: "message-v1"
@@ -75,7 +80,7 @@ events:
       The output was:
       0
       Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-      Compila├º├úo de 22/03/2026 01:03:05 iniciada.
+      Compila├º├úo de 04/04/2026 18:28:41 iniciada.
       
       Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\4.2.1\\CompilerIdCXX\\CompilerIdCXX.vcxproj" no n├│ 1 (destinos padr├úo).
       PrepareForBuild:
@@ -113,7 +118,7 @@ events:
           0 Aviso(s)
           0 Erro(s)
       
-      Tempo Decorrido 00:00:01.87
+      Tempo Decorrido 00:00:02.53
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -146,6 +151,8 @@ events:
       - "link"
     candidate_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -159,13 +166,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -179,13 +191,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -199,16 +216,25 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
     searched_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/link"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/link"
@@ -248,6 +274,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/link"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/link"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/link"
@@ -266,9 +298,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/link"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/link.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/link"
+      - "C:/vcpkg/installed/x64-windows/Python314/link.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/link"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/link"
@@ -308,6 +349,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/link.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/link"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/link.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/link.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/link"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/link"
@@ -326,6 +373,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/link"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/link.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/link"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.com"
     found: "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.exe"
     search_context:
@@ -339,6 +389,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -352,6 +404,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -359,6 +413,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
     kind: "find-v1"
@@ -383,6 +438,8 @@ events:
       - "lld-link"
     candidate_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -396,13 +453,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -416,13 +478,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -436,16 +503,25 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
     searched_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/lld-link"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/lld-link"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/lld-link"
@@ -485,6 +561,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/lld-link"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/lld-link"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link"
@@ -503,9 +585,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/lld-link"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/lld-link"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/lld-link"
+      - "C:/vcpkg/installed/x64-windows/Python314/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/lld-link"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/lld-link"
@@ -545,6 +636,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/lld-link"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/lld-link"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link"
@@ -563,9 +660,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/lld-link.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/lld-link.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/lld-link"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/lld-link.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/lld-link.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/lld-link"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link.com"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link.exe"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lld-link"
+      - "C:/Python314/Scripts/lld-link.com"
+      - "C:/Python314/Scripts/lld-link.exe"
+      - "C:/Python314/Scripts/lld-link"
+      - "C:/Python314/lld-link.com"
+      - "C:/Python314/lld-link.exe"
+      - "C:/Python314/lld-link"
       - "C:/Program Files/Python311/Scripts/lld-link.com"
       - "C:/Program Files/Python311/Scripts/lld-link.exe"
       - "C:/Program Files/Python311/Scripts/lld-link"
@@ -605,6 +711,12 @@ events:
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.com"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link.exe"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lld-link"
+      - "C:/Program Files/nodejs/lld-link.com"
+      - "C:/Program Files/nodejs/lld-link.exe"
+      - "C:/Program Files/nodejs/lld-link"
+      - "C:/ProgramData/chocolatey/bin/lld-link.com"
+      - "C:/ProgramData/chocolatey/bin/lld-link.exe"
+      - "C:/ProgramData/chocolatey/bin/lld-link"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link.com"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link.exe"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/lld-link"
@@ -623,6 +735,9 @@ events:
       - "C:/msys64/mingw64/bin/lld-link.com"
       - "C:/msys64/mingw64/bin/lld-link.exe"
       - "C:/msys64/mingw64/bin/lld-link"
+      - "C:/Users/Patrick/AppData/Roaming/npm/lld-link.com"
+      - "C:/Users/Patrick/AppData/Roaming/npm/lld-link.exe"
+      - "C:/Users/Patrick/AppData/Roaming/npm/lld-link"
     found: false
     search_context:
       CMAKE_PROGRAM_PATH:
@@ -635,6 +750,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -648,6 +765,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -655,6 +774,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
     kind: "find-v1"
@@ -677,6 +797,8 @@ events:
       - "link"
     candidate_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -690,13 +812,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -710,13 +837,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -730,16 +862,25 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
     searched_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/link"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/link"
@@ -779,6 +920,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/link"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/link"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/link"
@@ -797,9 +944,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/link"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/link.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/link.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/link"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/link.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/link"
+      - "C:/vcpkg/installed/x64-windows/Python314/link.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/link"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/link"
@@ -839,6 +995,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/link"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/link.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/link"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/link.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/link.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/link"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/link"
@@ -857,6 +1019,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/link.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/link.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/link"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/link.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/link.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/link"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.com"
     found: "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/link.exe"
     search_context:
@@ -870,6 +1035,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -883,6 +1050,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -890,6 +1059,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
     kind: "find-v1"
@@ -912,6 +1082,8 @@ events:
       - "mt"
     candidate_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -925,13 +1097,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -945,13 +1122,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -965,16 +1147,25 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
     searched_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/mt.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/mt"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/mt.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/mt"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/mt.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/mt.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/mt"
@@ -1014,6 +1205,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/mt.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/mt"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/mt.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/mt"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/mt.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/mt.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/mt"
@@ -1032,9 +1229,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/mt.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/mt.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/mt"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/mt.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/mt"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/mt.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/mt"
+      - "C:/vcpkg/installed/x64-windows/Python314/mt.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/mt"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/mt.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/mt.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/mt"
@@ -1074,6 +1280,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/mt.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/mt"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/mt.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/mt"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/mt.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/mt.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/mt"
@@ -1092,9 +1304,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/mt.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/mt.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/mt"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/mt.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/mt.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/mt"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt.com"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt.exe"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/mt"
+      - "C:/Python314/Scripts/mt.com"
+      - "C:/Python314/Scripts/mt.exe"
+      - "C:/Python314/Scripts/mt"
+      - "C:/Python314/mt.com"
+      - "C:/Python314/mt.exe"
+      - "C:/Python314/mt"
       - "C:/Program Files/Python311/Scripts/mt.com"
       - "C:/Program Files/Python311/Scripts/mt.exe"
       - "C:/Program Files/Python311/Scripts/mt"
@@ -1134,6 +1355,12 @@ events:
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.com"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt.exe"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/mt"
+      - "C:/Program Files/nodejs/mt.com"
+      - "C:/Program Files/nodejs/mt.exe"
+      - "C:/Program Files/nodejs/mt"
+      - "C:/ProgramData/chocolatey/bin/mt.com"
+      - "C:/ProgramData/chocolatey/bin/mt.exe"
+      - "C:/ProgramData/chocolatey/bin/mt"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/mt.com"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/mt.exe"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/mt"
@@ -1152,6 +1379,9 @@ events:
       - "C:/msys64/mingw64/bin/mt.com"
       - "C:/msys64/mingw64/bin/mt.exe"
       - "C:/msys64/mingw64/bin/mt"
+      - "C:/Users/Patrick/AppData/Roaming/npm/mt.com"
+      - "C:/Users/Patrick/AppData/Roaming/npm/mt.exe"
+      - "C:/Users/Patrick/AppData/Roaming/npm/mt"
     found: false
     search_context:
       CMAKE_PROGRAM_PATH:
@@ -1164,6 +1394,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -1177,6 +1409,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -1184,6 +1418,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
     kind: "find-v1"
@@ -1206,6 +1441,8 @@ events:
       - "lib"
     candidate_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1219,13 +1456,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1239,13 +1481,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1259,16 +1506,25 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
     searched_directories:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/lib.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/lib"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/lib.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/lib"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/lib.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/lib.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/lib"
@@ -1308,6 +1564,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lib.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lib.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lib"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/lib.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/lib"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/lib.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/lib"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/lib.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/lib.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/lib"
@@ -1326,9 +1588,18 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/lib.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/lib.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/lib"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/lib.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/lib"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/lib.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/lib"
+      - "C:/vcpkg/installed/x64-windows/Python314/lib.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/lib"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/lib.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/lib.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/lib"
@@ -1368,6 +1639,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lib.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lib.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/lib"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/lib.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/lib"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/lib.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/lib"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/lib.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/lib.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/lib"
@@ -1386,6 +1663,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/lib.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/lib.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/lib"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/lib.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/lib.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/lib"
       - "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib.com"
     found: "C:/Program Files/Microsoft Visual Studio/18/Community/VC/Tools/MSVC/14.50.35717/bin/Hostx64/x64/lib.exe"
     search_context:
@@ -1399,6 +1679,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -1412,6 +1694,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -1419,6 +1703,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
     kind: "find-v1"
@@ -1454,6 +1739,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/python3/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1467,12 +1754,15 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/sbin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/"
@@ -1496,6 +1786,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/python3/"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1509,12 +1801,15 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/sbin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/"
@@ -1538,6 +1833,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/python3/"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -1551,12 +1848,15 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/bin/"
       - "C:/Program Files/sbin/"
       - "C:/Program Files/"
@@ -1603,6 +1903,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/rc"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/rc.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/rc"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/rc.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/rc"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/rc"
@@ -1642,6 +1948,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/rc.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/rc"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/rc.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/rc"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/rc"
@@ -1660,6 +1972,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/rc"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/rc.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/rc"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/rc"
@@ -1729,6 +2044,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/rc.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/rc"
+      - "C:/vcpkg/installed/x64-windows/Python314/rc.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/rc"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/rc.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/rc.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/rc"
@@ -1768,6 +2089,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/rc.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/rc"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/rc.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/rc"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/rc"
@@ -1786,6 +2113,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/rc"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/rc.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/rc.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/rc"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/rc"
@@ -1855,6 +2185,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.com"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc.exe"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/rc"
+      - "C:/Python314/Scripts/rc.com"
+      - "C:/Python314/Scripts/rc.exe"
+      - "C:/Python314/Scripts/rc"
+      - "C:/Python314/rc.com"
+      - "C:/Python314/rc.exe"
+      - "C:/Python314/rc"
       - "C:/Program Files/Python311/Scripts/rc.com"
       - "C:/Program Files/Python311/Scripts/rc.exe"
       - "C:/Program Files/Python311/Scripts/rc"
@@ -1894,6 +2230,12 @@ events:
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.com"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc.exe"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/rc"
+      - "C:/Program Files/nodejs/rc.com"
+      - "C:/Program Files/nodejs/rc.exe"
+      - "C:/Program Files/nodejs/rc"
+      - "C:/ProgramData/chocolatey/bin/rc.com"
+      - "C:/ProgramData/chocolatey/bin/rc.exe"
+      - "C:/ProgramData/chocolatey/bin/rc"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/rc.com"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/rc.exe"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/rc"
@@ -1912,6 +2254,9 @@ events:
       - "C:/msys64/mingw64/bin/rc.com"
       - "C:/msys64/mingw64/bin/rc.exe"
       - "C:/msys64/mingw64/bin/rc"
+      - "C:/Users/Patrick/AppData/Roaming/npm/rc.com"
+      - "C:/Users/Patrick/AppData/Roaming/npm/rc.exe"
+      - "C:/Users/Patrick/AppData/Roaming/npm/rc"
       - "C:/Program Files/bin/rc.com"
       - "C:/Program Files/bin/rc.exe"
       - "C:/Program Files/bin/rc"
@@ -1960,6 +2305,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -1973,6 +2320,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -1980,6 +2329,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -1996,8 +2346,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3f6ihw"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3f6ihw"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-wqajl0"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-wqajl0"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2011,39 +2361,39 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3f6ihw'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-wqajl0'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_85342.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_4ac46.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 22/03/2026 01:03:07 iniciada.
+        Compila├º├úo de 04/04/2026 18:28:45 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3f6ihw\\cmTC_85342.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-wqajl0\\cmTC_4ac46.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3f6ihw\\Debug\\".
-          Criando o diret├│rio "cmTC_85342.dir\\Debug\\cmTC_85342.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-wqajl0\\Debug\\".
+          Criando o diret├│rio "cmTC_4ac46.dir\\Debug\\cmTC_4ac46.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_85342.dir\\Debug\\cmTC_85342.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_85342.dir\\Debug\\cmTC_85342.tlog\\unsuccessfulbuild".
+          Criando "cmTC_4ac46.dir\\Debug\\cmTC_4ac46.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_4ac46.dir\\Debug\\cmTC_4ac46.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_85342.dir\\Debug\\\\" /Fd"cmTC_85342.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_4ac46.dir\\Debug\\\\" /Fd"cmTC_4ac46.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_85342.dir\\Debug\\\\" /Fd"cmTC_85342.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_4ac46.dir\\Debug\\\\" /Fd"cmTC_4ac46.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3f6ihw\\Debug\\cmTC_85342.exe" /INCREMENTAL /ILK:"cmTC_85342.dir\\Debug\\cmTC_85342.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3f6ihw/Debug/cmTC_85342.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3f6ihw/Debug/cmTC_85342.lib" /MACHINE:X64  /machine:x64 cmTC_85342.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_85342.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3f6ihw\\Debug\\cmTC_85342.exe
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-wqajl0\\Debug\\cmTC_4ac46.exe" /INCREMENTAL /ILK:"cmTC_4ac46.dir\\Debug\\cmTC_4ac46.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-wqajl0/Debug/cmTC_4ac46.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-wqajl0/Debug/cmTC_4ac46.lib" /MACHINE:X64  /machine:x64 cmTC_4ac46.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_4ac46.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-wqajl0\\Debug\\cmTC_4ac46.exe
         FinalizeBuildStatus:
-          Excluindo o arquivo "cmTC_85342.dir\\Debug\\cmTC_85342.tlog\\unsuccessfulbuild".
-          Tocando "cmTC_85342.dir\\Debug\\cmTC_85342.tlog\\cmTC_85342.lastbuildstate".
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3f6ihw\\cmTC_85342.vcxproj" (destinos padr├úo).
+          Excluindo o arquivo "cmTC_4ac46.dir\\Debug\\cmTC_4ac46.tlog\\unsuccessfulbuild".
+          Tocando "cmTC_4ac46.dir\\Debug\\cmTC_4ac46.tlog\\cmTC_4ac46.lastbuildstate".
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-wqajl0\\cmTC_4ac46.vcxproj" (destinos padr├úo).
         
         Compila├º├úo com ├¬xito.
             0 Aviso(s)
             0 Erro(s)
         
-        Tempo Decorrido 00:00:00.80
+        Tempo Decorrido 00:00:00.87
         
       exitCode: 0
   -
@@ -2109,6 +2459,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -2122,6 +2474,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -2129,6 +2483,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -2171,6 +2526,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -2184,6 +2541,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -2191,6 +2550,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -2235,6 +2595,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -2248,6 +2610,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -2255,6 +2619,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -2330,6 +2695,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -2343,6 +2710,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -2350,6 +2719,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -2397,6 +2767,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/libs/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -2421,6 +2795,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -2433,6 +2811,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/"
@@ -2469,6 +2849,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/libs/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -2493,6 +2877,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -2505,6 +2893,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/"
@@ -2541,6 +2931,10 @@ events:
       - "C:/Program Files/Python311/libs/"
       - "C:/Program Files/Python311/bin/"
       - "C:/Program Files/Python311/"
+      - "C:/Python314/Scripts/bin/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/bin/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/bin/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -2565,6 +2959,10 @@ events:
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/bin/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/bin/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -2577,6 +2975,8 @@ events:
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/lib/bin/"
       - "C:/Program Files/lib/"
       - "C:/Program Files/bin/"
@@ -2630,6 +3030,14 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
@@ -2678,6 +3086,14 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
@@ -2702,6 +3118,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/"
@@ -2774,6 +3194,14 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
@@ -2822,6 +3250,14 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
@@ -2846,6 +3282,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/"
@@ -2925,6 +3365,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -2938,6 +3380,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -2945,6 +3389,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -2997,6 +3442,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -3021,6 +3470,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -3033,6 +3486,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/"
@@ -3071,6 +3526,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -3095,6 +3554,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -3107,6 +3570,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/"
@@ -3145,6 +3610,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/"
       - "C:/Program Files/Python311/bin/"
       - "C:/Program Files/Python311/"
+      - "C:/Python314/Scripts/bin/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/bin/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/bin/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -3169,6 +3638,10 @@ events:
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/bin/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/bin/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -3181,6 +3654,8 @@ events:
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/lib/bin/"
       - "C:/Program Files/lib/"
       - "C:/Program Files/bin/"
@@ -3220,6 +3695,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -3244,6 +3723,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -3256,6 +3739,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/lib/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/"
@@ -3294,6 +3779,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/bin/"
@@ -3318,6 +3807,10 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/bin/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/bin/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/bin/"
@@ -3330,6 +3823,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/lib/"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/"
@@ -3376,6 +3871,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -3389,6 +3886,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -3396,6 +3895,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -3422,8 +3922,8 @@ events:
     checks:
       - "Performing Test HAS_MSVC_GL_LTCG"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-1qn8xy"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-1qn8xy"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-gqvpp3"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-gqvpp3"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -3436,62 +3936,62 @@ events:
       variable: "HAS_MSVC_GL_LTCG"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-1qn8xy'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-gqvpp3'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_9b953.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_83bb2.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 22/03/2026 01:03:09 iniciada.
+        Compila├º├úo de 04/04/2026 18:28:47 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\cmTC_9b953.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\cmTC_83bb2.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\Debug\\".
-          Criando o diret├│rio "cmTC_9b953.dir\\Debug\\cmTC_9b953.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\Debug\\".
+          Criando o diret├│rio "cmTC_83bb2.dir\\Debug\\cmTC_83bb2.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_9b953.dir\\Debug\\cmTC_9b953.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_9b953.dir\\Debug\\cmTC_9b953.tlog\\unsuccessfulbuild".
+          Criando "cmTC_83bb2.dir\\Debug\\cmTC_83bb2.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_83bb2.dir\\Debug\\cmTC_83bb2.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\cmTC_9b953.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\cmTC_83bb2.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_9b953.dir\\Debug\\cmTC_9b953_MD.tlog\\".
+          Criando o diret├│rio "cmTC_83bb2.dir\\Debug\\cmTC_83bb2_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_9b953.dir\\Debug\\\\" /scanDependencies "cmTC_9b953.dir\\Debug\\\\" /Fo"cmTC_9b953.dir\\Debug\\\\" /Fd"cmTC_9b953.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_83bb2.dir\\Debug\\\\" /scanDependencies "cmTC_83bb2.dir\\Debug\\\\" /Fo"cmTC_83bb2.dir\\Debug\\\\" /Fd"cmTC_83bb2.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_9b953.dir\\Debug\\\\" /scanDependencies "cmTC_9b953.dir\\Debug\\\\" /Fo"cmTC_9b953.dir\\Debug\\\\" /Fd"cmTC_9b953.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_83bb2.dir\\Debug\\\\" /scanDependencies "cmTC_83bb2.dir\\Debug\\\\" /Fo"cmTC_83bb2.dir\\Debug\\\\" /Fd"cmTC_83bb2.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\src.cxx"
           src.cxx
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_9b953.dir\\Debug\\\\" /Fo"cmTC_9b953.dir\\Debug\\\\" /Fd"cmTC_9b953.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_9b953.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_83bb2.dir\\Debug\\\\" /Fo"cmTC_83bb2.dir\\Debug\\\\" /Fd"cmTC_83bb2.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_83bb2.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_9b953.dir\\Debug\\\\" /Fo"cmTC_9b953.dir\\Debug\\\\" /Fd"cmTC_9b953.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_9b953.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_83bb2.dir\\Debug\\\\" /Fo"cmTC_83bb2.dir\\Debug\\\\" /Fd"cmTC_83bb2.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_83bb2.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\src.cxx"
           src.cxx
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\Debug\\cmTC_9b953.exe" /INCREMENTAL /ILK:"cmTC_9b953.dir\\Debug\\cmTC_9b953.ilk" /NOLOGO "-LTCG" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-1qn8xy/Debug/cmTC_9b953.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-1qn8xy/Debug/cmTC_9b953.lib" /MACHINE:X64  /machine:x64 cmTC_9b953.dir\\Debug\\src.obj
-        LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\cmTC_9b953.vcxproj]
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\Debug\\cmTC_83bb2.exe" /INCREMENTAL /ILK:"cmTC_83bb2.dir\\Debug\\cmTC_83bb2.ilk" /NOLOGO "-LTCG" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-gqvpp3/Debug/cmTC_83bb2.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-gqvpp3/Debug/cmTC_83bb2.lib" /MACHINE:X64  /machine:x64 cmTC_83bb2.dir\\Debug\\src.obj
+        LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\cmTC_83bb2.vcxproj]
           Gerando c├│digo
           Finalizada a gera├º├úo de c├│digo
-          cmTC_9b953.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\Debug\\cmTC_9b953.exe
+          cmTC_83bb2.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\Debug\\cmTC_83bb2.exe
         FinalizeBuildStatus:
-          Excluindo o arquivo "cmTC_9b953.dir\\Debug\\cmTC_9b953.tlog\\unsuccessfulbuild".
-          Tocando "cmTC_9b953.dir\\Debug\\cmTC_9b953.tlog\\cmTC_9b953.lastbuildstate".
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\cmTC_9b953.vcxproj" (destinos padr├úo).
+          Excluindo o arquivo "cmTC_83bb2.dir\\Debug\\cmTC_83bb2.tlog\\unsuccessfulbuild".
+          Tocando "cmTC_83bb2.dir\\Debug\\cmTC_83bb2.tlog\\cmTC_83bb2.lastbuildstate".
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\cmTC_83bb2.vcxproj" (destinos padr├úo).
         
         Compila├º├úo com ├¬xito.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\cmTC_9b953.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\cmTC_83bb2.vcxproj" (destino padr├úo) (1) ->
         (Link destino) -> 
-          LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-1qn8xy\\cmTC_9b953.vcxproj]
+          LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-gqvpp3\\cmTC_83bb2.vcxproj]
         
             1 Aviso(s)
             0 Erro(s)
         
-        Tempo Decorrido 00:00:01.29
+        Tempo Decorrido 00:00:01.27
         
       exitCode: 0
   -
@@ -3563,6 +4063,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -3576,6 +4078,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -3583,6 +4087,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -3659,6 +4164,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -3672,6 +4179,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -3679,6 +4188,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -3702,8 +4212,8 @@ events:
     checks:
       - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yu1o7n"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yu1o7n"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-tk0ytv"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-tk0ytv"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -3716,68 +4226,65 @@ events:
       variable: "CMAKE_HAVE_LIBC_PTHREAD"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yu1o7n'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-tk0ytv'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_25a24.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_0035c.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 22/03/2026 01:03:11 iniciada.
+        Compila├º├úo de 04/04/2026 18:28:49 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\Debug\\".
-          Criando o diret├│rio "cmTC_25a24.dir\\Debug\\cmTC_25a24.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\Debug\\".
+          Criando o diret├│rio "cmTC_0035c.dir\\Debug\\cmTC_0035c.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_25a24.dir\\Debug\\cmTC_25a24.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_25a24.dir\\Debug\\cmTC_25a24.tlog\\unsuccessfulbuild".
+          Criando "cmTC_0035c.dir\\Debug\\cmTC_0035c.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_0035c.dir\\Debug\\cmTC_0035c.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_25a24.dir\\Debug\\cmTC_25a24_MD.tlog\\".
+          Criando o diret├│rio "cmTC_0035c.dir\\Debug\\cmTC_0035c_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_25a24.dir\\Debug\\\\" /scanDependencies "cmTC_25a24.dir\\Debug\\\\" /Fo"cmTC_25a24.dir\\Debug\\\\" /Fd"cmTC_25a24.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx"
-          Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0035c.dir\\Debug\\\\" /scanDependencies "cmTC_0035c.dir\\Debug\\\\" /Fo"cmTC_0035c.dir\\Debug\\\\" /Fd"cmTC_0035c.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx"
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_25a24.dir\\Debug\\\\" /scanDependencies "cmTC_25a24.dir\\Debug\\\\" /Fo"cmTC_25a24.dir\\Debug\\\\" /Fd"cmTC_25a24.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0035c.dir\\Debug\\\\" /scanDependencies "cmTC_0035c.dir\\Debug\\\\" /Fo"cmTC_0035c.dir\\Debug\\\\" /Fd"cmTC_0035c.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx"
           src.cxx
-        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
-        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
-        C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_25a24.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj]
+        C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_0035c.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj]
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_25a24.dir\\Debug\\\\" /Fo"cmTC_25a24.dir\\Debug\\\\" /Fd"cmTC_25a24.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_25a24.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0035c.dir\\Debug\\\\" /Fo"cmTC_0035c.dir\\Debug\\\\" /Fd"cmTC_0035c.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_0035c.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_25a24.dir\\Debug\\\\" /Fo"cmTC_25a24.dir\\Debug\\\\" /Fd"cmTC_25a24.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_25a24.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0035c.dir\\Debug\\\\" /Fo"cmTC_0035c.dir\\Debug\\\\" /Fd"cmTC_0035c.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_0035c.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx"
           src.cxx
-        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj" (destinos padr├úo) -- FALHA.
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj" (destinos padr├úo) -- FALHA.
         
         FALHA da compila├º├úo.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj" (destino padr├úo) (1) ->
         (SetModuleDependencies destino) -> 
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_25a24.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_0035c.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj]
         
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj" (destino padr├úo) (1) ->
         (SetModuleDependencies destino) -> 
-          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
-          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj]
         
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj" (destino padr├úo) (1) ->
         (ClCompile destino) -> 
-          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yu1o7n\\cmTC_25a24.vcxproj]
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-tk0ytv\\cmTC_0035c.vcxproj]
         
             1 Aviso(s)
-            3 Erro(s)
+            2 Erro(s)
         
-        Tempo Decorrido 00:00:02.04
+        Tempo Decorrido 00:00:00.79
         
       exitCode: 1
   -
@@ -3795,8 +4302,8 @@ events:
     checks:
       - "Looking for pthread_create in pthreads"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-x9xx70"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-x9xx70"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzjrbh"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzjrbh"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -3809,56 +4316,56 @@ events:
       variable: "CMAKE_HAVE_PTHREADS_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-x9xx70'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzjrbh'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_43e36.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_6028a.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 22/03/2026 01:03:13 iniciada.
+        Compila├º├úo de 04/04/2026 18:28:50 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\cmTC_43e36.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\cmTC_6028a.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\Debug\\".
-          Criando o diret├│rio "cmTC_43e36.dir\\Debug\\cmTC_43e36.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\Debug\\".
+          Criando o diret├│rio "cmTC_6028a.dir\\Debug\\cmTC_6028a.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_43e36.dir\\Debug\\cmTC_43e36.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_43e36.dir\\Debug\\cmTC_43e36.tlog\\unsuccessfulbuild".
+          Criando "cmTC_6028a.dir\\Debug\\cmTC_6028a.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_6028a.dir\\Debug\\cmTC_6028a.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\cmTC_43e36.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\cmTC_6028a.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_43e36.dir\\Debug\\cmTC_43e36_MD.tlog\\".
+          Criando o diret├│rio "cmTC_6028a.dir\\Debug\\cmTC_6028a_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_43e36.dir\\Debug\\\\" /scanDependencies "cmTC_43e36.dir\\Debug\\\\" /Fo"cmTC_43e36.dir\\Debug\\\\" /Fd"cmTC_43e36.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_6028a.dir\\Debug\\\\" /scanDependencies "cmTC_6028a.dir\\Debug\\\\" /Fo"cmTC_6028a.dir\\Debug\\\\" /Fd"cmTC_6028a.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_43e36.dir\\Debug\\\\" /scanDependencies "cmTC_43e36.dir\\Debug\\\\" /Fo"cmTC_43e36.dir\\Debug\\\\" /Fd"cmTC_43e36.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_6028a.dir\\Debug\\\\" /scanDependencies "cmTC_6028a.dir\\Debug\\\\" /Fo"cmTC_6028a.dir\\Debug\\\\" /Fd"cmTC_6028a.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_43e36.dir\\Debug\\\\" /Fo"cmTC_43e36.dir\\Debug\\\\" /Fd"cmTC_43e36.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_43e36.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_6028a.dir\\Debug\\\\" /Fo"cmTC_6028a.dir\\Debug\\\\" /Fd"cmTC_6028a.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_6028a.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_43e36.dir\\Debug\\\\" /Fo"cmTC_43e36.dir\\Debug\\\\" /Fd"cmTC_43e36.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_43e36.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_6028a.dir\\Debug\\\\" /Fo"cmTC_6028a.dir\\Debug\\\\" /Fd"cmTC_6028a.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_6028a.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\Debug\\cmTC_43e36.exe" /INCREMENTAL /ILK:"cmTC_43e36.dir\\Debug\\cmTC_43e36.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-x9xx70/Debug/cmTC_43e36.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-x9xx70/Debug/cmTC_43e36.lib" /MACHINE:X64  /machine:x64 cmTC_43e36.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\cmTC_43e36.vcxproj]
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\cmTC_43e36.vcxproj" (destinos padr├úo) -- FALHA.
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\Debug\\cmTC_6028a.exe" /INCREMENTAL /ILK:"cmTC_6028a.dir\\Debug\\cmTC_6028a.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzjrbh/Debug/cmTC_6028a.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzjrbh/Debug/cmTC_6028a.lib" /MACHINE:X64  /machine:x64 cmTC_6028a.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\cmTC_6028a.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\cmTC_6028a.vcxproj" (destinos padr├úo) -- FALHA.
         
         FALHA da compila├º├úo.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\cmTC_43e36.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\cmTC_6028a.vcxproj" (destino padr├úo) (1) ->
         (Link destino) -> 
-          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-x9xx70\\cmTC_43e36.vcxproj]
+          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzjrbh\\cmTC_6028a.vcxproj]
         
             0 Aviso(s)
             1 Erro(s)
         
-        Tempo Decorrido 00:00:00.93
+        Tempo Decorrido 00:00:00.79
         
       exitCode: 1
   -
@@ -3876,8 +4383,8 @@ events:
     checks:
       - "Looking for pthread_create in pthread"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-cw7u1t"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-cw7u1t"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-egj3it"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-egj3it"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -3890,56 +4397,56 @@ events:
       variable: "CMAKE_HAVE_PTHREAD_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-cw7u1t'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-egj3it'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_930c4.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_bd34b.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 22/03/2026 01:03:15 iniciada.
+        Compila├º├úo de 04/04/2026 18:28:51 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\cmTC_930c4.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\cmTC_bd34b.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\Debug\\".
-          Criando o diret├│rio "cmTC_930c4.dir\\Debug\\cmTC_930c4.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\Debug\\".
+          Criando o diret├│rio "cmTC_bd34b.dir\\Debug\\cmTC_bd34b.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_930c4.dir\\Debug\\cmTC_930c4.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_930c4.dir\\Debug\\cmTC_930c4.tlog\\unsuccessfulbuild".
+          Criando "cmTC_bd34b.dir\\Debug\\cmTC_bd34b.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_bd34b.dir\\Debug\\cmTC_bd34b.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\cmTC_930c4.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\cmTC_bd34b.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_930c4.dir\\Debug\\cmTC_930c4_MD.tlog\\".
+          Criando o diret├│rio "cmTC_bd34b.dir\\Debug\\cmTC_bd34b_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_930c4.dir\\Debug\\\\" /scanDependencies "cmTC_930c4.dir\\Debug\\\\" /Fo"cmTC_930c4.dir\\Debug\\\\" /Fd"cmTC_930c4.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_bd34b.dir\\Debug\\\\" /scanDependencies "cmTC_bd34b.dir\\Debug\\\\" /Fo"cmTC_bd34b.dir\\Debug\\\\" /Fd"cmTC_bd34b.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_930c4.dir\\Debug\\\\" /scanDependencies "cmTC_930c4.dir\\Debug\\\\" /Fo"cmTC_930c4.dir\\Debug\\\\" /Fd"cmTC_930c4.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_bd34b.dir\\Debug\\\\" /scanDependencies "cmTC_bd34b.dir\\Debug\\\\" /Fo"cmTC_bd34b.dir\\Debug\\\\" /Fd"cmTC_bd34b.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_930c4.dir\\Debug\\\\" /Fo"cmTC_930c4.dir\\Debug\\\\" /Fd"cmTC_930c4.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_930c4.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_bd34b.dir\\Debug\\\\" /Fo"cmTC_bd34b.dir\\Debug\\\\" /Fd"cmTC_bd34b.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_bd34b.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_930c4.dir\\Debug\\\\" /Fo"cmTC_930c4.dir\\Debug\\\\" /Fd"cmTC_930c4.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_930c4.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_bd34b.dir\\Debug\\\\" /Fo"cmTC_bd34b.dir\\Debug\\\\" /Fd"cmTC_bd34b.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_bd34b.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\Debug\\cmTC_930c4.exe" /INCREMENTAL /ILK:"cmTC_930c4.dir\\Debug\\cmTC_930c4.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-cw7u1t/Debug/cmTC_930c4.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-cw7u1t/Debug/cmTC_930c4.lib" /MACHINE:X64  /machine:x64 cmTC_930c4.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\cmTC_930c4.vcxproj]
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\cmTC_930c4.vcxproj" (destinos padr├úo) -- FALHA.
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\Debug\\cmTC_bd34b.exe" /INCREMENTAL /ILK:"cmTC_bd34b.dir\\Debug\\cmTC_bd34b.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-egj3it/Debug/cmTC_bd34b.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-egj3it/Debug/cmTC_bd34b.lib" /MACHINE:X64  /machine:x64 cmTC_bd34b.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\cmTC_bd34b.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\cmTC_bd34b.vcxproj" (destinos padr├úo) -- FALHA.
         
         FALHA da compila├º├úo.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\cmTC_930c4.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\cmTC_bd34b.vcxproj" (destino padr├úo) (1) ->
         (Link destino) -> 
-          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-cw7u1t\\cmTC_930c4.vcxproj]
+          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-egj3it\\cmTC_bd34b.vcxproj]
         
             0 Aviso(s)
             1 Erro(s)
         
-        Tempo Decorrido 00:00:01.15
+        Tempo Decorrido 00:00:00.88
         
       exitCode: 1
   -
@@ -4011,6 +4518,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -4024,6 +4533,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -4031,6 +4542,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -4071,6 +4583,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4084,12 +4598,15 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/sbin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/"
@@ -4112,6 +4629,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4125,12 +4644,15 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/sbin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/"
@@ -4153,6 +4675,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4166,12 +4690,15 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/bin/"
       - "C:/Program Files/sbin/"
       - "C:/Program Files/"
@@ -4215,6 +4742,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/pwsh"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/pwsh"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/pwsh"
@@ -4254,6 +4787,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/pwsh"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/pwsh"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh"
@@ -4272,6 +4811,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/pwsh"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/pwsh"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/pwsh"
@@ -4338,6 +4880,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/pwsh"
+      - "C:/vcpkg/installed/x64-windows/Python314/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/pwsh"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/pwsh"
@@ -4377,6 +4925,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/pwsh"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/pwsh"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh"
@@ -4395,6 +4949,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/pwsh"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/pwsh.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/pwsh.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/pwsh"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/pwsh"
@@ -4461,6 +5018,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.com"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh.exe"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/pwsh"
+      - "C:/Python314/Scripts/pwsh.com"
+      - "C:/Python314/Scripts/pwsh.exe"
+      - "C:/Python314/Scripts/pwsh"
+      - "C:/Python314/pwsh.com"
+      - "C:/Python314/pwsh.exe"
+      - "C:/Python314/pwsh"
       - "C:/Program Files/Python311/Scripts/pwsh.com"
       - "C:/Program Files/Python311/Scripts/pwsh.exe"
       - "C:/Program Files/Python311/Scripts/pwsh"
@@ -4500,6 +5063,12 @@ events:
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh.com"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh.exe"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/pwsh"
+      - "C:/Program Files/nodejs/pwsh.com"
+      - "C:/Program Files/nodejs/pwsh.exe"
+      - "C:/Program Files/nodejs/pwsh"
+      - "C:/ProgramData/chocolatey/bin/pwsh.com"
+      - "C:/ProgramData/chocolatey/bin/pwsh.exe"
+      - "C:/ProgramData/chocolatey/bin/pwsh"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh.com"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh.exe"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/pwsh"
@@ -4518,6 +5087,9 @@ events:
       - "C:/msys64/mingw64/bin/pwsh.com"
       - "C:/msys64/mingw64/bin/pwsh.exe"
       - "C:/msys64/mingw64/bin/pwsh"
+      - "C:/Users/Patrick/AppData/Roaming/npm/pwsh.com"
+      - "C:/Users/Patrick/AppData/Roaming/npm/pwsh.exe"
+      - "C:/Users/Patrick/AppData/Roaming/npm/pwsh"
       - "C:/Program Files/bin/pwsh.com"
       - "C:/Program Files/bin/pwsh.exe"
       - "C:/Program Files/bin/pwsh"
@@ -4565,6 +5137,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -4578,6 +5152,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -4585,6 +5161,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"
@@ -4625,6 +5202,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4638,12 +5217,15 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/sqlite/"
       - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/sbin/"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/"
@@ -4666,6 +5248,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/"
+      - "C:/vcpkg/installed/x64-windows/Python314/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4679,12 +5263,15 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files/Git/cmd/"
       - "C:/vcpkg/installed/x64-windows/Program Files/CMake/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/vcpkg/installed/x64-windows/sqlite/"
       - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/sbin/"
       - "C:/vcpkg/installed/x64-windows/Program Files/"
@@ -4707,6 +5294,8 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/bzip2/"
       - "C:/vcpkg/installed/x64-windows/tools/pkgconf/"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/"
+      - "C:/Python314/Scripts/"
+      - "C:/Python314/"
       - "C:/Program Files/Python311/Scripts/"
       - "C:/Program Files/Python311/"
       - "C:/Program Files (x86)/NVIDIA Corporation/PhysX/Common/"
@@ -4720,12 +5309,15 @@ events:
       - "C:/Program Files/Git/cmd/"
       - "C:/Program Files/CMake/bin/"
       - "C:/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/"
+      - "C:/Program Files/nodejs/"
+      - "C:/ProgramData/chocolatey/bin/"
       - "C:/Program Files/MySQL/MySQL Shell 8.0/bin/"
       - "C:/Users/Patrick/AppData/Local/Microsoft/WindowsApps/"
       - "C:/Users/Patrick/AppData/Local/Programs/Microsoft VS Code/bin/"
       - "C:/sqlite/"
       - "C:/Users/Patrick/AppData/Local/Programs/cursor/resources/app/bin/"
       - "C:/msys64/mingw64/bin/"
+      - "C:/Users/Patrick/AppData/Roaming/npm/"
       - "C:/Program Files/bin/"
       - "C:/Program Files/sbin/"
       - "C:/Program Files/"
@@ -4769,6 +5361,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/Scripts/powershell"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Python314/powershell"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/Python311/Scripts/powershell"
@@ -4808,6 +5406,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/powershell"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Program Files/nodejs/powershell"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/ProgramData/chocolatey/bin/powershell"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/MySQL/MySQL Shell 8.0/bin/powershell"
@@ -4826,6 +5430,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/msys64/mingw64/bin/powershell"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/debug/Users/Patrick/AppData/Roaming/npm/powershell"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/debug/Program Files/bin/powershell"
@@ -4892,6 +5499,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/Scripts/powershell"
+      - "C:/vcpkg/installed/x64-windows/Python314/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/Python314/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/Python314/powershell"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/powershell.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/Python311/Scripts/powershell"
@@ -4931,6 +5544,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/powershell.com"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit/powershell"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/Program Files/nodejs/powershell"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/ProgramData/chocolatey/bin/powershell"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/MySQL/MySQL Shell 8.0/bin/powershell"
@@ -4949,6 +5568,9 @@ events:
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/msys64/mingw64/bin/powershell"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/powershell.com"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/powershell.exe"
+      - "C:/vcpkg/installed/x64-windows/Users/Patrick/AppData/Roaming/npm/powershell"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/Program Files/bin/powershell"
@@ -5015,6 +5637,12 @@ events:
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.com"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell.exe"
       - "C:/vcpkg/installed/x64-windows/tools/hwloc/bin/powershell"
+      - "C:/Python314/Scripts/powershell.com"
+      - "C:/Python314/Scripts/powershell.exe"
+      - "C:/Python314/Scripts/powershell"
+      - "C:/Python314/powershell.com"
+      - "C:/Python314/powershell.exe"
+      - "C:/Python314/powershell"
       - "C:/Program Files/Python311/Scripts/powershell.com"
       - "C:/Program Files/Python311/Scripts/powershell.exe"
       - "C:/Program Files/Python311/Scripts/powershell"
@@ -5051,6 +5679,8 @@ events:
         - "C:/vcpkg/installed/x64-windows/debug"
         - "C:/vcpkg/installed/x64-windows"
       ENV{PATH}:
+        - "C:\\Python314\\Scripts\\"
+        - "C:\\Python314\\"
         - "C:\\Program Files\\Python311\\Scripts\\"
         - "C:\\Program Files\\Python311\\"
         - "C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common"
@@ -5064,6 +5694,8 @@ events:
         - "C:\\Program Files\\Git\\cmd"
         - "C:\\Program Files\\CMake\\bin"
         - "C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\"
+        - "C:\\Program Files\\nodejs\\"
+        - "C:\\ProgramData\\chocolatey\\bin"
         - "C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\"
         - "C:\\Users\\Patrick\\AppData\\Local\\Microsoft\\WindowsApps"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\Microsoft VS Code\\bin"
@@ -5071,6 +5703,7 @@ events:
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
         - "C:\\Program Files\\CMake\\bin"
+        - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
         - "C:/Program Files"

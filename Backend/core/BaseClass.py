@@ -82,8 +82,16 @@ class BaseManager():
     
     # ── Pre-Simulation ───────────────────────────────────────────────────────
 
-    def pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool) -> None:
-        self._call(self._fn_pre_compute, self._default_pre_compute, global_assets, timeline, sim_data, aggr_ret, indicator_pool)
+    def pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool):
+        # Defines parsets from params
+        param_sets = self._calculate_param_combinations(self.params)
+
+        # Calculates Indicators 
+        if self.indicators: indicator_pool = self._calculate_and_map_indicators(global_assets, timeline, aggr_ret, indicator_pool, param_sets)
+
+        indicator_pool, sim_data = self._call(self._fn_pre_compute, self._default_pre_compute, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets)
+
+        return indicator_pool, sim_data, param_sets
 
     # ── Rebalance Func ───────────────────────────────────────────────────────
 

@@ -54,20 +54,11 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         #     "strats": { ... }}
 
 
-    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool) -> dict:
+    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
 
-        # Defines PSM parsets from params
-        param_sets = self._calculate_param_combinations(self.params)
-
-        # Calculates Indicators 
-        if self.indicators: indicator_pool = self._calculate_and_map_indicators(global_assets, timeline, aggr_ret, indicator_pool, param_sets)
-
-        # Calculates Models metrics
+        # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
         
-
-        # Saves to _pre_cache
-
-        return indicator_pool
+        return indicator_pool, sim_data
                        
     def _default_rank(self, context: dict) -> Dict[str, float]:
         history  = context.get("history", {})

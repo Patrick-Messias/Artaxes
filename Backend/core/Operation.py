@@ -1927,6 +1927,14 @@ if __name__ == "__main__":
 # XXX - Modernize Classes
 # XXX - Adicionar novo Backtester para Close-Close, Open-Open.
 
+# - SM and MM for Portfolio and Models
+
+# - Deselop SM selection system for Models/Strats/Assets
+# - Develop Portfolio Simulator
+# - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
+
+# - Rework Trade (Individual trades), pnl_matrix and lot_matrix, trade (holds non variable data) and trade_matrix (holds variable data) both linked by id (trade_id)
+
 # - Create backend and frontend for results panel
     - Schema DuckDB: Metadata tables + views over all existing parquets
     - FastAPI: Endpoints REST to list and consult results, WebSocket for streaming of backtest progress
@@ -1940,12 +1948,7 @@ if __name__ == "__main__":
     - Basket — Basket.tsx, BasketItem.tsx
     - Chart — EquityChart.tsx, BenchmarkSelector.tsx
 
-# - SM and MM for Portfolio and Models
-
 # - Dev Roadmap png/list 
-# - Deselop SM selection system for Models/Strats/Assets
-# - Develop Portfolio Simulator
-# - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
 
 # - Modify HTF-LTF function to work from LTF to HTF also
 # - Monte Carlo
