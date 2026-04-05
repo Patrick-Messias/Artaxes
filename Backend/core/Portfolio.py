@@ -6,7 +6,10 @@ from PortfolioSystemManager import PortfolioSystemManager
 from PortfolioMoneyManager import PortfolioMoneyManager
 from Storage import Storage
 from Asset import Asset
-import polars as pl, uuid
+import polars as pl, uuid, sys
+
+sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\indicators')
+sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
 @dataclass
 class PortfolioParams():
@@ -398,11 +401,11 @@ class Portfolio():
                     print(f"< [Error] No PnL or Walkforward data found for Asset: {a_name}")
 
         # From System Manager Indicators
-        if self.portfolio_system_manager and self.portfolio_system_manager.sm_indicators:
+        if self.portfolio_system_manager and self.portfolio_system_manager.indicators:
             unique_dts.update(self._get_all_sm_ind_datetimes())
 
         # From Money Manager Indicators
-        if self.portfolio_money_manager and self.portfolio_money_manager.mm_indicators:
+        if self.portfolio_money_manager and self.portfolio_money_manager.indicators:
             unique_dts.update(self._get_all_mm_ind_datetimes())
 
         self.datetime_timeline = sorted(list(unique_dts))
@@ -442,7 +445,7 @@ class Portfolio():
         unique_ind_dts = set()
         repeated_assets = set()
 
-        sm_inds = self.portfolio_system_manager.sm_indicators if (self.portfolio_system_manager and self.portfolio_system_manager.sm_indicators) else {}
+        sm_inds = self.portfolio_system_manager.indicators if (self.portfolio_system_manager and self.portfolio_system_manager.indicators) else {}
         if sm_inds:
             for ind_name, ind_obj in sm_inds.items():
                 tf = ind_obj.timeframe
@@ -451,19 +454,19 @@ class Portfolio():
                     continue
 
                 # Gets Asset define in ind and not in repeated_assets 
-                if ind_obj.asset is None:
-                    if ind_obj.asset not in repeated_assets:
+                if ind_obj.asset is not None:
+                    if ind_obj.asset not in repeated_assets and ind_obj.asset not in ["each_aggr", "all_aggr"]:
                         asset_obj = assets.get(ind_obj.asset)
                         asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
                         unique_ind_dts.update(asset_df["datetime"])
                         repeated_assets.add(ind_obj.asset)
 
-                # Else gets each asset defined in sm_assets and not in repeated_assets
+                # Else gets each asset defined in assets and not in repeated_assets
                 else:
-                    sm_assets = self.portfolio_system_manager.sm_assets if self.portfolio_system_manager and self.portfolio_system_manager.sm_assets else []
-                    for asset_name in sm_assets:
+                    assets = self.portfolio_system_manager.assets if self.portfolio_system_manager and self.portfolio_system_manager.assets else []
+                    for asset_name in assets:
                         if asset_name not in repeated_assets:
-                            asset_obj = assets.get(asset_name)
+                            asset_obj = self.global_assets.get(asset_name)
                             asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
                             unique_ind_dts.update(asset_df["datetime"])
                             repeated_assets.add(ind_obj.asset)
@@ -475,7 +478,7 @@ class Portfolio():
         unique_ind_dts = set()
         repeated_assets = set()
 
-        mm_inds = self.portfolio_money_manager.mm_indicators if (self.portfolio_money_manager and self.portfolio_money_manager.mm_indicators) else {}
+        mm_inds = self.portfolio_money_manager.indicators if (self.portfolio_money_manager and self.portfolio_money_manager.indicators) else {}
         if mm_inds:
             for ind_name, ind_obj in mm_inds.items():
                 tf = ind_obj.timeframe
@@ -491,10 +494,10 @@ class Portfolio():
                         unique_ind_dts.update(asset_df["datetime"])
                         repeated_assets.add(ind_obj.asset)
 
-                # Else gets each asset defined in mm_assets and not in repeated_assets
+                # Else gets each asset defined in assets and not in repeated_assets
                 else:
-                    mm_assets = self.portfolio_money_manager.mm_assets if self.portfolio_money_manager and self.portfolio_money_manager.mm_assets else []
-                    for asset_name in mm_assets:
+                    assets = self.portfolio_money_manager.assets if self.portfolio_money_manager and self.portfolio_money_manager.assets else []
+                    for asset_name in assets:
                         if asset_name not in repeated_assets:
                             asset_obj = assets.get(asset_name)
                             asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
@@ -552,27 +555,30 @@ if __name__ == "__main__":
         reb_metric="pnl",
         reb_method="fixed",
         max_active_models=None,
-        sm_params={
+        params={
             "param1": range(2, 4+1, 1),
             "param2": range(20, 50+1, 30),
         },
-        sm_indicators={
+        indicators={
             'atr': VAR(asset=None, timeframe="M15", when="pre", window='param2'),
-            'var': VAR(asset="model", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
-            'var_all': VAR(asset="models", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            'var': VAR(asset="all_aggr", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            'var_all': VAR(asset="each_aggr", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
         },
-        sm_assets={'EURUSD': eurusd},
+        assets={'EURUSD'},
     ))
 
     pmm = PortfolioMoneyManager(PortfolioMoneyManagerParams(
-        capital=100_000.0,
+        capital=100000.0,
         max_capital_exposure=1.0,
+        reb_metric="pnl",
         reb_method="fixed",
-        alo_allocation={"MA Trend Following": 1.0},  # 100% para o único model
-        mm_params={
+        reb_lookback_n=252,
+        reb_deviation_func=None,
+        params={
             "param1": range(4, 12+1, 4),
             "param2": range(20, 80+1, 50),
         },
+        indicators=None,
     ))
 
     # ── Model level ───────────────────────────────────────────────────────────

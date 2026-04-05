@@ -93,22 +93,6 @@ class BaseManager():
 
         return indicator_pool, sim_data, param_sets
 
-    # ── Rebalance Func ───────────────────────────────────────────────────────
-
-    def rank(self, context: dict) -> Dict[str, float]:
-        # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
-        return self._call(self._fn_rank, self._default_rank, context)
-
-    def filter(self, context: dict) -> List[str]:
-        # Removes models that don't pass the filter function
-        # Returns list of model_names that are active
-        return self._call(self._fn_filter, self._default_filter, context)
-
-    def rebalance(self, context: dict) -> List[str]:
-        # Orchestrates rank -> filter -> selection
-        # Returns ordered list of active models
-        return self._call(self._fn_rebalance, self._default_rebalance, context)
-
     # ── Indicators ───────────────────────────────────────────────────────
 
     def get_ind(self, ind_key: str, target: str, i: int, indicator_pool: dict, ps_name: str, col: str = "main"):
@@ -136,15 +120,21 @@ class BaseManager():
 
     def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets):
 
-        # Discovers dynamically time column
-        time_col = next((c for c in timeline.columns if c.lower() in ['ts', 'datetime', 'time', 'date']), timeline.columns[0])
+        # Makes timeline be a Polars DataFrame
+        if isinstance(timeline, list):
+            timeline_df = pl.DataFrame({"datetime": timeline})
+        else:
+            timeline_df = timeline
+
+        # Discovers dinamically time column
+        time_col = next((c for c in timeline_df.columns if c.lower() in ['ts', 'datetime', 'time', 'date']), timeline_df.columns[0])
 
         # Creates 1 dataframe with all models results
         portfolio_series= None
         if aggr_ret:
             all_models_df = pl.DataFrame(aggr_ret)
             portfolio_series = pl.DataFrame({
-                time_col: timeline.get_column(time_col),
+                time_col: timeline_df.get_column(time_col), # Usa timeline_df aqui
                 "main": all_models_df.select(pl.mean_horizontal(pl.all())).to_series()
             })
 
@@ -161,7 +151,8 @@ class BaseManager():
                 if ind_obj.asset is None: 
                     if self.assets is None: continue
                     
-                    for a_name, a_obj in self.assets:
+                    for a_name in self.assets:
+                        a_obj = global_assets.get(a_name)
                         unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
 
                         self._pre_cache[ps_name][ind_key][a_name] = unique_key
@@ -170,7 +161,7 @@ class BaseManager():
                             asset_df = a_obj.data_get(ind_obj.timeframe)
                             if asset_df is not None: 
                                 ind_result = self._calculate_indicator(asset_df, ind_obj, eff_params)
-                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
+                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
                                 indicator_pool[unique_key] = ind_result_aligned
                     
                 # 2. Calculates for each Asset in list (ind_obj.asset is list["a1", "a2", ...]) or single Asset (str)
@@ -206,11 +197,11 @@ class BaseManager():
 
                             if unique_key not in indicator_pool: 
                                 m_df = pl.DataFrame({
-                                    time_col: timeline.get_column(time_col),
+                                    time_col: timeline_df.get_column(time_col),
                                     "main": m_obj_series
                                 })
                                 ind_result = self._calculate_indicator(m_df, ind_obj, eff_params)
-                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
+                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
                                 indicator_pool[unique_key] = ind_result_aligned
 
                     # 5. Calculates with sum of all models in aggr_models_ret
@@ -221,7 +212,7 @@ class BaseManager():
 
                         if unique_key not in indicator_pool: 
                             ind_result = self._calculate_indicator(portfolio_series, ind_obj, eff_params)
-                            ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
+                            ind_result_aligned = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
                             indicator_pool[unique_key] = ind_result_aligned
                 
         return indicator_pool
@@ -237,7 +228,12 @@ class BaseManager():
             raise ValueError("data must countain time reference (ts/datetime/date/time)")
         
         # Executes Indicator, ind_obj must be able to accept Series + params
-        ind_results = ind_obj._calculate_logic(data, eff_params)
+        ind_results = ind_obj._calculate_logic(data, **eff_params)
+
+        # If indicator returned lazy expression, execute on original DF and convert to Series
+        if isinstance(ind_results, pl.Expr):
+            if isinstance(data, pl.DataFrame):
+                ind_results = data.select(ind_results).to_series()
 
         if isinstance(ind_results, pl.Series): # Stitches results with ts in a final DataFrame
             ind_results = ind_results.alias("main") if ind_results.name == "" else ind_results
@@ -322,10 +318,10 @@ class BaseManager():
 
         if freq == "tick":
             return df # Will always run
-
+        
         if freq == "daily":
             condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
-        if freq == "weekly":
+        elif freq == "weekly":
             condition = pl.col("ts").dt.week() != pl.col("ts").dt.week().shift(1)
         elif freq == "monthly":
             condition = pl.col("ts").dt.month() != pl.col("ts").dt.month().shift(1)
@@ -333,9 +329,18 @@ class BaseManager():
             condition = pl.col("ts").dt.year() != pl.col("ts").dt.year().shift(1)
         else:
             return set()
+        
+        # Uses fill_null(False) to garantee that shift(1) null doesn't break the filter
+        filtered_dates = df.filter(condition.fill_null(False))["ts"].to_list()
 
-        # Fist candle is always a point of rebalance (start)
-        return set(df.filter(condition | pl.col("ts").is_first())["ts"].to_list())
+        # Converts to Set
+        schedule_set = set(filtered_dates)
+
+        # Forces first candle to always be be a rebalance point
+        if timeline:
+            schedule_set.add(timeline[0])
+
+        return schedule_set
 
     #||=========================================================================================||
 

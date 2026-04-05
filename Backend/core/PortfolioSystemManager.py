@@ -17,7 +17,7 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
     reb_lookback_n: int = 252 # If len < lookback then [:idx]
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Only rebalance if (ex: Portfolio std deviated "x" std from mean)
-    reb_close_open_trades_on_rebalance: bool = False
+    reb_closes_open_trades_on_rebalance: bool = False
 
     # Plugin functions for custom model hierarchy rules and rebalancing logic
     fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
@@ -27,22 +27,22 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
 
 class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarchy 
-    def __init__(self, params: PortfolioSystemManagerParams):
-        super().__init__(params)
+    def __init__(self, psm_params: PortfolioSystemManagerParams):
+        super().__init__(psm_params)
 
-        self.reb_metric                         = params.reb_metric
-        self.model_hierarchy                    = dict(params.model_hierarchy)
-        self.max_active_models                  = params.max_active_models
-        self.reb_method                         = params.reb_method
-        self.reb_lookback_n                     = params.reb_lookback_n
-        self.reb_close_open_trades_on_rebalance = params.reb_close_open_trades_on_rebalance
+        self.reb_metric                         = psm_params.reb_metric
+        self.model_hierarchy                    = dict(psm_params.model_hierarchy)
+        self.max_active_models                  = psm_params.max_active_models
+        self.reb_method                         = psm_params.reb_method
+        self.reb_lookback_n                     = psm_params.reb_lookback_n
+        self.reb_closes_open_trades_on_rebalance = psm_params.reb_closes_open_trades_on_rebalance
 
         # Funções plugáveis — usa custom se passado, senão usa default interno
-        self._fn_pre_compute    = params.fn_pre_compute
-        self._fn_rank           = params.fn_rank
-        self._fn_filter         = params.fn_filter
-        self._fn_rebalance      = params.fn_rebalance
-        self._fn_main           = params.fn_main
+        self._fn_pre_compute    = psm_params.fn_pre_compute
+        self._fn_rank           = psm_params.fn_rank
+        self._fn_filter         = psm_params.fn_filter
+        self._fn_rebalance      = psm_params.fn_rebalance
+        self._fn_main           = psm_params.fn_main
 
         self._pre_cache: Dict = {}   # Metrics and Indicators
         # self._pre_cache = {
@@ -53,6 +53,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         #         }},
         #     "strats": { ... }}
 
+#||=========================================================================================||
 
     def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
 
@@ -114,8 +115,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
         return hierarchy
    
-
-    # ─────────────────────────────────────────────────────────────────────────
+#||=========================================================================================||
 
     """ Dt execution framework
 

@@ -8,7 +8,7 @@ Atua sobre os níveis superiores (controla quem “fala” com o PMM e o TM).
 """
 
 import polars as pl, uuid
-from typing import Literal, Dict, Optional
+from typing import Literal, Dict, Set, Optional, List
 from dataclasses import dataclass, field
 from Indicator import Indicator
 from BaseClass import BaseClass, BaseManager
@@ -21,7 +21,7 @@ class SystemManagerParams:
     
     # Dados externos para o System Manager (Ex: Calendário Econômico, Sentimento, CDT)
     # Migrado para usar dicionário de Polars DataFrames
-    assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
+    assets: Set[str] = field(default_factory=set)
 
     # Customizable parameters for specific System Managers (Ex: thresholds para desativar modelos, regras de ativação, etc)
     params: Dict = field(default_factory=dict) 
@@ -41,17 +41,29 @@ class SystemManager(BaseClass, BaseManager):
         self.params = system_params.params
         self.indicators = system_params.indicators
 
+#||=========================================================================================||
+
+    # ── SM Rebalance Func ───────────────────────────────────────────────────────
+
+    def rank(self, context: dict) -> Dict[str, float]:
+        # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
+        return self._call(self._fn_rank, self._default_rank, context)
+
+    def filter(self, context: dict) -> List[str]:
+        # Removes models that don't pass the filter function
+        # Returns list of model_names that are active
+        return self._call(self._fn_filter, self._default_filter, context)
+
+    def rebalance(self, context: dict) -> List[str]:
+        # Orchestrates rank -> filter -> selection
+        # Returns ordered list of active models
+        return self._call(self._fn_rebalance, self._default_rebalance, context)
+
+
     def __repr__(self):
         return f"<{self.__class__.__name__} name={self.name}>"
 
-
-
-
-
-
-
-
-    #||=========================================================================================||
+#||=========================================================================================||
 
     # Management Indicators
     def fama_french(): pass # Imports all T-Bills, Assets, etc

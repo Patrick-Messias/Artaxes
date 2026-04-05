@@ -54,7 +54,7 @@ class VAR(Indicator):
             rolling_std  = returns.rolling_std(window_size=window, ddof=1)
 
             # Operação direta entre Series — sem pl.lit()
-            var_series = rolling_mean - (rolling_std * z_score)
+            var_series = rolling_mean - (rolling_std * pl.lit(z_score))
 
         else:
             raise ValueError(f"Type of VaR not supported: '{var_type}'. Use 'historical' or 'parametric'.")

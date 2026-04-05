@@ -9,7 +9,7 @@ PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio
 
 import polars as pl
 import uuid
-from typing import Literal, Dict, Optional
+from typing import Literal, Dict, Optional, List
 from dataclasses import dataclass, field
 from Indicator import Indicator
 from BaseClass import BaseClass, BaseManager
@@ -17,23 +17,12 @@ from BaseClass import BaseClass, BaseManager
 @dataclass
 class MoneyManagerParams:
     name: str = field(default_factory=lambda: f'mm_{uuid.uuid4()}')
+
+    capital: float=100000.0
+    max_capital_exposure: float=1.0
     
     reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
-
-    # Capital Management
-    capital: float = 0.0
-    max_capital_exposure: float = 1.0 # Ex: 1.0 = 100% do capital
-    
-    # Drawdown Risk (Orientado a valor financeiro ou percentual conforme o método)
-    # Ex: {"method": "var", "global": 0.2} -> Risco de 20% do capital total
-    drawdown: dict = field(default_factory=lambda: {
-        "method": "var", 
-        "global": None, 
-        "monthly": None, 
-        "weekly": None, 
-        "daily": None
-    }) 
-    
+ 
     # Dados externos para MM (Ex: volatilidade do mercado, regime de juros)
     # Agora usa Polars DataFrame
     assets: Dict[str, pl.DataFrame] = field(default_factory=dict)
@@ -50,41 +39,26 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         self.name = mm_params.name
         self.reb_frequency = mm_params.reb_frequency
         
-        # Capital Management
-        self.capital = mm_params.capital
-        self.max_capital_exposure = mm_params.max_capital_exposure
-
-        # Drawdown Risk Validation
-        self.drawdown = mm_params.drawdown
-        self._validate_drawdown_settings()
-                
         # Custom Rules & Data
         self.assets = mm_params.assets
         self.params = mm_params.params
         self.indicators = mm_params.indicators
 
+    # ── SM Rebalance Func ───────────────────────────────────────────────────────
 
+    def allocate(self, context: dict) -> Dict[str, float]:
+        # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
+        return self._call(self._fn_allocate, self._default_allocate, context)
 
+    def size(self, context: dict) -> List[str]:
+        # Removes models that don't pass the filter function
+        # Returns list of model_names that are active
+        return self._call(self._fn_size, self._default_size, context)
 
-
-
-
-    def _validate_drawdown_settings(self):
-        """Valida se os limites de drawdown estão coerentes com o método escolhido."""
-        if self.drawdown["method"] not in ["var", "fixed"]:
-            raise ValueError("Invalid drawdown method - Has to be 'var' or 'fixed'")
-            
-        if self.drawdown["method"] == "var":
-            for period in ["global", "monthly", "weekly", "daily"]:
-                val = self.drawdown.get(period)
-                if val is not None and (val <= 0 or val >= 1):
-                    raise ValueError(f"Invalid drawdown {period} - Value {val} must be between 0 and 1 for 'var' (percentage) method")
-
-    def calculate_var(): pass # UTILIZAR CLASSE DO INDICADOR VAR PARA EVITAR REDUNDANCIA
-
-    def get_allocated_capital(self) -> float:
-        """Retorna o capital máximo que este manager pode expor."""
-        return self.capital * self.max_capital_exposure
+    def risk_guard(self, context: dict) -> List[str]:
+        # Orchestrates rank -> filter -> selection
+        # Returns ordered list of active models
+        return self._call(self._fn_risk_guard, self._default_risk_guard, context)
 
     #||=========================================================================================||
 

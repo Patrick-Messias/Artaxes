@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 #from Backend.core import Asset
 from MoneyManager import MoneyManager, MoneyManagerParams
-from typing import Optional, Dict, Literal, Callable, Union
+from typing import Optional, Dict, Literal, Callable, List
 import polars as pl
 
 @dataclass
@@ -15,6 +15,13 @@ class PortfolioMoneyManagerParams(MoneyManagerParams):
     reb_lookback_n: int = 1
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Function that defines the deviation threshold needed for rebalancing (e.g., 5% deviation from target allocation)
 
+    # Plugin functions for custom model hierarchy rules and rebalancing logic
+    fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
+    fn_allocate:        Optional[Callable] = None   # (context: dict) -> Dict[str, float]
+    fn_size:            Optional[Callable] = None   # (context: dict) -> List[str]
+    fn_risk_guard:      Optional[Callable] = None   # (context: dict) -> List[str]
+    fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
+
 class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money management
     def __init__(self, pmm_params: PortfolioMoneyManagerParams): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
         super().__init__(pmm_params)
@@ -25,47 +32,48 @@ class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money mana
         self.reb_lookback_n = pmm_params.reb_lookback_n
         self.reb_deviation_func = pmm_params.reb_deviation_func
 
-    def calculate_model_capital_allocation(self): # Rebalances capital allocation between Models of the Portfolio
+        # Funções plugáveis — usa custom se passado, senão usa default interno
+        self._fn_pre_compute    = pmm_params.fn_pre_compute
+        self._fn_allocate       = pmm_params.fn_allocate
+        self._fn_size           = pmm_params.fn_size
+        self._fn_risk_guard     = pmm_params.fn_risk_guard
+        self._fn_main           = pmm_params.fn_main
+
+        self._pre_cache: Dict = {}
+
+#||=========================================================================================||
+
+    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
+
+        # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
+        
+        return indicator_pool, sim_data
+          
+    def _default_allocate(self):
         pass
 
-    def get_model_allocated_capital(self, model_name: str) -> float:
-        # Returns absolute capital allocated to a given model
-        return self.get_allocated_capital() * self.get_model_allocation(model_name)
+    def _default_size(self):
+        pass
 
-    def get_model_allocation(self, model_name: str) -> float:
-        # Returns the current capital allocation for a given model, based on the alo_allocation or alo_allocation_func
-        if self.reb_method == "fixed" and self.alo_allocation:
-            return self.alo_allocation.get(model_name, 0.0) 
-        
-        # equal weight fallback
-        return 1.0 / len(self.alo_allocation) if self.alo_allocation else 0.0
+    def _default_risk_guard(self):
+        pass
+
+    # ── Every Datetime [i] ───────────────────────────────────────────────
+
+    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+        # Called every datetime for each model and asset
+        # Returns True if model can operate now
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
     
-    def rebalance(self, equity_history: Dict[str, pl.DataFrame]) -> Dict[str, float]:
-        # Recalculates alocations based on historical equity of each model
-        # Returns [model_name: new_fraction]
-        # Called by _portfolio_simulation() at each rebalance frequency
+    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
 
-        if self.reb_method == "equal_weight":
-            n = len(equity_history)
-            return {m: 1.0 / n for m in equity_history}
-            
-        if self.reb_method == "performance":
-            # Ranks metrics based on last rebalance_lookback_n periods
-            scores = {}
-            for m, df in equity_history.items():
-                tail = df.tail(self.reb_lookback_n)["pnl"]
-                if self.reb_metric == "sharpe":
-                    scores[m] = float(tail.mean() / (tail.std() + 1e-9))
-                else:
-                    scores[m] = float(tail.sum())
+        # Calculates Live Indicators
 
-            total = sum(max(v, 0) for v in scores.values()) + 1e-9
-            return {m: max(v, 0) / total for m, v in scores.items()}
+        # Rebalances
 
-        # fixed — retorna alocação definida
-        return self.model_allocation or {}
+        return hierarchy
 
-
+#||=========================================================================================||
 
 
 
