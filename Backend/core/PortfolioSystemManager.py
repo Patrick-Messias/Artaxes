@@ -15,9 +15,8 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     # Rebalancing
     reb_metric: Literal["pnl", "pnl_dd", "sharpe"] = "pnl" # Metric used for performance-based rebalancing (if reb_method == "performance")
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
-    reb_lookback_n: int = 252 # If len < lookback then [:idx]
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Only rebalance if (ex: Portfolio std deviated "x" std from mean)
-    reb_closes_open_trades_on_rebalance: bool = False
+    reb_closes_open_trades_on_rebalance: bool = False # NOTE add this only to StratSystemManager
 
     # Plugin functions for custom model hierarchy rules and rebalancing logic
     fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
@@ -34,7 +33,6 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         self.model_hierarchy                    = dict(psm_params.model_hierarchy)
         self.max_active_models                  = psm_params.max_active_models
         self.reb_method                         = psm_params.reb_method
-        self.reb_lookback_n                     = psm_params.reb_lookback_n
         self.reb_closes_open_trades_on_rebalance = psm_params.reb_closes_open_trades_on_rebalance
 
         # Funções plugáveis — usa custom se passado, senão usa default interno

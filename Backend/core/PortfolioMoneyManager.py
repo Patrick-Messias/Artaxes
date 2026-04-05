@@ -12,7 +12,6 @@ class PortfolioMoneyManagerParams(MoneyManagerParams):
     # Rebalancing
     reb_metric: Literal["pnl", "pnl_dd", "sharpe"] = "pnl" # Metric used for performance-based rebalancing (if reb_method == "performance")
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
-    reb_lookback_n: int = 1
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Function that defines the deviation threshold needed for rebalancing (e.g., 5% deviation from target allocation)
 
     # Plugin functions for custom model hierarchy rules and rebalancing logic
@@ -29,7 +28,6 @@ class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money mana
 
         self.reb_metric = pmm_params.reb_metric
         self.reb_method = pmm_params.reb_method
-        self.reb_lookback_n = pmm_params.reb_lookback_n
         self.reb_deviation_func = pmm_params.reb_deviation_func
 
         # Funções plugáveis — usa custom se passado, senão usa default interno

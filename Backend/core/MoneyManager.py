@@ -22,6 +22,8 @@ class MoneyManagerParams:
     max_capital_exposure: float=1.0
     
     reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
+    reb_lookback: int=252 # If len < lookback then [:idx]
+    reb_lookback_period_type: Literal["tick", "day", "week", "month", "year"] # 252 what? ticks, days?
  
     # Dados externos para MM (Ex: volatilidade do mercado, regime de juros)
     # Agora usa Polars DataFrame
@@ -38,6 +40,8 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         super().__init__()
         self.name = mm_params.name
         self.reb_frequency = mm_params.reb_frequency
+        self.reb_lookback = mm_params.reb_lookback
+        self.reb_lookback_period_type = mm_params.reb_lookback_period_type
         
         # Custom Rules & Data
         self.assets = mm_params.assets

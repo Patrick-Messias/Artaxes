@@ -342,6 +342,33 @@ class BaseManager():
 
         return schedule_set
 
+    @staticmethod
+    def separate_long_short_returns(self, df: pl.DataFrame) -> pl.DataFrame:
+        # df needs at least: 'datetime', 'return', 'lot'
+
+        if "lot" not in df.columns: return df
+        
+        return df.with_columns([
+            # 🟢 Long Returns
+            pl.when(pl.col("lot") > 0)
+            .then(pl.col("return"))
+            .otherwise(0.0)
+            .alias("long_return"),
+            
+            # 🔴 Short Returns
+            pl.when(pl.col("lot") < 0)
+            .then(pl.col("return"))
+            .otherwise(0.0)
+            .alias("short_return"),
+            
+            # 📊 Exposure direction
+            pl.when(pl.col("lot") > 0).then(1)
+            .when(pl.col("lot") < 0).then(-1)
+            .otherwise(0)
+            .alias("position_direction")
+        ])
+    
+
     #||=========================================================================================||
 
 

@@ -18,6 +18,8 @@ class SystemManagerParams:
     name: str = field(default_factory=lambda: f'sm_{uuid.uuid4()}')
 
     reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
+    reb_lookback: int=252 # If len < lookback then [:idx]
+    reb_lookback_period_type: Literal["tick", "day", "week", "month", "year"] # 252 what? ticks, days?
     
     # Dados externos para o System Manager (Ex: Calendário Econômico, Sentimento, CDT)
     # Migrado para usar dicionário de Polars DataFrames
@@ -31,15 +33,17 @@ class SystemManagerParams:
     
 
 class SystemManager(BaseClass, BaseManager): 
-    def __init__(self, system_params: SystemManagerParams):
+    def __init__(self, sm_params: SystemManagerParams):
         super().__init__()
-        self.name = system_params.name
-        self.reb_frequency = system_params.reb_frequency
-        
+        self.name = sm_params.name
+        self.reb_frequency = sm_params.reb_frequency
+        self.reb_lookback = sm_params.reb_lookback
+        self.reb_lookback_period_type = sm_params.reb_lookback_period_type
+    
         # Custom Data & Rules
-        self.assets = system_params.assets
-        self.params = system_params.params
-        self.indicators = system_params.indicators
+        self.assets = sm_params.assets
+        self.params = sm_params.params
+        self.indicators = sm_params.indicators
 
 #||=========================================================================================||
 

@@ -186,34 +186,50 @@ class Portfolio():
         indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}, {}, {}
         timeline = self.datetime_timeline
 
+        # Adds Long/Short differently
+        if aggr_models_ret is not None:
+            aggr_models_ret = self.separate_long_short_returns(aggr_models_ret)
+        if aggr_strats_ret is not None:
+            aggr_strats_ret = self.separate_long_short_returns(aggr_strats_ret)
+        if aggr_assets_ret is not None:
+            aggr_assets_ret = self.separate_long_short_returns(aggr_assets_ret)
+
         # Portfolio
-        if self.portfolio_system_manager:
-            indicator_pool, sim_data, params_pool = self.portfolio_system_manager.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
-            psm_sch[self.name] = self.portfolio_system_manager.get_schedule(timeline)
+        psm = self.portfolio_system_manager or PortfolioSystemManager(PortfolioSystemManagerParams())
+        if psm:
+            indicator_pool, sim_data, params_pool = psm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
+            psm_sch[self.name] = psm.get_schedule(timeline)
             
-        if self.portfolio_money_manager:
-            indicator_pool, sim_data, params_pool = self.portfolio_money_manager.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
-            psm_sch[self.name] = self.portfolio_money_manager.get_schedule(timeline)
+        pmm = self.portfolio_money_manager or PortfolioMoneyManager(PortfolioMoneyManagerParams())
+        if pmm:
+            indicator_pool, sim_data, params_pool = pmm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
+            pmm_sch[self.name] = pmm.get_schedule(timeline)
+
+
+        # Próximos Passos:
+        # Como separar entre LONG e SHORT? adicionar separação para cada nível! 
+        # Adicionar date_start/end para puxar assets para indicadores onde -> [date_start+lenght : date_end] assim tendo mais resultados OU MELHOR DEIXANDO CALCULAR SOBRE TODO E FILTRAR PARA DATETIME?
+
 
         for _, _, m_name, m_obj, *_ in self._iter_portfolio_data():
-            msm = m_obj.model_system_manager()
+            msm = m_obj.model_system_manager() or ModelSystemManager(ModelSystemManagerParams())
             if msm:
                 indicator_pool, sim_data, params_pool = msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
                 msm_sch[m_name] = msm.get_schedule(timeline)
 
-            msm = m_obj.model_money_manager()
-            if msm:
+            mmm = m_obj.model_money_manager() or ModelMoneyManager(ModelMoneyManagerParams())
+            if mmm:
                 indicator_pool, sim_data, params_pool = msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
                 mmm_sch[m_name] = msm.get_schedule(timeline)
 
             for s_name, s_obj in m_obj.strats.items():
                 s_key = (m_name, s_name)
-                ssm = s_obj.strat_system_manager
+                ssm = s_obj.strat_system_manager or StratSystemManager(StratSystemManagerParams())
                 if ssm:
                     indicator_pool, sim_data, params_pool = ssm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
                     ssm_sch[s_key] = ssm.get_schedule(timeline)
 
-                smm = s_obj.strat_money_manager
+                smm = s_obj.strat_money_manager or StratMoneyManager(StratMoneyManagerParams())
                 if smm:
                     indicator_pool, sim_data, params_pool = smm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
                     smm_sch[s_key] = smm.get_schedule(timeline)
@@ -228,9 +244,6 @@ class Portfolio():
         #         hierarchy = s_obj.strat_system_manager.main(hierarchy, ...)
 
         return indicator_pool, sim_data, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
-    
-
-
     
     def _update_pos_with_backtest_ret(self, step_dt, active_positions, instance):
         for idf, pos_info in active_positions.items():

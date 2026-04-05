@@ -120,8 +120,7 @@ def CorrelationClusteringMC(
     basket_results: Dict[str, List[float]], 
     resolution_days: int = 63, # ~3 meses
     mc_params: Optional[Dict] = None, # [runs, shuffle, pnl_col, percentile] -> [10000, True, 'wfm_matrix_data', 95.0]
-    metric_type: str = "pnl_sum"
-):
+    metric_type: str = "pnl_sum"):
     """
     Gera um ClusterMap (Dendrograma + Heatmap) comparando os itens da cesta.
     basket_results: { 'Nome_Modelo_1': [retornos_diarios], 'Nome_Modelo_2': [...] }
@@ -201,7 +200,7 @@ def CorrelationClusteringMC(
     return linkage_matrix, corr_matrix
 
 
-# Parameter Sensibility Test - Takes parest or wf curve and does another operation with smallest and most numerous parsets possible for each param_set at each time
+# Monte Carlo Parameter Sensibility Test - Takes each parset from an optimization with deviation (ex: +-5 ticks) from each parameter, runs monte carlo, takes n=3 monte carlo lines closest to mean and adds all to one graph 
 """
 """
 

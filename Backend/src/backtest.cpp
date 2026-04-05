@@ -618,8 +618,34 @@ SimulationOutput Backtest::run_simulation(
                 }
             }
  
-            // ── 5. DAILY PnL UPDATE ───────────────────────────────────────────
+            // ── 5. PnL UPDATE ───────────────────────────────────────────
             if (trade_pnl_resolution=="daily" && (day_switched || dt_final || is_last_bar)) {
+                for (auto& trade : active_trades) {
+                    bool is_long = (trade.lot_size > 0);
+                    double dv;
+ 
+                    if (is_pct_mode) {
+                        // pct_mode: dv já foi acumulado em update_pct_pnl
+                        // emite o retorno acumulado desde o último daily snapshot
+                        // e reseta o acumulador diário
+                        dv = trade.daily_pnl_accum ;  // retorno acumulado do período
+                        trade.daily_pnl_accum  = 0.0; // reseta para próximo período diário
+                    } else {
+                        double prev_p = trade.daily_pnl_accum ;
+                        double curr_p = close[i];
+                        dv = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+                        trade.daily_pnl_accum  = curr_p;
+                    }
+ 
+                    daily_results_matrix.push_back({
+                        format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
+                        dv,
+                        std::abs(trade.lot_size),
+                        ps_id
+                    });
+                }
+            }
+            else if (trade_pnl_resolution=="tick") {
                 for (auto& trade : active_trades) {
                     bool is_long = (trade.lot_size > 0);
                     double dv;
