@@ -85,13 +85,13 @@ class Portfolio(BaseClass, BaseManager):
 
             #||=====================================================================================||#
             
-            # A - Exits at [i] open
+            # Exits at [i] open
             for idf, pos_info in active_positions.items():
                 pass
 
             #||=====================================================================================||#
             
-            # B - Entries at [i] open - MM Tactical Level - Bottom Up (MM can change with exit/entry)
+            # Entries at [i] open - MM Tactical Level - Bottom Up (MM can change with exit/entry)
             for idf, pos_info in hierarchy.items():
                 if portfolio_simulation_with_backtest_results: pass
                     
@@ -109,17 +109,17 @@ class Portfolio(BaseClass, BaseManager):
 
             #||=====================================================================================||#
             
-            # C - Updates PnL of open positions at [i] ends in previous step
+            # Updates PnL of open positions at [i] ends in previous step
             update_func_to_use(step_dt, active_positions, instance)
 
             #||=====================================================================================||#
-            
-            # D - Updates System Managers - Top Down - at [i] ends
+
+            # Updates System Managers - Top Down - at [i] ends
             hierarchy = self._system_managers(step_dt, hierarchy, psm_sch, msm_sch, ssm_sch)
 
             #||=====================================================================================||#
             
-            # E - Updates Money Managers - Top Down - at [i] ends - Strategic Level
+            # Updates Money Managers - Top Down - at [i] ends - Strategic Level
             hierarchy = self._money_managers(step_dt, hierarchy, pmm_sch, mmm_sch, smm_sch)
 
             #||=====================================================================================||#
@@ -137,52 +137,73 @@ class Portfolio(BaseClass, BaseManager):
     # ── Portfolio Defs ───────────────────────────────────────────────
 
     def _system_managers(self, dt, hierarchy, psm_sch, msm_sch, ssm_sch):
-        for o_name, o_obj, *_ in self._iter_portfolio_data():
-            if dt in psm_sch and self.portfolio_system_manager:
-                operation_key = (o_name)
-                df = self.sim_data[operation_key]
+        psm = sm_mm_map.get("managers", {}).get("psm")
+
+        if psm and dt in psm_sch.get(self.name, []):
+            operation_key = self.name
+            df = self.sim_data.get(operation_key)
+
+            if df is not None:
                 operation_data = df.filter(pl.col("datetime") <= dt)
-                hierarchy = self.portfolio_system_manager.main(hierarchy, operation_data, self.portfolio_returns)
-
+                hierarchy = psm.main(hierarchy, operation_data, self.portfolio_returns)
+        
+        for o_name, o_obj, *_ in self._iter_portfolio_data():
             for m_name, m_obj in o_obj.items():
-                if dt in msm_sch and m_obj.model_system_manager:
+                msm = sm_mm_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
+
+                if msm and dt in msm_sch.get(m_name, []):
                     model_key = (o_name, m_name)
-                    df = self.sim_data[model_key]
-                    model_data = df.filter(pl.col("datetime") <= dt)
-                    hierarchy = m_obj.model_system_manager.main(hierarchy, model_data, self.portfolio_returns)
+                    df = self.sim_data.get(model_key)
 
-                for s_name, s_obj in m_obj.items():
-                    if dt in ssm_sch.get((m_name, s_name)) and s_obj.strat_system_manager:
+                    if df is not None:
+                        model_data = df.filter(pl.col("datetime") <= dt)
+                        hierarchy = msm.main(hierarchy, model_data, self.portfolio_returns)
+
+                for s_name, _ in m_obj.items():
+                    ssm = sm_mm_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
+                    
+                    if ssm and dt in ssm_sch.get((m_name, s_name), []):
                         strat_key = (o_name, m_name, s_name)
-                        df = self.sim_data[strat_key]
-                        strat_data = df.filter(pl.col("datetime") <= dt)
-                        hierarchy = s_obj.strat_system_manager.main(hierarchy, strat_data, self.portfolio_returns)
-
-        return hierarchy    
+                        df = self.sim_data.get(strat_key)
+                        
+                        if df is not None:
+                            strat_data = df.filter(pl.col("datetime") <= dt)
+                            hierarchy = ssm.main(hierarchy, strat_data, self.portfolio_returns)
+        return hierarchy
 
     def _money_managers(self, dt, hierarchy, pmm_sch, mmm_sch, smm_sch): # Updates self.sim_data enside each MM
-        # NOTE Deve calcular o lote baseado no pnl_matrix, weight (cap alocado) e metadado do asset
-        # Pode usar dados de [:i] para calcular para i+1 (prox iter) para evitar leakage
-        for o_name, o_obj, *_ in self._iter_portfolio_data():
-            if dt in pmm_sch and self.portfolio_money_manager:
-                operation_key = (o_name)
-                df = self.sim_data[operation_key]
+        pmm = sm_mm_map.get("managers", {}).get("pmm")
+
+        if pmm and dt in pmm_sch.get(self.name, []):
+            operation_key = self.name
+            df = self.sim_data.get(operation_key)
+
+            if df is not None:
                 operation_data = df.filter(pl.col("datetime") <= dt)
-                self.sim_data, hierarchy = self.portfolio_money_manager.calculate_model_position_sizes(hierarchy, operation_data, self.portfolio_returns)
+                hierarchy = pmm.main(hierarchy, operation_data, self.portfolio_returns)
 
+        for o_name, o_obj, *_ in self._iter_portfolio_data():
             for m_name, m_obj in o_obj.items():
-                if dt in mmm_sch and m_obj.model_money_manager:
-                    model_key = (o_name, m_name)
-                    df = self.sim_data[model_key]
-                    model_data = df.filter(pl.col("datetime") <= dt)
-                    self.sim_data, hierarchy = m_obj.model_money_manager.calculate_asset_strat_position_sizes(hierarchy, model_data, self.portfolio_returns)
+                mmm = sm_mm_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmmm")
 
-                for s_name, s_obj in m_obj.items():
-                    if dt in smm_sch.get((m_name, s_name)) and s_obj.strat_money_manager:
+                if mmm and dt in mmm_sch.get(m_name, []):
+                    model_key = (o_name, m_name)
+                    df = self.sim_data.get(model_key)
+
+                    if df is not None:
+                        model_data = df.filter(pl.col("datetime") <= dt)
+                        hierarchy = mmm.main(hierarchy, model_data, self.portfolio_returns)
+
+                for s_name, _ in m_obj.items():
+                    smm = sm_mm_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
+
+                    if smm and dt in smm_sch.get((m_name, s_name), []):
                         strat_key = (o_name, m_name, s_name)
-                        df = self.sim_data[strat_key]
+                        df = self.sim_data.get(strat_key)
+
+                    if df is not None:
                         strat_data = df.filter(pl.col("datetime") <= dt)
-                        self.sim_data, hierarchy = s_obj.strat_money_manager.calculate_trade_position_sizes(hierarchy, strat_data, self.portfolio_returns)
+                        hierarchy = smm.main(hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy  
 
@@ -197,11 +218,13 @@ class Portfolio(BaseClass, BaseManager):
 
         # Portfolio
         p_magrs = sm_mm_map.get("managers", {})
-        psm = p_magrs.get("psm", PortfolioSystemManager(PortfolioSystemManagerParams()))
+        psm = p_magrs.get("psm", None)
+        if psm is None: psm = p_magrs["psm"] = PortfolioSystemManager(PortfolioSystemManagerParams())
         indicator_pool, sim_data, params_pool = psm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
         psm_sch[self.name] = psm.get_schedule(timeline)
             
-        pmm = p_magrs.get("pmm", PortfolioSystemManager(PortfolioSystemManagerParams()))
+        pmm = p_magrs.get("pmm", None)
+        if pmm is None: pmm = p_magrs["pmm"] = PortfolioSystemManager(PortfolioSystemManagerParams())
         indicator_pool, sim_data, params_pool = pmm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
         pmm_sch[self.name] = pmm.get_schedule(timeline)
 
@@ -209,22 +232,26 @@ class Portfolio(BaseClass, BaseManager):
         for m_name, m_info in sm_mm_map.get("models", {}).items():
             m_magrs = m_info.get("managers",{})
 
-            msm = m_magrs.get("msm", ModelSystemManager(ModelSystemManagerParams()))
+            msm = m_magrs.get("msm", None)
+            if msm is None: msm = m_magrs['msm'] = ModelSystemManager(ModelSystemManagerParams())
             indicator_pool, sim_data, params_pool = msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
             msm_sch[m_name] = msm.get_schedule(timeline)
 
-            mmm = m_magrs.get("mmm", ModelMoneyManager(ModelMoneyManagerParams()))
+            mmm = m_magrs.get("mmm", None)
+            if mmm is None: mmm = m_magrs['mmm'] = ModelMoneyManager(ModelMoneyManagerParams())
             indicator_pool, sim_data, params_pool = mmm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
             mmm_sch[m_name] = mmm.get_schedule(timeline)
 
             # Strats
             for s_name, s_info in m_info.get("strats", {}).items():
                 s_key = (m_name, s_name)
-                ssm = s_info.get("ssm", StratSystemManager(StratSystemManagerParams()))
+                ssm = s_info.get("ssm", None)
+                if ssm is None: ssm = s_info['ssm'] = StratSystemManager(StratSystemManagerParams())
                 indicator_pool, sim_data, params_pool = ssm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
                 ssm_sch[s_key] = ssm.get_schedule(timeline)
 
-                smm = s_info.get("smm", StratSystemManager(StratSystemManagerParams()))
+                smm = s_info.get("smm", None)
+                if smm is None: smm = s_info['smm'] = StratSystemManager(StratSystemManagerParams())
                 indicator_pool, sim_data, params_pool = smm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
                 smm_sch[s_key] = smm.get_schedule(timeline)
 
@@ -639,8 +666,6 @@ if __name__ == "__main__":
         name="Portfolio_Test",
         portfolio_data=portfolio_data,
         portfolio_parameters=portfolio_global_parameters,
-        portfolio_money_manager=pmm,
-        portfolio_system_manager=psm,
         sm_mm_map=sm_mm_map,  
     ))
 
