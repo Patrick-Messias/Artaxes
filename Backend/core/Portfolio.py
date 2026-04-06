@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 from PortfolioSystemManager import PortfolioSystemManager
 from PortfolioMoneyManager import PortfolioMoneyManager
+from BaseClass import BaseClass, BaseManager
 from Storage import Storage
 from Asset import Asset
 import polars as pl, uuid, sys
@@ -28,7 +29,7 @@ class PortfolioParams():
 
     datetime_timeline: set=field(default_factory=set)
 
-class Portfolio(): 
+class Portfolio(BaseClass, BaseManager): 
     def __init__(self, portfolio_params: PortfolioParams):
         self.name = portfolio_params.name
         self.portfolio_data = portfolio_params.portfolio_data
@@ -119,7 +120,7 @@ class Portfolio():
             #||=====================================================================================||#
             
             # E - Updates Money Managers - Top Down - at [i] ends - Strategic Level
-            hierarchy = self._money_managers(step_dt, hierarchy)
+            hierarchy = self._money_managers(step_dt, hierarchy, pmm_sch, mmm_sch, smm_sch)
 
             #||=====================================================================================||#
 
@@ -136,22 +137,25 @@ class Portfolio():
     # ── Portfolio Defs ───────────────────────────────────────────────
 
     def _system_managers(self, dt, hierarchy, psm_sch, msm_sch, ssm_sch):
-        for o_name, o_obj in self._iter_portfolio_data():
+        for o_name, o_obj, *_ in self._iter_portfolio_data():
             if dt in psm_sch and self.portfolio_system_manager:
-                op_key = (o_name)
-                op_data = self.sim_data[:dt][op_key]
-                hierarchy = self.portfolio_system_manager.main(hierarchy, op_data, self.portfolio_returns)
+                operation_key = (o_name)
+                df = self.sim_data[operation_key]
+                operation_data = df.filter(pl.col("datetime") <= dt)
+                hierarchy = self.portfolio_system_manager.main(hierarchy, operation_data, self.portfolio_returns)
 
             for m_name, m_obj in o_obj.items():
                 if dt in msm_sch and m_obj.model_system_manager:
-                    mod_key = (o_name, m_name)
-                    mod_data = self.sim_data[:dt][mod_key]
-                    hierarchy = m_obj.model_system_manager.main(hierarchy, mod_data, self.portfolio_returns)
+                    model_key = (o_name, m_name)
+                    df = self.sim_data[model_key]
+                    model_data = df.filter(pl.col("datetime") <= dt)
+                    hierarchy = m_obj.model_system_manager.main(hierarchy, model_data, self.portfolio_returns)
 
                 for s_name, s_obj in m_obj.items():
                     if dt in ssm_sch.get((m_name, s_name)) and s_obj.strat_system_manager:
                         strat_key = (o_name, m_name, s_name)
-                        strat_data = self.sim_data[:dt][strat_key]
+                        df = self.sim_data[strat_key]
+                        strat_data = df.filter(pl.col("datetime") <= dt)
                         hierarchy = s_obj.strat_system_manager.main(hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy    
@@ -159,25 +163,25 @@ class Portfolio():
     def _money_managers(self, dt, hierarchy, pmm_sch, mmm_sch, smm_sch): # Updates self.sim_data enside each MM
         # NOTE Deve calcular o lote baseado no pnl_matrix, weight (cap alocado) e metadado do asset
         # Pode usar dados de [:i] para calcular para i+1 (prox iter) para evitar leakage
-        for o_name, o_obj in self._iter_portfolio_data():
-            operation_key = (o_name)
-            operation_data = self.sim_data[:dt][operation_key]
-
+        for o_name, o_obj, *_ in self._iter_portfolio_data():
             if dt in pmm_sch and self.portfolio_money_manager:
+                operation_key = (o_name)
+                df = self.sim_data[operation_key]
+                operation_data = df.filter(pl.col("datetime") <= dt)
                 self.sim_data, hierarchy = self.portfolio_money_manager.calculate_model_position_sizes(hierarchy, operation_data, self.portfolio_returns)
 
             for m_name, m_obj in o_obj.items():
-                model_key = (o_name, m_name)
-                model_data = self.sim_data[:dt][model_key]
-
                 if dt in mmm_sch and m_obj.model_money_manager:
+                    model_key = (o_name, m_name)
+                    df = self.sim_data[model_key]
+                    model_data = df.filter(pl.col("datetime") <= dt)
                     self.sim_data, hierarchy = m_obj.model_money_manager.calculate_asset_strat_position_sizes(hierarchy, model_data, self.portfolio_returns)
 
                 for s_name, s_obj in m_obj.items():
-                    strat_key = (o_name, m_name, s_name)
-                    strat_data = self.sim_data[:dt][strat_key]
-
                     if dt in smm_sch.get((m_name, s_name)) and s_obj.strat_money_manager:
+                        strat_key = (o_name, m_name, s_name)
+                        df = self.sim_data[strat_key]
+                        strat_data = df.filter(pl.col("datetime") <= dt)
                         self.sim_data, hierarchy = s_obj.strat_money_manager.calculate_trade_position_sizes(hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy  
@@ -187,61 +191,42 @@ class Portfolio():
         timeline = self.datetime_timeline
 
         # Adds Long/Short differently
-        if aggr_models_ret is not None:
-            aggr_models_ret = self.separate_long_short_returns(aggr_models_ret)
-        if aggr_strats_ret is not None:
-            aggr_strats_ret = self.separate_long_short_returns(aggr_strats_ret)
-        if aggr_assets_ret is not None:
-            aggr_assets_ret = self.separate_long_short_returns(aggr_assets_ret)
+        aggr_models_ret = BaseClass.separate_long_short_returns(aggr_models_ret) #type: ignore
+        aggr_strats_ret = BaseClass.separate_long_short_returns(aggr_strats_ret) #type: ignore
+        aggr_assets_ret = BaseClass.separate_long_short_returns(aggr_assets_ret) #type: ignore
 
         # Portfolio
-        psm = self.portfolio_system_manager or PortfolioSystemManager(PortfolioSystemManagerParams())
-        if psm:
-            indicator_pool, sim_data, params_pool = psm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
-            psm_sch[self.name] = psm.get_schedule(timeline)
+        p_magrs = sm_mm_map.get("managers", {})
+        psm = p_magrs.get("psm", PortfolioSystemManager(PortfolioSystemManagerParams()))
+        indicator_pool, sim_data, params_pool = psm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
+        psm_sch[self.name] = psm.get_schedule(timeline)
             
-        pmm = self.portfolio_money_manager or PortfolioMoneyManager(PortfolioMoneyManagerParams())
-        if pmm:
-            indicator_pool, sim_data, params_pool = pmm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
-            pmm_sch[self.name] = pmm.get_schedule(timeline)
+        pmm = p_magrs.get("pmm", PortfolioSystemManager(PortfolioSystemManagerParams()))
+        indicator_pool, sim_data, params_pool = pmm.pre_compute(global_assets, timeline, sim_data, aggr_models_ret, indicator_pool)
+        pmm_sch[self.name] = pmm.get_schedule(timeline)
 
+        # Models
+        for m_name, m_info in sm_mm_map.get("models", {}).items():
+            m_magrs = m_info.get("managers",{})
 
-        # Próximos Passos:
-        # Como separar entre LONG e SHORT? adicionar separação para cada nível! 
-        # Adicionar date_start/end para puxar assets para indicadores onde -> [date_start+lenght : date_end] assim tendo mais resultados OU MELHOR DEIXANDO CALCULAR SOBRE TODO E FILTRAR PARA DATETIME?
+            msm = m_magrs.get("msm", ModelSystemManager(ModelSystemManagerParams()))
+            indicator_pool, sim_data, params_pool = msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
+            msm_sch[m_name] = msm.get_schedule(timeline)
 
+            mmm = m_magrs.get("mmm", ModelMoneyManager(ModelMoneyManagerParams()))
+            indicator_pool, sim_data, params_pool = mmm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
+            mmm_sch[m_name] = mmm.get_schedule(timeline)
 
-        for _, _, m_name, m_obj, *_ in self._iter_portfolio_data():
-            msm = m_obj.model_system_manager() or ModelSystemManager(ModelSystemManagerParams())
-            if msm:
-                indicator_pool, sim_data, params_pool = msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
-                msm_sch[m_name] = msm.get_schedule(timeline)
-
-            mmm = m_obj.model_money_manager() or ModelMoneyManager(ModelMoneyManagerParams())
-            if mmm:
-                indicator_pool, sim_data, params_pool = msm.pre_compute(global_assets, timeline, sim_data, aggr_strats_ret, indicator_pool)
-                mmm_sch[m_name] = msm.get_schedule(timeline)
-
-            for s_name, s_obj in m_obj.strats.items():
+            # Strats
+            for s_name, s_info in m_info.get("strats", {}).items():
                 s_key = (m_name, s_name)
-                ssm = s_obj.strat_system_manager or StratSystemManager(StratSystemManagerParams())
-                if ssm:
-                    indicator_pool, sim_data, params_pool = ssm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
-                    ssm_sch[s_key] = ssm.get_schedule(timeline)
+                ssm = s_info.get("ssm", StratSystemManager(StratSystemManagerParams()))
+                indicator_pool, sim_data, params_pool = ssm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
+                ssm_sch[s_key] = ssm.get_schedule(timeline)
 
-                smm = s_obj.strat_money_manager or StratMoneyManager(StratMoneyManagerParams())
-                if smm:
-                    indicator_pool, sim_data, params_pool = smm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
-                    smm_sch[s_key] = smm.get_schedule(timeline)
-
-        # # Exemplo para o Strat System Manager no ponto D
-        # for s_name, s_obj in m_obj.items():
-        #     s_key = (m_name, s_name)
-        #     schedule = ssm_sch.get(s_key)
-            
-        #     # Roda se: schedule é None (sempre) OU o tempo atual está no set
-        #     if schedule is None or step_dt in schedule:
-        #         hierarchy = s_obj.strat_system_manager.main(hierarchy, ...)
+                smm = s_info.get("smm", StratSystemManager(StratSystemManagerParams()))
+                indicator_pool, sim_data, params_pool = smm.pre_compute(global_assets, timeline, sim_data, aggr_assets_ret, indicator_pool)
+                smm_sch[s_key] = smm.get_schedule(timeline)
 
         return indicator_pool, sim_data, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
     
@@ -527,6 +512,12 @@ class Portfolio():
 
     # ──────────────────────────────────────────────────────────────────────────── 
 
+
+    # Próximos Passos:
+    # Como separar entre LONG e SHORT? adicionar separação para cada nível! 
+    # Adicionar date_start/end para puxar assets para indicadores onde -> [date_start+lenght : date_end] assim tendo mais resultados OU MELHOR DEIXANDO CALCULAR SOBRE TODO E FILTRAR PARA DATETIME?
+
+
     def _run(self):
         # Data Init - Uses already uploaded data or loads from drive with Storage.py
         print("     > Populating Portfolio Data from Database")
@@ -585,7 +576,7 @@ if __name__ == "__main__":
         max_capital_exposure=1.0,
         reb_metric="pnl",
         reb_method="fixed",
-        reb_lookback_n=252,
+        reb_lookback=252,
         reb_deviation_func=None,
         params={
             "param1": range(4, 12+1, 4),
@@ -600,8 +591,7 @@ if __name__ == "__main__":
     ))
 
     mmm = ModelMoneyManager(ModelMoneyManagerParams(
-        capital=100_000.0,
-        max_capital_exposure=1.0,
+        capital=100000.0,
     ))
 
     # ── Strat level ───────────────────────────────────────────────────────────
@@ -610,9 +600,7 @@ if __name__ == "__main__":
     ))
 
     smm = StratMoneyManager(StratMoneyManagerParams(
-        sizing_method="neutral",
-        capital_method="fixed",
-        capital=100_000.0,
+        capital=100000.0,
     ))
 
     # ── portfolio_data com SM/MM em cada nível ────────────────────────────────
@@ -632,19 +620,12 @@ if __name__ == "__main__":
 
     # SM/MM mapeados por nível — referenciados durante a simulação
     sm_mm_map = {
-        "portfolio": {
-            "psm": psm,
-            "pmm": pmm,
-        },
+        "managers": {"psm": psm, "pmm": pmm},
         "models": {
             "MA Trend Following": {
-                "msm": msm,
-                "mmm": mmm,
+                "managers": {"msm": msm, "mmm": mmm},
                 "strats": {
-                    "AT15": {
-                        "ssm": ssm,
-                        "smm": smm,
-                    }
+                    "AT15": {"managers": {"ssm": ssm, "smm": smm}}
                 }
             }
         }
@@ -664,6 +645,80 @@ if __name__ == "__main__":
     ))
 
     portfolio._run()
+
+    """
+    DEFAULT
+    Portofolio
+    SM: Rankear com EWPCA (aggr dos models) para definir PC1 e PC2
+
+        LONG_SHORT_FACTOR = 0.5 # Balanced by default
+    MM: Divide capital entre modelos usando o peso do SM
+        (tf1 = 0.3 a 0.6 | mr1 = 0.3 a 0.6 | sn1 = 0.4)
+    
+    Models (Trend_Following_1, Mean_Reversion_1 e Seasonality_1)
+    SM: RRG and Correlation
+    MM: 
+
+    DEFAULT
+
+    Portfolio SM: EWPCA → RRG+Hurst sobre aggr_models_ret
+        LONG_trend          = (RRG_PC1 == ('Improving or 'Leading'))    & (Hurst_PC1 > 0.5)
+        LONG_reversion      = (RRG_PC2 == 'Lagging')                    & (Hurst_PC2 < 0.5)
+        SHORT_trend         = (RRG_PC1 == ('Lagging' or 'Weakening'))   & (Hurst_PC1 > 0.5)
+        SHORT_reversion     = (RRG_PC2 == 'Weakening')                  & (Hurst_PC2 < 0.5)
+        LONG_SHORT_FACTOR: dinâmico via RRG ou fixo pelo usuário (0.5 default)
+
+    Portfolio MM: normaliza scores → peso por model
+        capital_model = capital_total * peso_model * LONG_SHORT_FACTOR(lado)
+        bounds: min=0.1, max=0.6 por model
+
+    ────────────────────────────────────────────
+    Model SM: Sharpe rolling + correlação entre strats
+        score_strat = sharpe_rolling(lookback) * (1 - avg_corr)
+        score_asset = sharpe_rolling(lookback) * (1 * avg_corr)
+        LONG_SHORT_FACTOR herdado do Portfolio, ajustado pelo long_ratio do param_set
+
+    Model MM: normaliza scores → peso por strat
+        capital_strat = capital_model * peso_strat
+        bounds: min=0.05, max=0.5 por strat
+
+    ────────────────────────────────────────────
+    Strat SM: Walkforward (já implementado)
+        seleciona param_set com maior lucro
+        long_ratio calculado do lot_matrix histórico
+
+    Strat MM: StratMoneyManager (já implementado)
+        sizing por trade baseado em capital_strat alocado pelo MMM
+
+    DEFAULT
+
+    Portfolio SM: EWPCA → RRG+Hurst sobre aggr_models_ret
+        scores: LONG_trend, LONG_reversion, SHORT_trend, SHORT_reversion
+        LONG_SHORT_FACTOR: dinâmico via RRG ou fixo pelo usuário (0.5 default)
+
+    Portfolio MM: normaliza scores → peso por model
+        capital_model = capital_total * peso_model * LONG_SHORT_FACTOR(lado)
+        bounds: min=0.1, max=0.6 por model
+
+    ────────────────────────────────────────────
+    Model SM: Sharpe rolling + correlação entre strats
+        score_strat = sharpe_rolling(lookback) * (1 - avg_corr)
+        LONG_SHORT_FACTOR herdado do Portfolio, ajustado pelo long_ratio do param_set
+
+    Model MM: normaliza scores → peso por strat
+        capital_strat = capital_model * peso_strat
+        bounds: min=0.05, max=0.5 por strat
+
+    ────────────────────────────────────────────
+    Strat SM: Walkforward (já implementado)
+        seleciona param_set ou wf_id pelo IS/OOS
+        long_ratio calculado do lot_matrix histórico
+
+    Strat MM: StratMoneyManager (já implementado)
+        sizing por trade baseado em capital_strat alocado pelo MMM
+
+    """
+
 
 
     """

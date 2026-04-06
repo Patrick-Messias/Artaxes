@@ -18,13 +18,6 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Only rebalance if (ex: Portfolio std deviated "x" std from mean)
     reb_closes_open_trades_on_rebalance: bool = False # NOTE add this only to StratSystemManager
 
-    # Plugin functions for custom model hierarchy rules and rebalancing logic
-    fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
-    fn_rank:            Optional[Callable] = None   # (context: dict) -> Dict[str, float]
-    fn_filter:          Optional[Callable] = None   # (context: dict) -> List[str]
-    fn_rebalance:       Optional[Callable] = None   # (context: dict) -> List[str]
-    fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
-
 class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarchy 
     def __init__(self, psm_params: PortfolioSystemManagerParams):
         super().__init__(psm_params)
@@ -34,13 +27,6 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         self.max_active_models                  = psm_params.max_active_models
         self.reb_method                         = psm_params.reb_method
         self.reb_closes_open_trades_on_rebalance = psm_params.reb_closes_open_trades_on_rebalance
-
-        # Funções plugáveis — usa custom se passado, senão usa default interno
-        self._fn_pre_compute    = psm_params.fn_pre_compute
-        self._fn_rank           = psm_params.fn_rank
-        self._fn_filter         = psm_params.fn_filter
-        self._fn_rebalance      = psm_params.fn_rebalance
-        self._fn_main           = psm_params.fn_main
 
         self._pre_cache: Dict = {}   # Metrics and Indicators
         # self._pre_cache = {

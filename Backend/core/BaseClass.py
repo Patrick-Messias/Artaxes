@@ -70,6 +70,24 @@ class BaseClass():
                 eff[k] = v
         return eff
     
+    @staticmethod
+    def separate_long_short_returns(df: pl.DataFrame) -> pl.DataFrame:
+        # df needs at least: 'datetime', 'return', 'lot'
+        
+        # If dict with DataFrames
+        if isinstance(df, dict):
+            return {k: BaseClass.separate_long_short_returns(v) for k, v in df.items()}
+        
+        if isinstance(df, pl.DataFrame):
+            if "lot" not in df.columns: 
+                return df
+            
+            return df.with_columns([
+                pl.when(pl.col("lot") > 0).then(pl.col("return")).otherwise(0.0).alias("long_return"),
+                pl.when(pl.col("lot") < 0).then(pl.col("return")).otherwise(0.0).alias("short_return"),
+                pl.when(pl.col("lot") > 0).then(1).when(pl.col("lot") < 0).then(-1).otherwise(0).alias("position_direction")
+            ])
+        return df
 
 @dataclass
 class BaseManager():
@@ -341,33 +359,6 @@ class BaseManager():
             schedule_set.add(timeline[0])
 
         return schedule_set
-
-    @staticmethod
-    def separate_long_short_returns(self, df: pl.DataFrame) -> pl.DataFrame:
-        # df needs at least: 'datetime', 'return', 'lot'
-
-        if "lot" not in df.columns: return df
-        
-        return df.with_columns([
-            # 🟢 Long Returns
-            pl.when(pl.col("lot") > 0)
-            .then(pl.col("return"))
-            .otherwise(0.0)
-            .alias("long_return"),
-            
-            # 🔴 Short Returns
-            pl.when(pl.col("lot") < 0)
-            .then(pl.col("return"))
-            .otherwise(0.0)
-            .alias("short_return"),
-            
-            # 📊 Exposure direction
-            pl.when(pl.col("lot") > 0).then(1)
-            .when(pl.col("lot") < 0).then(-1)
-            .otherwise(0)
-            .alias("position_direction")
-        ])
-    
 
     #||=========================================================================================||
 

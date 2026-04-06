@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from SystemManager import SystemManager, SystemManagerParams
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict, List
 
 @dataclass
 class StratSystemManagerParams(SystemManagerParams):
@@ -9,43 +9,78 @@ class StratSystemManagerParams(SystemManagerParams):
     strat_lookback_n: int = 1
     close_open_trades_on_rebalance: bool = False
 
-    # Plugin functions for custom model hierarchy rules and rebalancing logic
-    fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
-    fn_rank:            Optional[Callable] = None   # (context: dict) -> Dict[str, float]
-    fn_filter:          Optional[Callable] = None   # (context: dict) -> List[str]
-    fn_rebalance:       Optional[Callable] = None   # (context: dict) -> List[str]
-    fn_should_execute:  Optional[Callable] = None   # (model_name: str, context: dict) -> bool
-
 class StratSystemManager(SystemManager): 
-    def __init__(self, sm_params: SystemManagerParams):
-        super().__init__(sm_params) 
+    def __init__(self, ssm_params: SystemManagerParams):
+        super().__init__(ssm_params) 
         
-        self.strat_hierarchy = dict(sm_params.strat_hierarchy)
-        self.rebalance_frequency = sm_params.rebalance_frequency
-        self.strat_lookback_n = sm_params.strat_lookback_n
-        self.close_open_trades_on_rebalance = sm_params.close_open_trades_on_rebalance
+        self.strat_hierarchy = dict(ssm_params.strat_hierarchy)
+        self.rebalance_frequency = ssm_params.rebalance_frequency
+        self.strat_lookback_n = ssm_params.strat_lookback_n
+        self.close_open_trades_on_rebalance = ssm_params.close_open_trades_on_rebalance
 
-        self._fn_pre_compute    = sm_params.fn_pre_compute
-        self._fn_rank           = sm_params.fn_rank
-        self._fn_filter         = sm_params.fn_filter
-        self._fn_rebalance      = sm_params.fn_rebalance
-        self._fn_should_execute = sm_params.fn_should_execute
+#||=========================================================================================||
 
+    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
 
-    def balance(self, strat_data): 
-        return self._call(self._fn_rebalance, self._default_rebalance, strat_data)
+        # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
+        
+        return indicator_pool, sim_data
+                       
+    def _default_rank(self, context: dict) -> Dict[str, float]:
+        history  = context.get("history", {})
+        lookback = self.reb_lookback_n
+        scores   = {}
 
-    def _default_rebalance(self, strat_data): # Updates the hierarchy of the strat enside the model
+        for model, df in history.items():
+            if df.is_empty():
+                scores[model] = -float("inf")
+                continue
+            tail = df.tail(lookback)["pnl"]
+            if self.reb_metric == "sharpe":
+                scores[model] = float(tail.mean() / (tail.std() + 1e-9))
+            elif self.reb_metric == "pnl_dd":
+                eq  = tail.cum_sum()
+                dd  = float((eq.cum_max() - eq).max() + 1e-9)
+                scores[model] = float(tail.sum()) / dd
+            else:  # pnl
+                scores[model] = float(tail.sum())
 
-        # Checks pma_rules on how to rebalance
+        return scores
 
-        # Analyses current hierarchy and models performance based on rebalancing rules
+    def _default_filter(self, context: dict) -> List[str]:
+        models = context.get("models", []) 
+        return models # By default doesn't filter out any model
 
-        # Updates hierachy
+    def _default_rebalance(self, context: dict) -> List[str]:
+        scores = self.rank(context)
+        context["scores"] = scores
 
-        return None
+        passed = self.filter(context)
+        descending = self.model_hierarchy.get("order_by", "highest") == "highest"
+        ranked = sorted(passed, key=lambda m: scores.get(m, -float("inf")), reverse=descending)
 
+        if self.max_active_models:
+            ranked = ranked[:self.max_active_models]
 
+        self._active_models = ranked
+        return ranked
+
+    # ── Every Datetime [i] ───────────────────────────────────────────────
+
+    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+        # Called every datetime for each model and asset
+        # Returns True if model can operate now
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
+    
+    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+
+        # Calculates Live Indicators
+
+        # Rebalances
+
+        return hierarchy
+
+#||=========================================================================================||
 
 
 

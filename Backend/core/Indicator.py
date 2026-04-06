@@ -1,6 +1,13 @@
 import polars as pl
 from typing import Literal
 
+"""
+Refazer para:
+calculate_single: Lógica pura, com 1 set de dado
+calculate: Itera sobre data com rolling e chama calculate_single
+calculate_param_sets: Itera sobre cada parset e chama calculate
+"""
+
 class Indicator:
     def __init__(self, asset: str = None, timeframe: str = None, when: Literal["pre", "live"]="pre", **params):
         self.asset = asset

@@ -9,7 +9,7 @@ PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio
 
 import polars as pl
 import uuid
-from typing import Literal, Dict, Optional, List
+from typing import Literal, Dict, Optional, Callable, List
 from dataclasses import dataclass, field
 from Indicator import Indicator
 from BaseClass import BaseClass, BaseManager
@@ -23,7 +23,7 @@ class MoneyManagerParams:
     
     reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
     reb_lookback: int=252 # If len < lookback then [:idx]
-    reb_lookback_period_type: Literal["tick", "day", "week", "month", "year"] # 252 what? ticks, days?
+    reb_lookback_period_type: Literal["tick", "day", "week", "month", "year"]="day" # 252 what? ticks, days?
  
     # Dados externos para MM (Ex: volatilidade do mercado, regime de juros)
     # Agora usa Polars DataFrame
@@ -34,6 +34,13 @@ class MoneyManagerParams:
     
     # Indicadores específicos para balanceamento de ativos/modelos
     indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict) 
+
+    # Plugin functions for custom model hierarchy rules and rebalancing logic
+    fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
+    fn_allocate:        Optional[Callable] = None   # (context: dict) -> Dict[str, float]
+    fn_size:            Optional[Callable] = None   # (context: dict) -> List[str]
+    fn_risk_guard:      Optional[Callable] = None   # (context: dict) -> List[str]
+    fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
 
 class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
     def __init__(self, mm_params: MoneyManagerParams):
@@ -48,8 +55,21 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         self.params = mm_params.params
         self.indicators = mm_params.indicators
 
+        # Funções plugáveis — usa custom se passado, senão usa default interno
+        self._fn_pre_compute    = mm_params.fn_pre_compute
+        self._fn_allocate       = mm_params.fn_allocate
+        self._fn_size           = mm_params.fn_size
+        self._fn_risk_guard     = mm_params.fn_risk_guard
+        self._fn_main           = mm_params.fn_main
+
     # ── SM Rebalance Func ───────────────────────────────────────────────────────
 
+    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
+
+        # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
+        
+        return indicator_pool, sim_data
+            
     def allocate(self, context: dict) -> Dict[str, float]:
         # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
         return self._call(self._fn_allocate, self._default_allocate, context)
@@ -63,6 +83,21 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         # Orchestrates rank -> filter -> selection
         # Returns ordered list of active models
         return self._call(self._fn_risk_guard, self._default_risk_guard, context)
+
+    # ── Every Datetime [i] ───────────────────────────────────────────────
+
+    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+        # Called every datetime for each model and asset
+        # Returns True if model can operate now
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
+    
+    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+
+        # Calculates Live Indicators
+
+        # Rebalances
+
+        return hierarchy
 
     #||=========================================================================================||
 

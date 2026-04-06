@@ -8,7 +8,7 @@ Atua sobre os níveis superiores (controla quem “fala” com o PMM e o TM).
 """
 
 import polars as pl, uuid
-from typing import Literal, Dict, Set, Optional, List
+from typing import Literal, Set, Dict, Optional, Callable, List
 from dataclasses import dataclass, field
 from Indicator import Indicator
 from BaseClass import BaseClass, BaseManager
@@ -19,7 +19,7 @@ class SystemManagerParams:
 
     reb_frequency: Literal["tick", "daily", "weekly", "monthly", "yearly", "never"] = "weekly"
     reb_lookback: int=252 # If len < lookback then [:idx]
-    reb_lookback_period_type: Literal["tick", "day", "week", "month", "year"] # 252 what? ticks, days?
+    reb_lookback_period_type: Literal["tick", "day", "week", "month", "year"]="day" # 252 what? ticks, days?
     
     # Dados externos para o System Manager (Ex: Calendário Econômico, Sentimento, CDT)
     # Migrado para usar dicionário de Polars DataFrames
@@ -31,6 +31,12 @@ class SystemManagerParams:
     # Indicadores administrativos (Ex: Medidores de Regime de Mercado)
     indicators: Optional[Dict[str, Indicator]] = field(default_factory=dict)
     
+    # Plugin functions for custom model hierarchy rules and rebalancing logic
+    fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
+    fn_rank:            Optional[Callable] = None   # (context: dict) -> Dict[str, float]
+    fn_filter:          Optional[Callable] = None   # (context: dict) -> List[str]
+    fn_rebalance:       Optional[Callable] = None   # (context: dict) -> List[str]
+    fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
 
 class SystemManager(BaseClass, BaseManager): 
     def __init__(self, sm_params: SystemManagerParams):
@@ -44,6 +50,13 @@ class SystemManager(BaseClass, BaseManager):
         self.assets = sm_params.assets
         self.params = sm_params.params
         self.indicators = sm_params.indicators
+
+        # Funções plugáveis — usa custom se passado, senão usa default interno
+        self._fn_pre_compute    = sm_params.fn_pre_compute
+        self._fn_rank           = sm_params.fn_rank
+        self._fn_filter         = sm_params.fn_filter
+        self._fn_rebalance      = sm_params.fn_rebalance
+        self._fn_main           = sm_params.fn_main
 
 #||=========================================================================================||
 

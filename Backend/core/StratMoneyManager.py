@@ -147,109 +147,36 @@ class StratMoneyManager(MoneyManager):
  
         return base
  
-    # ─────────────────────────────────────────────────────────────────────────
-    # Interface Portfolio Simulator — escalar com capital externo
-    # ─────────────────────────────────────────────────────────────────────────
- 
-    def calculate_strat_position_sizes(self, strat_data):
-        return None
+#||=========================================================================================||
 
-    def calc_lot_size(
-        self,
-        capital:           float,
-        price:             float,
-        dist_price:        float = 0.0,   # distância em preço (ATR, SL, etc.)
-        asset=None,
-        trades:            Optional[List] = None,
-        cumulative_profit: float = 0.0,   # lucro acumulado em $ para compound
-    ) -> float:
-        """
-        Calcula lot_size escalar para Portfolio Simulator.
-        Recebe capital externo de MMM/PMM.
-        Aplica capital_method antes do sizing.
-        Arredondamento via min_lot/lot_step fica no Portfolio Simulator.
-        """
-        capital_base = self._apply_capital_method(capital, cumulative_profit)
- 
-        m            = self.sizing_method
-        p            = self.sizing_params
-        tick         = getattr(asset, 'tick',         0.01) if asset else 0.01
-        tick_fin_val = getattr(asset, 'tick_fin_val', 1.0)  if asset else 1.0
- 
-        if m == "neutral":
-            return 1.0
- 
-        if m == "fixed":
-            return float(p.get("fixed_lot", 1.0))
- 
-        if m == "risk_per_trade":
-            # Prioridade: dist_price arg → dist_fixed → tick
-            dist       = dist_price if dist_price > 0.0 else (self.dist_fixed or tick)
-            dist_ticks = dist / tick
-            if dist_ticks <= 0.0: return 1.0
-            return (capital_base * p.get("risk_pct", 0.01)) / (dist_ticks * tick_fin_val)
- 
-        if m == "pct_capital":
-            if price <= 0.0 or tick_fin_val <= 0.0: return 1.0
-            return (capital_base * p.get("pct", 0.02)) / (price * tick_fin_val)
- 
-        if m == "kelly":
-            return self._calc_kelly(capital_base, price, tick_fin_val, trades, p)
- 
-        if m == "var":
-            return self._calc_var_lot(capital_base, price, tick_fin_val, trades, p)
- 
-        if m == "signal":
-            return 1.0  # Portfolio Sim sem série → neutro
- 
-        return 1.0
- 
-    # ─────────────────────────────────────────────────────────────────────────
-    # Internos
-    # ─────────────────────────────────────────────────────────────────────────
- 
-    def _apply_capital_method(self, capital: float, cumulative_profit: float) -> float:
-        """
-        "fixed"    → capital constante
-        "compound" → capital + cumulative_profit × compound_fract
-                     cumulative_profit deve ser em $ no Portfolio Simulator
-        """
-        if self.capital_method == "fixed":
-            return capital
-        # compound
-        return capital + cumulative_profit * self.compound_fract
- 
-    def _calc_kelly(self, capital: float, price: float, tick_fin_val: float,
-                    trades: Optional[List], p: dict) -> float:
-        min_trades = int(p.get("min_trades", 30))
-        if not trades or len(trades) < min_trades:
-            return 1.0
-        wins   = [t for t in trades if t.profit > 0]
-        losses = [t for t in trades if t.profit <= 0]
-        if not wins or not losses:
-            return 1.0
-        win_rate = len(wins) / len(trades)
-        avg_win  = sum(t.profit for t in wins)       / len(wins)
-        avg_loss = abs(sum(t.profit for t in losses) / len(losses))
-        b        = avg_win / avg_loss
-        kelly_f  = max(0.0, (win_rate * b - (1 - win_rate)) / b)
-        kelly_f *= p.get("kelly_weight", 0.25)
-        return (capital * kelly_f) / (price * tick_fin_val)
- 
-    def _calc_var_lot(self, capital: float, price: float, tick_fin_val: float,
-                      trades: Optional[List], p: dict) -> float:
-        min_trades = int(p.get("min_trades", 30))
-        if not trades or len(trades) < min_trades:
-            return 1.0
-        returns = np.array([t.profit for t in trades], dtype=np.float64)
-        conf    = p.get("var_confidence", 0.95)
-        var     = float(np.percentile(returns, (1 - conf) * 100))
-        if var >= 0:
-            return 1.0
-        return (capital * p.get("risk_pct", 0.01)) / (abs(var) * tick_fin_val)
- 
-    def __repr__(self):
-        return (f"<StratMoneyManager sizing={self.sizing_method} "
-                f"capital_method={self.capital_method} "
-                f"compound_fract={self.compound_fract} "
-                f"capital={self.capital}>")
+    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
+
+        # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
+        
+        return indicator_pool, sim_data
+          
+    def _default_allocate(self):
+        pass
+
+    def _default_size(self):
+        pass
+
+    def _default_risk_guard(self):
+        pass
+
+    # ── Every Datetime [i] ───────────────────────────────────────────────
+
+    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+        # Called every datetime for each model and asset
+        # Returns True if model can operate now
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
+    
+    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+
+        # Calculates Live Indicators
+
+        # Rebalances
+
+        return hierarchy
+
+#||=========================================================================================||

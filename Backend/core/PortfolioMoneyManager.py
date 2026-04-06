@@ -14,13 +14,6 @@ class PortfolioMoneyManagerParams(MoneyManagerParams):
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Function that defines the deviation threshold needed for rebalancing (e.g., 5% deviation from target allocation)
 
-    # Plugin functions for custom model hierarchy rules and rebalancing logic
-    fn_pre_compute:     Optional[Callable] = None   # (history: Dict[str, pl.DataFrame]) -> None
-    fn_allocate:        Optional[Callable] = None   # (context: dict) -> Dict[str, float]
-    fn_size:            Optional[Callable] = None   # (context: dict) -> List[str]
-    fn_risk_guard:      Optional[Callable] = None   # (context: dict) -> List[str]
-    fn_main:            Optional[Callable] = None   # (model_name: str, context: dict) -> bool
-
 class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money management
     def __init__(self, pmm_params: PortfolioMoneyManagerParams): # PMM(Portfolio) > MMM(Model) > MMA(Strat)
         super().__init__(pmm_params)
@@ -29,13 +22,6 @@ class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money mana
         self.reb_metric = pmm_params.reb_metric
         self.reb_method = pmm_params.reb_method
         self.reb_deviation_func = pmm_params.reb_deviation_func
-
-        # Funções plugáveis — usa custom se passado, senão usa default interno
-        self._fn_pre_compute    = pmm_params.fn_pre_compute
-        self._fn_allocate       = pmm_params.fn_allocate
-        self._fn_size           = pmm_params.fn_size
-        self._fn_risk_guard     = pmm_params.fn_risk_guard
-        self._fn_main           = pmm_params.fn_main
 
         self._pre_cache: Dict = {}
 
