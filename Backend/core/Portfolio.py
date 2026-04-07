@@ -75,8 +75,6 @@ class Portfolio(BaseClass, BaseManager):
 
         # 2 - Run Timeline
         for i, step_dt in enumerate(self.datetime_timeline):
-            instance = self.sim_data.get(step_dt, {})
-            if not instance: continue
 
             # Init step data
             self.portfolio_returns[step_dt] = {"assets": {}}
@@ -110,21 +108,21 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
             
             # Updates PnL of open positions at [i] ends in previous step
-            update_func_to_use(step_dt, active_positions, instance)
+            #update_func_to_use(step_dt, active_positions)
 
             #||=====================================================================================||#
 
             # Updates System Managers - Top Down - at [i] ends
-            hierarchy = self._system_managers(step_dt, hierarchy, psm_sch, msm_sch, ssm_sch)
+            hierarchy = self._system_managers(i, step_dt, hierarchy, psm_sch, msm_sch, ssm_sch)
 
             #||=====================================================================================||#
             
             # Updates Money Managers - Top Down - at [i] ends - Strategic Level
-            hierarchy = self._money_managers(step_dt, hierarchy, pmm_sch, mmm_sch, smm_sch)
+            hierarchy = self._money_managers(i, step_dt, hierarchy, pmm_sch, mmm_sch, smm_sch)
 
             #||=====================================================================================||#
 
-        print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:..2f}")
+            #print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
 
         return True
 
@@ -136,17 +134,19 @@ class Portfolio(BaseClass, BaseManager):
 
     # ── Portfolio Defs ───────────────────────────────────────────────
 
-    def _system_managers(self, dt, hierarchy, psm_sch, msm_sch, ssm_sch):
-        psm = sm_mm_map.get("managers", {}).get("psm")
+    def _system_managers(self, i, dt, hierarchy, psm_sch, msm_sch, ssm_sch):
 
+        # Portfolio Level
+        psm = sm_mm_map.get("managers", {}).get("psm")
         if psm and dt in psm_sch.get(self.name, []):
-            operation_key = self.name
-            df = self.sim_data.get(operation_key)
+            df = self.sim_data.get(self.name)
 
             if df is not None:
-                operation_data = df.filter(pl.col("datetime") <= dt)
-                hierarchy = psm.main(hierarchy, operation_data, self.portfolio_returns)
+                print("> Rebalancing PSM")
+                operation_data = df.head(i + 1)
+                hierarchy = psm.main(dt, hierarchy, operation_data, self.portfolio_returns)
         
+        # Model and Strat Levels
         for o_name, o_obj, *_ in self._iter_portfolio_data():
             for m_name, m_obj in o_obj.items():
                 msm = sm_mm_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
@@ -156,8 +156,8 @@ class Portfolio(BaseClass, BaseManager):
                     df = self.sim_data.get(model_key)
 
                     if df is not None:
-                        model_data = df.filter(pl.col("datetime") <= dt)
-                        hierarchy = msm.main(hierarchy, model_data, self.portfolio_returns)
+                        model_data = df.head(i+1)
+                        hierarchy = msm.main(dt, hierarchy, model_data, self.portfolio_returns)
 
                 for s_name, _ in m_obj.items():
                     ssm = sm_mm_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
@@ -165,34 +165,36 @@ class Portfolio(BaseClass, BaseManager):
                     if ssm and dt in ssm_sch.get((m_name, s_name), []):
                         strat_key = (o_name, m_name, s_name)
                         df = self.sim_data.get(strat_key)
-                        
+           
                         if df is not None:
-                            strat_data = df.filter(pl.col("datetime") <= dt)
-                            hierarchy = ssm.main(hierarchy, strat_data, self.portfolio_returns)
+                            strat_data = df.head(i + 1)
+                            hierarchy = ssm.main(dt, hierarchy, strat_data, self.portfolio_returns)
         return hierarchy
 
-    def _money_managers(self, dt, hierarchy, pmm_sch, mmm_sch, smm_sch): # Updates self.sim_data enside each MM
-        pmm = sm_mm_map.get("managers", {}).get("pmm")
+    def _money_managers(self, i, dt, hierarchy, pmm_sch, mmm_sch, smm_sch): # Updates self.sim_data enside each MM
 
+        # Portfolio Level
+        pmm = sm_mm_map.get("managers", {}).get("pmm")
         if pmm and dt in pmm_sch.get(self.name, []):
-            operation_key = self.name
-            df = self.sim_data.get(operation_key)
+            df = self.sim_data.get(self.name)
 
             if df is not None:
-                operation_data = df.filter(pl.col("datetime") <= dt)
-                hierarchy = pmm.main(hierarchy, operation_data, self.portfolio_returns)
+                print("> Rebalancing PMM")
+                operation_data = df.head(i + 1)
+                hierarchy = pmm.main(dt, hierarchy, operation_data, self.portfolio_returns)
 
+        # Model and Strat Levels
         for o_name, o_obj, *_ in self._iter_portfolio_data():
             for m_name, m_obj in o_obj.items():
-                mmm = sm_mm_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmmm")
+                mmm = sm_mm_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
                 if mmm and dt in mmm_sch.get(m_name, []):
                     model_key = (o_name, m_name)
                     df = self.sim_data.get(model_key)
 
                     if df is not None:
-                        model_data = df.filter(pl.col("datetime") <= dt)
-                        hierarchy = mmm.main(hierarchy, model_data, self.portfolio_returns)
+                        model_data = df.head(i + 1)
+                        hierarchy = mmm.main(dt, hierarchy, model_data, self.portfolio_returns)
 
                 for s_name, _ in m_obj.items():
                     smm = sm_mm_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
@@ -201,9 +203,9 @@ class Portfolio(BaseClass, BaseManager):
                         strat_key = (o_name, m_name, s_name)
                         df = self.sim_data.get(strat_key)
 
-                    if df is not None:
-                        strat_data = df.filter(pl.col("datetime") <= dt)
-                        hierarchy = smm.main(hierarchy, strat_data, self.portfolio_returns)
+                        if df is not None:
+                            strat_data = df.head(i + 1)
+                            hierarchy = smm.main(dt, hierarchy, strat_data, self.portfolio_returns)
 
         return hierarchy  
 
@@ -257,7 +259,7 @@ class Portfolio(BaseClass, BaseManager):
 
         return indicator_pool, sim_data, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
     
-    def _update_pos_with_backtest_ret(self, step_dt, active_positions, instance):
+    def _update_pos_with_backtest_ret(self, step_dt, active_positions):
         for idf, pos_info in active_positions.items():
             # ifs       = (op, mod, strat, asset)
             # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
@@ -297,98 +299,77 @@ class Portfolio(BaseClass, BaseManager):
             "portfolio_pnl": step_pnl_nominal_total
         }
 
-    def _update_pos_with_assets_ret(self, step_dt, active_positions, instance):
+    def _update_pos_with_assets_ret(self, step_dt, active_positions):
         pass
 
     # ── Data Handling ───────────────────────────────────────────────
 
     def _populate_sim_data(self):
-        # Populates sim_data with a dict where each key is a timestamp, with pnl/lot/wf of each dt
-        # self.sim_data = {
-        #     timestamp: {
-        #         (op, mod, strat, asset): {
-        #             "pnls": { "param_set_1": 0.001, "param_set_2": 0.0 },
-        #             "lots": { "param_set_1": 1.0, "param_set_2": 0.0 },
-        #             "wf": { "best_param": "...", "pnl": 0.0 } # Opcional
-        #         }}}
-
-        aggr_assets_ret, aggr_strats_ret, aggr_models_ret = {}, {}, {}
+        # Clears data and creates aggregated returns dicts
+        self.sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret = {}, {}, {}, {}
+        
+        # Temporary Dict to group strat series by model
+        strat_accumulator, model_accumulator = {}, {}
 
         # Timeline template to make shure it aligns 
         timeline_df = pl.DataFrame({"ts": self.datetime_timeline})
 
-        # Temporary Dict to group strat series by model
-        strat_accumulator, model_accumulator = {}, {}
-
         for o_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
-            key = (o_name, m_name, s_name, a_name)
-            asset_key = (m_name, s_name, a_name)
-            strat_key = (m_name, s_name)
+            asset_key = (o_name, m_name, s_name, a_name)
+            strat_key = (o_name, m_name, s_name)
             
-            pnl_df = a_obj.get("pnl_matrix")
-            lot_df = a_obj.get("lot_matrix")
-            wf_df  = a_obj.get("wf")
-
             # Vectorized Asset Aggregation
+            pnl_df = a_obj.get("pnl_matrix")
             if pnl_df is not None:
-                param_cols = [c for c in pnl_df.columns if c != "ts"]
+                # Aligns and fixes missing dates
+                aligned_pnl = timeline_df.join(pnl_df, on="ts", how="left").fill_null(0.0)
 
-                # Join garantees that assets with missing date stay aligned to datetime
-                agg_pnl = timeline_df.join(pnl_df, on="ts", how="left").fill_null(0.0)
-                asset_series = agg_pnl.select(pl.mean_horizontal(param_cols)).to_series()
+                # Stores complete matrix on sim_data
+                self.sim_data[asset_key] = aligned_pnl
 
-                aggr_assets_ret[asset_key] = asset_series
+                # Calculates horizontal lines (avg performance across all parsets)
+                param_cols = [c for c in aligned_pnl.columns if c != "ts"]
+                asset_mean_series = aligned_pnl.select(pl.mean_horizontal(param_cols)).to_series()
 
-                # Sums to Strategy level
+                aggr_assets_ret[(m_name, s_name, a_name)] = asset_mean_series
+
+                # Accumulates to consolidate Strat level
                 if strat_key not in strat_accumulator:
                     strat_accumulator[strat_key] = []
-                strat_accumulator[strat_key].append(asset_series)
+                strat_accumulator[strat_key].append(asset_mean_series)
 
-        # Populates sim_data (Quick search dict)
-        if pnl_df is not None:
-            for row in pnl_df.iter_rows(named=True):
-                ts = row.pop('ts')
-                if ts not in self.sim_data: self.sim_data[ts] = {}
-                if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
-                self.sim_data[ts][key]["pnls"] = row
-                
-        if lot_df is not None:
-            for row in lot_df.iter_rows(named=True):
-                ts = row.pop('ts')
-                if ts not in self.sim_data: self.sim_data[ts] = {}
-                if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
-                self.sim_data[ts][key]["lots"] = row
+        # Hierarchical Consolidation (Strategy -> Model -> Operation)
+        aggr_strats_ret = {}
+        for s_key, list_series in strat_accumulator.items():
+            # Creates a DataFrame with the average of all Strat assets
+            strat_df = pl.DataFrame(list_series)
+            strat_mean_series = strat_df.select(pl.mean_horizontal(pl.all())).to_series()
 
-        if wf_df is not None:
-            for row in wf_df.iter_rows(named=True):
-                ts = row['datetime']
-                if ts not in self.sim_data: self.sim_data[ts] = {}
-                if key not in self.sim_data[ts]: self.sim_data[ts][key] = {}
-                if "wf_pnls" not in self.sim_data[ts][key]:
-                    self.sim_data[ts][key]["wf_pnls"] = {}
-                    self.sim_data[ts][key]["wf_params"] = {}
-                
-                w_id = row["wf_id"]
-                self.sim_data[ts][key]["wf_pnls"][w_id] = row["pnl"]
-                self.sim_data[ts][key]["wf_params"][w_id] = row["best_param"]
-     
-        # 3. Final Hierarchical Consolidation
-        # Consolidates Strats (Avg of Assets)
-        for s_k, list_of_asset_series in strat_accumulator.items():
-            strat_df = pl.DataFrame(list_of_asset_series)
-            final_strat_series = strat_df.select(pl.mean_horizontal(pl.all())).to_series()
-            aggr_strats_ret[s_k] = final_strat_series
+            aggr_strats_ret[(s_key[1], s_key[2])] = strat_mean_series
+            self.sim_data[s_key] = pl.DataFrame({"ts": self.datetime_timeline, "pnl": strat_mean_series})
 
-            # Feeds Models accumulator
-            m_n = s_k[0]
-            if m_n not in model_accumulator:
-                model_accumulator[m_n] = []
-            model_accumulator[m_n].append(final_strat_series)
+            # Accumulates to Model level
+            m_key = (s_key[0], s_key[1])
+            if m_key not in model_accumulator:
+                model_accumulator[m_key] = []
+            model_accumulator[m_key].append(strat_mean_series)
 
-        # Consolidates Models
-        for m_n, list_of_strat_series in model_accumulator.items():
-            model_df = pl.DataFrame(list_of_strat_series)
-            aggr_models_ret[m_n] = model_df.select(pl.mean_horizontal(pl.all())).to_series()
+        aggr_models_ret = {}
+        op_accumulator = []
+        for m_key, list_series in model_accumulator.items():
+            model_df = pl.DataFrame(list_series)
+            model_mean_series = model_df.select(pl.mean_horizontal(pl.all())).to_series()
+
+            aggr_models_ret[m_key[1]] = model_mean_series
+            self.sim_data[m_key] = pl.DataFrame({"ts": self.datetime_timeline, "pnl": model_mean_series})
+
+            # Operation level
+            op_accumulator.append(model_mean_series)
+
+        if op_accumulator:
+            op_df = pl.DataFrame(list_series)
+            op_mean_series = op_df.select(pl.mean_horizontal(pl.all())).to_series()
+            self.sim_data[self.name] = pl.DataFrame({"datetime": self.datetime_timeline, "pnl": op_mean_series})
 
         return aggr_assets_ret, aggr_strats_ret, aggr_models_ret
 
@@ -601,6 +582,7 @@ if __name__ == "__main__":
     pmm = PortfolioMoneyManager(PortfolioMoneyManagerParams(
         capital=100000.0,
         max_capital_exposure=1.0,
+        reb_frequency="weekly",
         reb_metric="pnl",
         reb_method="fixed",
         reb_lookback=252,
@@ -619,6 +601,7 @@ if __name__ == "__main__":
 
     mmm = ModelMoneyManager(ModelMoneyManagerParams(
         capital=100000.0,
+        reb_frequency="weekly",
     ))
 
     # ── Strat level ───────────────────────────────────────────────────────────
@@ -628,6 +611,7 @@ if __name__ == "__main__":
 
     smm = StratMoneyManager(StratMoneyManagerParams(
         capital=100000.0,
+        reb_frequency="weekly",
     ))
 
     # ── portfolio_data com SM/MM em cada nível ────────────────────────────────
