@@ -1934,6 +1934,14 @@ if __name__ == "__main__":
 # - If Portfolio Simulation then Slippage and Commission on backtest = 0 and calculates on lot_size of Portfolio
 
 # - Rework Trade (Individual trades), pnl_matrix and lot_matrix, trade (holds non variable data) and trade_matrix (holds variable data) both linked by id (trade_id)
+# - Rework Parquet saving, always use "datetime", float32 instead of float64
+
+
+
+
+
+
+
 
 # - Create backend and frontend for results panel
     - Schema DuckDB: Metadata tables + views over all existing parquets

@@ -209,6 +209,8 @@ class Portfolio(BaseClass, BaseManager):
 
         return hierarchy  
 
+
+
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret):
         indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}, {}, {}
         timeline = self.datetime_timeline
@@ -304,82 +306,121 @@ class Portfolio(BaseClass, BaseManager):
 
     # ── Data Handling ───────────────────────────────────────────────
 
-    def _populate_sim_data(self):
-        # Clears data and creates aggregated returns dicts
-        self.sim_data, aggr_assets_ret, aggr_strats_ret, aggr_models_ret = {}, {}, {}, {}
-        
-        # Temporary Dict to group strat series by model
-        strat_accumulator, model_accumulator = {}, {}
+    # Used to pull real data from parquet from selected source
+    def _populate_sim_data(self, key, i, data_type="pnl"):
+        ref = self.sim_data.get(key)
+        if not ref: return None
 
-        # Timeline template to make shure it aligns 
-        timeline_df = pl.DataFrame({"ts": self.datetime_timeline})
+        # Se pediu o Aggr de Strat/Model/Portfolio
+        if ref["type"] == "aggr":
+            return pl.DataFrame({"datetime": self.datetime_timeline[:i+1], "pnl": ref["pnl"].head(i + 1)})
 
-        for o_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
-            asset_key = (o_name, m_name, s_name, a_name)
-            strat_key = (o_name, m_name, s_name)
+        # Se for Nível Asset
+        if ref["type"] == "disk":
+            if data_type == "aggr": # ---> NOVO: Manager querendo rankear ativos
+                return pl.DataFrame({"datetime": self.datetime_timeline[:i+1], "pnl": ref["aggr_pnl"].head(i + 1)})
             
-            # Vectorized Asset Aggregation
-            pnl_df = a_obj.get("pnl_matrix")
-            if pnl_df is not None:
-                # Aligns and fixes missing dates
-                aligned_pnl = timeline_df.join(pnl_df, on="ts", how="left").fill_null(0.0)
+            if data_type == "pnl":  # ---> Manager querendo rodar WF (lê o disco)
+                return pl.read_parquet(ref["pnl_path"]).head(i + 1)
+        return None
 
-                # Stores complete matrix on sim_data
-                self.sim_data[asset_key] = aligned_pnl
 
-                # Calculates horizontal lines (avg performance across all parsets)
-                param_cols = [c for c in aligned_pnl.columns if c != "ts"]
-                asset_mean_series = aligned_pnl.select(pl.mean_horizontal(param_cols)).to_series()
-
-                aggr_assets_ret[(m_name, s_name, a_name)] = asset_mean_series
-
-                # Accumulates to consolidate Strat level
-                if strat_key not in strat_accumulator:
-                    strat_accumulator[strat_key] = []
-                strat_accumulator[strat_key].append(asset_mean_series)
-
-        # Hierarchical Consolidation (Strategy -> Model -> Operation)
-        aggr_strats_ret = {}
-        for s_key, list_series in strat_accumulator.items():
-            # Creates a DataFrame with the average of all Strat assets
-            strat_df = pl.DataFrame(list_series)
-            strat_mean_series = strat_df.select(pl.mean_horizontal(pl.all())).to_series()
-
-            aggr_strats_ret[(s_key[1], s_key[2])] = strat_mean_series
-            self.sim_data[s_key] = pl.DataFrame({"ts": self.datetime_timeline, "pnl": strat_mean_series})
-
-            # Accumulates to Model level
-            m_key = (s_key[0], s_key[1])
-            if m_key not in model_accumulator:
-                model_accumulator[m_key] = []
-            model_accumulator[m_key].append(strat_mean_series)
-
-        aggr_models_ret = {}
-        op_accumulator = []
-        for m_key, list_series in model_accumulator.items():
-            model_df = pl.DataFrame(list_series)
-            model_mean_series = model_df.select(pl.mean_horizontal(pl.all())).to_series()
-
-            aggr_models_ret[m_key[1]] = model_mean_series
-            self.sim_data[m_key] = pl.DataFrame({"ts": self.datetime_timeline, "pnl": model_mean_series})
-
-            # Operation level
-            op_accumulator.append(model_mean_series)
-
-        if op_accumulator:
-            op_df = pl.DataFrame(list_series)
-            op_mean_series = op_df.select(pl.mean_horizontal(pl.all())).to_series()
-            self.sim_data[self.name] = pl.DataFrame({"datetime": self.datetime_timeline, "pnl": op_mean_series})
-
-        return aggr_assets_ret, aggr_strats_ret, aggr_models_ret
-
-    def _load_selected_saved_returns_data(self): # Loads all data from selected map (wf, pnl, lot)
+    # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
+    def _load_selected_saved_returns_data(self, aggregate_wf=True): 
         storage = Storage(base_path=self.data_storage_base_path)
+        self.sim_data = {}
+        strat_acc = {} # (op, mod, strat):  [series, series] 
+        model_acc = {} # (op, mod):         [series, series]
+        portf_acc = {} # (op)               [series, series]
+        unique_dts = set()
 
-        for op_name, _, m_name, _, s_name, _, a_name, a_obj in self._iter_portfolio_data():
-            assets_trade_matrix = storage.load(op_name, m_name, s_name, a_name)
-            a_obj.update(assets_trade_matrix)
+        for op_name, _, m_name, _, s_name, _, a_name, _ in self._iter_portfolio_data():
+            a_key = (op_name, m_name, s_name, a_name)
+            s_key = (op_name, m_name, s_name)
 
+            # Mapping Path
+            base_path = storage._asset_path(op_name, m_name, s_name, a_name)
+            self.sim_data[a_key] = {
+                "pnl_path": str(base_path / "matrix" / "pnl_matrix.parquet"),
+                "lot_path": str(base_path / "matrix" / "lot_matrix.parquet"),
+                "wf_path":  str(base_path / "wfm" / "wf.parquet"),
+                "type": "disk"
+            }
+
+            # Loads PnL (parsets)
+            pnl_df = pl.read_parquet(self.sim_data[a_key]["pnl_path"])
+
+            # NOTE TEMPORARY FIX, PARQUET MUST SAVE TIMESTAMP AS DATETIME ALWAYS
+            if "ts" in pnl_df.columns: pnl_df = pnl_df.rename({"ts": "datetime"})
+            if "Ts" in pnl_df.columns: pnl_df = pnl_df.rename({"Ts": "datetime"})
+
+            unique_dts.update(pnl_df["datetime"].to_list())
+
+            # Aggregates base (parsets)
+            ps_cols = [c for c in pnl_df.columns if c != "datetime"]
+            
+            asset_aggr_df = pnl_df.select([
+                pl.col("datetime"),
+                pl.mean_horizontal(ps_cols).alias("pnl_mean")
+            ])
+
+            if aggregate_wf:
+                try:
+                    wf_df = pl.read_parquet(self.sim_data[a_key]["wf_path"])
+
+                    # NOTE TEMPORARY FIX, PARQUET MUST SAVE TIMESTAMP AS DATETIME ALWAYS
+                    if "ts" in wf_df.columns: wf_df = wf_df.rename({"ts": "datetime"})
+                    if "Ts" in wf_df.columns: wf_df = wf_df.rename({"Ts": "datetime"})
+
+                    unique_dts.update(wf_df["datetime"].to_list())
+
+                    # If WF has PnL column we sum/aggr avg 
+                    if "pnl" in wf_df.columns:
+                        wf_df = wf_df.select(["datetime", pl.col("pnl").alias("wf_pnl")])
+                        asset_aggr_df = asset_aggr_df.join(wf_df, on="datetime", how="left").fill_null(0.0)
+
+                        # Avg between parsets and WF
+                        asset_aggr_df = asset_aggr_df.with_columns(
+                            ((pl.col("pnl_mean") + pl.col("wf_pnl")) / 2).alias("pnl_mean")
+                        )
+                except Exception:
+                    pass # If not wf, ignores
+
+            # Extracts final seires and renames
+            asset_series = asset_aggr_df["pnl_mean"].alias(a_name)
+
+            # Saves aggr to RAM
+            self.sim_data[a_key]["aggr_pnl"] = asset_series
+
+            # Accumulates to Strat
+            strat_acc.setdefault(s_key, []).append(asset_series)
+
+        # Hierarchical consolidation (RAM)
+        # Aggr Strat: Avg of Assets
+        for s_key, asset_list in strat_acc.items():
+            strat_mean = pl.DataFrame(asset_list).mean_horizontal().alias(s_key[2])
+            self.sim_data[s_key] = {"pnl": strat_mean, "type": "aggr"}
+            
+            m_key = (s_key[0], s_key[1])
+            model_acc.setdefault(m_key, []).append(strat_mean)
+
+        # Aggr Model: Avg of Strats
+        for m_key, strat_list in model_acc.items():
+            model_mean = pl.DataFrame(strat_list).mean_horizontal().alias(m_key[1])
+            self.sim_data[m_key] = {"pnl": model_mean, "type": "aggr"}
+
+            op_key = (m_key[0],)
+            portf_acc.setdefault(op_key, []).append(model_mean)
+
+        # Aggr Portfolio: Avg of Models
+        for op_key, model_list in portf_acc.items():
+            port_mean = pl.DataFrame(model_list).mean_horizontal().alias(op_key[0])
+            self.sim_data[op_key] = {"pnl": port_mean, "type": "aggr"}
+
+        # Datetime timeline update
+        # Enviamos os datetimes coletados dos arquivos para o validador global
+        self._map_all_unique_datetimes(external_dts=unique_dts)
+        
         return True
     
     def _iter_portfolio_data(self):
@@ -391,35 +432,21 @@ class Portfolio(BaseClass, BaseManager):
 
     # ── Datetime timeline mapping ───────────────────────────────────────────────
 
-    def _map_all_unique_datetimes(self):
+    def _map_all_unique_datetimes(self, external_dts=None):
         unique_dts = set()
+        
+        if external_dts:
+            unique_dts.update(external_dts)
 
-        if self.use_portfolio_asset_data: # From Portfolio Assets
-            unique_dts.update(self._get_all_op_asset_datetimes())
-
-        else: # From Portfolio Operation results data
-            for *_, a_name, a_obj in self._iter_portfolio_data():        
-                if "pnl_matrix" in a_obj:
-                    unique_dts.update(a_obj["pnl_matrix"]["ts"])
-                elif "wf" in a_obj:
-                    unique_dts.update(a_obj["wf"]["datetime"])
-                else: 
-                    print(f"< [Error] No PnL or Walkforward data found for Asset: {a_name}")
-
-        # From System Manager Indicators
+        # Se houver indicadores globais que não estão nos arquivos de PnL
         if self.portfolio_system_manager and self.portfolio_system_manager.indicators:
             unique_dts.update(self._get_all_sm_ind_datetimes())
 
-        # From Money Manager Indicators
-        if self.portfolio_money_manager and self.portfolio_money_manager.indicators:
-            unique_dts.update(self._get_all_mm_ind_datetimes())
-
         self.datetime_timeline = sorted(list(unique_dts))
-
-        print("> Datetime sample")
-        for dt in self.datetime_timeline[:5] + self.datetime_timeline[-5:]:
-            print(dt.strftime(self.global_datetime_prefix))
-        return True
+        
+        # Print de conferência
+        if self.datetime_timeline:
+            print(f"> Timeline: {self.datetime_timeline[0]} até {self.datetime_timeline[-1]}")
     
     def _get_all_op_asset_datetimes(self, data_source="local"):
         assets = Asset.load_all() # NOTE Deletar futuramente
@@ -527,13 +554,9 @@ class Portfolio(BaseClass, BaseManager):
 
 
     def _run(self):
-        # Data Init - Uses already uploaded data or loads from drive with Storage.py
+        # Data Init - Loads data, saves unique datetimes and generates aggr results
         print("     > Populating Portfolio Data from Database")
-        self._load_selected_saved_returns_data()
-
-        # Maps all unique datetimes to use as simulator timeline
-        print("     > Mapping all unique datetimes from Portfolio Data")
-        self._map_all_unique_datetimes()
+        self._load_selected_saved_returns_data(aggregate_wf=True)
 
         # Runs Portfolio Simulation
         print("     > Executing Portfolio Simulation")
