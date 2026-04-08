@@ -120,7 +120,8 @@ class Portfolio(BaseClass, BaseManager):
 
             #||=====================================================================================||#
 
-            if i <= 3 or i >= len(self.datetime_timeline)-3: print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
+            if i < 3 or i > len(self.datetime_timeline)-3: 
+                print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
 
         return True
 
@@ -155,39 +156,40 @@ class Portfolio(BaseClass, BaseManager):
 
         # Model and Strat Levels
         for o_name, o_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj in self._iter_portfolio_data():
-            for m_name, m_obj in o_obj.items():
-                m_key = (o_name, m_name)
-                s_key = (self.name, m_name, s_name)
-                
-                msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
-                mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
+            #for m_name, m_obj in o_obj.items():
+            m_key = (o_name, m_name)
+            s_key = (self.name, m_name, s_name)
+            
+            msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
+            mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
-                # Rebalancing of Models
-                if (msm and dt in msm_sch.get(m_name, set())) or (mmm and dt in mmm_sch.get(m_name, set())):
-                    model_df = self._populate_sim_data(m_key, i, data_type="aggr")
-                    
-                    if model_df is not None:
-                        if msm and dt in msm_sch.get(m_name, set()):
-                            #print("msm")
-                            hierarchy = msm.main(dt, hierarchy, model_df, self.portfolio_returns)
-                        if mmm and dt in mmm_sch.get(m_name, set()):
-                            #print("mmm")
-                            hierarchy = mmm.main(dt, hierarchy, model_df, self.portfolio_returns)
-
-                # Strat Level
-                ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
-                smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
+            # Rebalancing of Models
+            if (msm and dt in msm_sch.get(m_name, set())) or (mmm and dt in mmm_sch.get(m_name, set())):
+                model_df = self._populate_sim_data(m_key, i, data_type="aggr")
                 
-                if (ssm and dt in ssm_sch.get(s_key, set())) or (smm and dt in smm_sch.get(s_key, set())):
-                    strat_df = self._populate_sim_data((o_name, m_name, s_name), i, data_type="aggr")
-                    
-                    if strat_df is not None:
-                        if ssm and dt in ssm_sch.get(s_key, set()):
-                            #print("ssm")
-                            hierarchy = ssm.main(dt, hierarchy, strat_df, self.portfolio_returns)
-                        if smm and dt in smm_sch.get(s_key, set()):
-                            #print("smm")
-                            hierarchy = smm.main(dt, hierarchy, strat_df, self.portfolio_returns)
+                if model_df is not None:
+                    if msm and dt in msm_sch.get(m_name, set()):
+                        #print("msm")
+                        hierarchy = msm.main(dt, hierarchy, model_df, self.portfolio_returns)
+                    if mmm and dt in mmm_sch.get(m_name, set()):
+                        #print("mmm")
+                        hierarchy = mmm.main(dt, hierarchy, model_df, self.portfolio_returns)
+
+            # Strat Level
+            ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
+            smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
+            
+            if (ssm and dt in ssm_sch.get(s_key, set())) or (smm and dt in smm_sch.get(s_key, set())):
+                strat_df = self._populate_sim_data((o_name, m_name, s_name), i, data_type="aggr")
+                
+                if strat_df is not None:
+                    if ssm and dt in ssm_sch.get(s_key, set()):
+                        #print("ssm")
+                        hierarchy = ssm.main(dt, hierarchy, strat_df, self.portfolio_returns)
+                    if smm and dt in smm_sch.get(s_key, set()):
+                        #print("smm")
+                        hierarchy = smm.main(dt, hierarchy, strat_df, self.portfolio_returns)
+
         return hierarchy
 
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
@@ -359,6 +361,7 @@ class Portfolio(BaseClass, BaseManager):
 
             base_path = storage._asset_path(op_name, m_name, s_name, a_name)
             pnl_path = str(base_path / "matrix" / "pnl_matrix.parquet")
+            lot_path = str(base_path / "matrix" / "lot_matrix.parquet")
             wf_path = str(base_path / "wfm" / "wf.parquet")
 
             self.sim_data[a_key] = {
@@ -412,8 +415,61 @@ class Portfolio(BaseClass, BaseManager):
             port_mean = pl.DataFrame(model_list).select(pl.mean_horizontal(pl.all())).to_series().alias(op_key[0])
             self.sim_data[op_key] = {"pnl": port_mean, "type": "aggr"}
 
+        # Creates WF map
+        self.sim_data[a_key]["wf_memory_map"] = self.pre_load_wf_memory_map(wf_path, pnl_path, lot_path)
+
         return True
     
+    def pre_load_wf_memory_map(self, wf_path: str, pnl_path: str, lot_path: str) -> dict:
+
+        # wf_map = self.sim_data[(o_name, m_name, s_name, a_name)].get("wf_memory_map", {})
+        # pnl, lot = wf_map.get(dt, {}).get("20_20_20", (0.0, 0.0))
+        # print(pnl, lot)
+        # Exemplo de Uso
+
+
+        # 1. Carrega os Parquets
+        df_wf = pl.read_parquet(wf_path)
+        df_pnl = pl.read_parquet(pnl_path)
+        df_lot = pl.read_parquet(lot_path)
+
+        # 2. Padroniza colunas de tempo
+        df_wf = df_wf.rename({df_wf.columns[0]: "datetime"})
+        df_pnl = df_pnl.rename({df_pnl.columns[0]: "datetime"})
+        df_lot = df_lot.rename({df_lot.columns[0]: "datetime"})
+
+        # 3. NORMALIZAÇÃO PARA LOWERCASE (O Fix)
+        # No WF, transformamos os valores da coluna best_param
+        df_wf = df_wf.with_columns(pl.col("best_param").str.to_lowercase())
+
+        # Nas Matrizes, transformamos os NOMES das colunas (exceto datetime)
+        df_pnl.columns = [c.lower() if c != "datetime" else c for c in df_pnl.columns]
+        df_lot.columns = [c.lower() if c != "datetime" else c for c in df_lot.columns]
+
+        # 4. Unpivot (Melt)
+        df_pnl_melt = df_pnl.unpivot(index="datetime", variable_name="best_param", value_name="val_pnl")
+        df_lot_melt = df_lot.unpivot(index="datetime", variable_name="best_param", value_name="val_lot")
+
+        # 5. Join (Agora o match "ps_..." == "ps_..." vai funcionar)
+        joined = df_wf.join(
+            df_pnl_melt, on=["datetime", "best_param"], how="left"
+        ).join(
+            df_lot_melt, on=["datetime", "best_param"], how="left"
+        ).fill_null(0.0)
+
+        # 6. Construção do Mapa
+        memory_map = {}
+        for row in joined.iter_rows(named=True):
+            dt = row["datetime"]
+            wid = str(row["wf_id"])
+            
+            if dt not in memory_map:
+                memory_map[dt] = {}
+            
+            memory_map[dt][wid] = (row["val_pnl"], row["val_lot"])
+
+        return memory_map
+
     def _iter_portfolio_data(self):
         for op_name, op_obj in self.portfolio_data.items():
             for m_name, m_obj in op_obj.items():
