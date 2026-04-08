@@ -77,8 +77,8 @@ class SystemManager(BaseClass, BaseManager):
         return self._call(self._fn_rebalance, self._default_rebalance, context)
 
 
-    def __repr__(self):
-        return f"<{self.__class__.__name__} name={self.name}>"
+    # def __repr__(self):
+    #     return f"<{self.__class__.__name__} name={self.name}>"
 
 #||=========================================================================================||
 

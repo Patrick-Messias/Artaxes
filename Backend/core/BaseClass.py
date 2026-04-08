@@ -137,57 +137,42 @@ class BaseManager():
             return None
 
     def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets):
-
-        # Makes timeline be a Polars DataFrame
+        # 1. Timeline Setup
         if isinstance(timeline, list):
             timeline_df = pl.DataFrame({"datetime": timeline})
         else:
             timeline_df = timeline
 
-        # Discovers dinamically time column
         time_col = next((c for c in timeline_df.columns if c.lower() in ['ts', 'datetime', 'time', 'date']), timeline_df.columns[0])
 
-        # Creates 1 dataframe with all models results
-        portfolio_series= None
+        # 2. Portfolio/Aggr Setup - CONVERSÃO DE TUPLA PARA STR AQUI
+        portfolio_series = None
         if aggr_ret:
-            all_models_df = pl.DataFrame(aggr_ret)
+            # Converte chaves (tuplas) para strings ("OP-MOD") para o Polars aceitar como colunas
+            str_aggr_ret = {
+                "-".join(map(str, k)) if isinstance(k, (tuple, list)) else str(k): v 
+                for k, v in aggr_ret.items()
+            }
+            
+            all_models_df = pl.DataFrame(str_aggr_ret)
             portfolio_series = pl.DataFrame({
-                time_col: timeline_df.get_column(time_col), # Usa timeline_df aqui
+                time_col: timeline_df.get_column(time_col),
                 "main": all_models_df.select(pl.mean_horizontal(pl.all())).to_series()
             })
 
+        # 3. Loop de Parsets e Indicadores
         for ps_name, ps_dict in param_sets.items():
             self._pre_cache[ps_name] = {}
 
             for ind_key, ind_obj in self.indicators.items():
                 eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                 ind_p_hash = self.param_suffix(eff_params)
-
                 self._pre_cache[ps_name][ind_key] = {}
 
-                # 1. Calculates for each Asset in assets
-                if ind_obj.asset is None: 
-                    if self.assets is None: continue
-                    
-                    for a_name in self.assets:
-                        a_obj = global_assets.get(a_name)
-                        unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-
-                        self._pre_cache[ps_name][ind_key][a_name] = unique_key
-                        
-                        if unique_key not in indicator_pool: 
-                            asset_df = a_obj.data_get(ind_obj.timeframe)
-                            if asset_df is not None: 
-                                ind_result = self._calculate_indicator(asset_df, ind_obj, eff_params)
-                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
-                                indicator_pool[unique_key] = ind_result_aligned
-                    
-                # 2. Calculates for each Asset in list (ind_obj.asset is list["a1", "a2", ...]) or single Asset (str)
-                elif not isinstance(ind_obj.asset, str) or ind_obj.asset not in ["each_aggr", "all_aggr"]:
-                    if global_assets is None: continue
-                    
-                    # If only str converts to list have same code below
-                    target_assets = ind_obj.asset if isinstance(ind_obj.asset, list) else [ind_obj.asset]
+                # --- LÓGICA POR ATIVO (Asset ou List) ---
+                if ind_obj.asset is None or (not isinstance(ind_obj.asset, str) or ind_obj.asset not in ["each_aggr", "all_aggr"]):
+                    if self.assets is None and ind_obj.asset is None: continue
+                    target_assets = ind_obj.asset if isinstance(ind_obj.asset, list) else ([ind_obj.asset] if ind_obj.asset else self.assets)
 
                     for a_name in target_assets:
                         a_obj = global_assets.get(a_name)
@@ -195,23 +180,22 @@ class BaseManager():
 
                         unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
                         self._pre_cache[ps_name][ind_key][a_name] = unique_key
+                        
+                        if unique_key not in indicator_pool: 
+                            asset_df = a_obj.data_get(ind_obj.timeframe)
+                            if asset_df is not None: 
+                                ind_result = self._calculate_indicator(asset_df, ind_obj, eff_params)
+                                indicator_pool[unique_key] = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
 
-                        if unique_key not in indicator_pool:
-                            a_df = a_obj.load(ind_obj.timeframe)
-                            if a_df is not None:
-                                ind_result = self._calculate_indicator(a_df, ind_obj, eff_params)
-                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline, ind_result, time_col)
-                                indicator_pool[unique_key] = ind_result_aligned
-
-                else:
-                    if aggr_ret is None: continue
-
-                    # 4. Calculates for each model/strat/asset in aggr_models_ret
+                # --- LÓGICA AGREGADA (each_aggr ou all_aggr) ---
+                elif aggr_ret:
                     if ind_obj.asset == "each_aggr": 
-                        for m_name, m_obj_series in aggr_ret.items():
-                            unique_key = f"each_aggr_{m_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+                        for m_key, m_obj_series in aggr_ret.items():
+                            # Normaliza o nome para a unique_key não conter parênteses de tupla
+                            m_str = "-".join(map(str, m_key)) if isinstance(m_key, (tuple, list)) else str(m_key)
+                            unique_key = f"each_aggr_{m_str}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
 
-                            self._pre_cache[ps_name][ind_key][m_name] = unique_key
+                            self._pre_cache[ps_name][ind_key][m_key] = unique_key
 
                             if unique_key not in indicator_pool: 
                                 m_df = pl.DataFrame({
@@ -219,19 +203,15 @@ class BaseManager():
                                     "main": m_obj_series
                                 })
                                 ind_result = self._calculate_indicator(m_df, ind_obj, eff_params)
-                                ind_result_aligned = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
-                                indicator_pool[unique_key] = ind_result_aligned
+                                indicator_pool[unique_key] = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
 
-                    # 5. Calculates with sum of all models in aggr_models_ret
-                    elif ind_obj.asset == "all_aggr": 
+                    elif ind_obj.asset == "all_aggr" and portfolio_series is not None: 
                         unique_key = f"all_aggr_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-
                         self._pre_cache[ps_name][ind_key]["total"] = unique_key
 
                         if unique_key not in indicator_pool: 
                             ind_result = self._calculate_indicator(portfolio_series, ind_obj, eff_params)
-                            ind_result_aligned = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
-                            indicator_pool[unique_key] = ind_result_aligned
+                            indicator_pool[unique_key] = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
                 
         return indicator_pool
     

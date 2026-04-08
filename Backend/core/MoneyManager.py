@@ -105,5 +105,5 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
 
 
 
-    def __repr__(self):
-        return f"<{self.__class__.__name__} name={self.name} capital={self.capital}>"
+    # def __repr__(self):
+    #     return f"<{self.__class__.__name__} name={self.name} capital={self.capital}>"
