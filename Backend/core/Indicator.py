@@ -35,6 +35,8 @@ class Indicator:
             return pl.Series(effective_params['ind_name'], result)
             
         return result
+    
+    
 
     def _calculate_logic(self, df, **kwargs):
         """

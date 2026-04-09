@@ -51,8 +51,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto a_take_profit  = py::array_t<double>(total_trades);
     auto a_profit       = py::array_t<double>(total_trades);
     auto a_profit_r     = py::array_t<double>(total_trades);
-    auto a_mfe          = py::array_t<double>(total_trades);
-    auto a_mae          = py::array_t<double>(total_trades);
+    //auto a_mfe          = py::array_t<double>(total_trades);
+    //auto a_mae          = py::array_t<double>(total_trades);
     auto a_bars_held    = py::array_t<int32_t>(total_trades);
     auto a_closed       = py::array_t<uint8_t>(total_trades);
 
@@ -70,8 +70,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto* p_take_profit = a_take_profit.mutable_data();
     auto* p_profit      = a_profit.mutable_data();
     auto* p_profit_r    = a_profit_r.mutable_data();
-    auto* p_mfe         = a_mfe.mutable_data();
-    auto* p_mae         = a_mae.mutable_data();
+    //auto* p_mfe         = a_mfe.mutable_data();
+    //auto* p_mae         = a_mae.mutable_data();
     auto* p_bars_held   = a_bars_held.mutable_data();
     auto* p_closed      = a_closed.mutable_data();
 
@@ -86,8 +86,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
             p_take_profit[idx] = t.take_profit;
             p_profit[idx]      = t.profit;
             p_profit_r[idx]    = t.profit_r;
-            p_mfe[idx]         = t.mfe;
-            p_mae[idx]         = t.mae;
+            //p_mfe[idx]         = t.mfe;
+            //p_mae[idx]         = t.mae;
             p_bars_held[idx]   = t.bars_held;
             p_closed[idx]      = t.closed ? 1 : 0;
             l_id[idx]          = py::str(t.id);
@@ -109,8 +109,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     trades_col["take_profit"]    = a_take_profit;
     trades_col["profit"]         = a_profit;
     trades_col["profit_r"]       = a_profit_r;
-    trades_col["mfe"]            = a_mfe;
-    trades_col["mae"]            = a_mae;
+    //trades_col["mfe"]            = a_mfe;
+    //trades_col["mae"]            = a_mae;
     trades_col["bars_held"]      = a_bars_held;
     trades_col["closed"]         = a_closed;
     trades_col["id"]             = l_id;
@@ -120,26 +120,45 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     trades_col["status"]         = l_status;
 
     // ── WFM columnar ──────────────────────────────────────────────────────────
+    //const size_t n_wfm = res.wfm_data.size();
+
     auto a_wfm_ts    = py::array_t<int64_t>(n_wfm);
     auto a_wfm_pnl   = py::array_t<double>(n_wfm);
     auto a_wfm_lot_size = py::array_t<double>(n_wfm);
-    auto a_wfm_ps_id = py::array_t<int32_t>(n_wfm);
+    auto a_wfm_mae = py::array_t<double>(n_wfm);
+    auto a_wfm_mfe = py::array_t<double>(n_wfm);
+    //auto a_wfm_trade_id = py::array_t<str>(n_wfm);
+
+    py::list l_wfm_trade_id(n_wfm);
+
     auto* p_ts    = a_wfm_ts.mutable_data();
     auto* p_pnl   = a_wfm_pnl.mutable_data();
     auto* p_wfm_lot_size = a_wfm_lot_size.mutable_data();
-    auto* p_ps_id = a_wfm_ps_id.mutable_data();
+    auto* p_wfm_mae = a_wfm_mae.mutable_data();
+    auto* p_wfm_mfe = a_wfm_mfe.mutable_data();
+    //auto* p_trade_id = a_wfm_trade_id.mutable_data();
+
     for (size_t i = 0; i < n_wfm; ++i) {
+        const auto& data = res.wfm_data[i];
+
         p_ts[i]    = res.wfm_data[i].ts;
         p_pnl[i]   = res.wfm_data[i].pnl;
         p_wfm_lot_size[i] = res.wfm_data[i].lot_size;
-        p_ps_id[i] = res.wfm_data[i].ps_id;
+        p_wfm_mae[i] = res.wfm_data[i].mae;
+        p_wfm_mfe[i] = res.wfm_data[i].mfe;
+
+        //p_trade_id[i] = res.wfm_data[i].trade_id;
+        l_wfm_trade_id[i] = py::cast(data.trade_id);
     }
     py::dict wfm_col;
     wfm_col["ts"]    = a_wfm_ts;
     wfm_col["pnl"]   = a_wfm_pnl;
     wfm_col["lot_size"] = a_wfm_lot_size;
-    wfm_col["ps_id"] = a_wfm_ps_id;
-
+    wfm_col["mae"] = a_wfm_mae;
+    wfm_col["mfe"] = a_wfm_mfe;
+    //wfm_col["trade_id"] = a_wfm_trade_id;
+    wfm_col["trade_id"] = l_wfm_trade_id;
+    
     py::dict out;
     out["trades_columnar"] = trades_col;
     out["wfm_columnar"]    = wfm_col;

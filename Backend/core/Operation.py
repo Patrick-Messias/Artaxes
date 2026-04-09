@@ -541,7 +541,9 @@ class Operation(BaseClass):
                         CREATE TABLE wfm_raw (
                             ts BIGINT,
                             pnl DOUBLE,
-                            lot_size DOUBLE,
+                            lot DOUBLE,
+                            mae DOUBLE,
+                            mfe DOUBLE,
                             ps_id INTEGER
                         )
                     """)
@@ -784,6 +786,14 @@ class Operation(BaseClass):
             print(f'< Error in Python-C++ Bridge: {e}')
             import traceback; traceback.print_exc()
             return {"trades_columnar": None, "wfm_columnar": None, "ps_names": []}
+
+
+
+    # 1. Corrigir bug com indicadores, aproveitar e já adicionar o calc_single (usuário adiciona lógica aqui), calculate (chama essa para calcular usando rolling) e calc_parsets (para calcular com multi parametros)
+    # 2. Corrigir forma de tratamento de dados trades_matrix e trades
+    # 3. Se acima funcionar bem, então adicionar novas colunas para trades_matrix e eliminar algumas de trades, e registrar trades_matrix apenas na atualização diário, entrada e saida não faz
+
+
 
     def _save_asset_results(self, m_name, s_name, a_name, matrix_pnl, matrix_lot):
         from Storage import Storage
@@ -1593,8 +1603,8 @@ class Operation(BaseClass):
                     if lot_matrix is not None:
                         pnl_matrix = self.multiply_matrices(pnl_matrix, lot_matrix)
 
-                    if "datetime" in pnl_matrix.columns and "ts" not in pnl_matrix.columns:
-                        pnl_matrix = pnl_matrix.rename({"datetime": "ts"}) # wip change ts->datetime
+                    #if "datetime" in pnl_matrix.columns and "ts" not in pnl_matrix.columns:
+                    #    pnl_matrix = pnl_matrix.rename({"datetime": "ts"}) # wip change ts->datetime
 
                     # ── RUN WF ─────────────────────────────────────
                     wfm_engine = s_obj.operation
@@ -1659,11 +1669,11 @@ class Operation(BaseClass):
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        #self._operation()
+        self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
         print(f"\n>>> III - Pos-Processing, Saving and Cleaning <<<")
-        #self._save_and_clean()
+        self._save_and_clean()
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")

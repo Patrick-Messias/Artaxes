@@ -17,8 +17,8 @@ struct Trade {
     double max_adv_price  = 0.0;
     double daily_pnl_accum = 0.0; 
     //double prev_day_price = 0.0;
-    double mfe            = 0.0;
-    double mae            = 0.0;
+    //double mfe            = 0.0;
+    //double mae            = 0.0;
     double exit_price     = 0.0;
     char   exit_datetime[20] = {};
     std::string exit_reason;

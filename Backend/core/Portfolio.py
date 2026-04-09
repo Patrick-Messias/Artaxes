@@ -56,7 +56,6 @@ class Portfolio(BaseClass, BaseManager):
         # 1 - Init, populating sim_data
         sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
 
-        # {(op, mod, strat, asset): {"weight": 0.1, "id": "48_48_48"}} / "id": "parset..."
         active_positions = {} 
         hierarchy = {}
         self.portfolio_returns = {}
@@ -70,7 +69,6 @@ class Portfolio(BaseClass, BaseManager):
         # SM and MM Pre-Compute Metrics, Indicators and Rebalance Schedule
         indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch \
         = self._pre_compute_and_calc_rebalance_schedule(self.global_assets, self.sm_mm_map)
-        # NOTE Se não for usar em mais nenhum outro lugar, zerar os aggr
 
         # 2 - Run Timeline
         for i, step_dt in enumerate(self.datetime_timeline):
@@ -111,10 +109,6 @@ class Portfolio(BaseClass, BaseManager):
 
             #||=====================================================================================||#
 
-            # 1. Erro na obtenção dos valores para _system_money_managers ao chamar _populate_sim_data
-            # 2. Ideal não seria manter o Portfolio SM/MM com resultados agregados de models e Model SM/MM com agregados de strats?
-            # logo apenas no Strat SM/MM uso os dados completos reais, para calcular lot
-
             # Updates System and Money Managers - Top Down - at [i] ends
             hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
 
@@ -124,12 +118,6 @@ class Portfolio(BaseClass, BaseManager):
                 print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
 
         return True
-
-    """
-    - If no pnl_matrix or wf then uses the structure up to model and then selects the model strats based on MSM and MMM to simulate Asset Portfolio
-    - Se pnl_matrix e not wf então pode fazer walkforward em cada nível em tempo real
-    
-    """
 
     # ── Portfolio Defs ───────────────────────────────────────────────
 
@@ -192,76 +180,6 @@ class Portfolio(BaseClass, BaseManager):
 
         return hierarchy
 
-    def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
-        indicator_pool, params_pool = {}, {}
-        psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
-        
-        timeline = self.datetime_timeline
-        sd = self.sim_data
-
-        # 1. Agregação e Separação (Long/Short)
-        # Extraímos as Series já calculadas no load
-        aggr_models_ret = {k: v["pnl"] for k, v in sd.items() if len(k) == 2 and v.get("type") == "aggr"}
-        aggr_strats_ret = {k: v["pnl"] for k, v in sd.items() if len(k) == 3 and v.get("type") == "aggr"}
-        aggr_assets_ret = {k: v["aggr_pnl"] for k, v in sd.items() if len(k) == 4 and "aggr_pnl" in v}
-
-        # Aplica lógica de Long/Short se necessário (gera novas chaves no dict)
-        aggr_models_ret = BaseClass.separate_long_short_returns(aggr_models_ret)
-        aggr_strats_ret = BaseClass.separate_long_short_returns(aggr_strats_ret)
-        aggr_assets_ret = BaseClass.separate_long_short_returns(aggr_assets_ret)
-
-        # --- PORTFOLIO LEVEL ---
-        p_magrs = sm_mm_map.get("managers", {})
-        
-        # System Manager (PSM)
-        psm = p_magrs.get("psm") or PortfolioSystemManager(PortfolioSystemManagerParams())
-        indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, aggr_models_ret, indicator_pool)
-        psm_sch[self.name] = psm.get_schedule(timeline)
-        p_magrs["psm"] = psm
-            
-        # Money Manager (PMM)
-        pmm = p_magrs.get("pmm") or PortfolioMoneyManager(PortfolioMoneyManagerParams())
-        indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, aggr_models_ret, indicator_pool)
-        pmm_sch[self.name] = pmm.get_schedule(timeline)
-        p_magrs["pmm"] = pmm
-
-        # --- MODELS LEVEL ---
-        for m_name, m_info in sm_mm_map.get("models", {}).items():
-            m_magrs = m_info.get("managers", {})
-            m_strats_filter = {k: v for k, v in aggr_strats_ret.items() if k[1] == m_name}
-
-            # Model System Manager (MSM)
-            msm = m_magrs.get("msm") or ModelSystemManager(ModelSystemManagerParams())
-            indicator_pool, sd, params_pool = msm.pre_compute(global_assets, timeline, sd, m_strats_filter, indicator_pool)
-            msm_sch[m_name] = msm.get_schedule(timeline)
-            m_magrs["msm"] = msm
-
-            # Model Money Manager (MMM)
-            mmm = m_magrs.get("mmm") or ModelMoneyManager(ModelMoneyManagerParams())
-            indicator_pool, sd, params_pool = mmm.pre_compute(global_assets, timeline, sd, m_strats_filter, indicator_pool)
-            mmm_sch[m_name] = mmm.get_schedule(timeline)
-            m_magrs["mmm"] = mmm
-
-            # --- STRATS LEVEL ---
-            for s_name, s_info in m_info.get("strats", {}).items():
-                s_magrs = s_info.get("managers", {})
-                s_key = (self.name, m_name, s_name)
-                s_assets_filter = {k: v for k, v in aggr_assets_ret.items() if k[:3] == s_key}
-
-                # Strat System Manager (SSM)
-                ssm = s_magrs.get("ssm") or StratSystemManager(StratSystemManagerParams())
-                indicator_pool, sd, params_pool = ssm.pre_compute(global_assets, timeline, sd, s_assets_filter, indicator_pool)
-                ssm_sch[s_key] = ssm.get_schedule(timeline)
-                s_magrs["ssm"] = ssm
-
-                # Strat Money Manager (SMM)
-                smm = s_magrs.get("smm") or StratMoneyManager(StratMoneyManagerParams())
-                indicator_pool, sd, params_pool = smm.pre_compute(global_assets, timeline, sd, s_assets_filter, indicator_pool)
-                smm_sch[s_key] = smm.get_schedule(timeline)
-                s_magrs["smm"] = smm
-
-        return indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
-    
     def _update_pos_with_backtest_ret(self, step_dt, active_positions):
         for idf, pos_info in active_positions.items():
             # ifs       = (op, mod, strat, asset)
@@ -328,7 +246,6 @@ class Portfolio(BaseClass, BaseManager):
             if data_type == "pnl":  # ---> Manager querendo rodar WF (lê o disco)
                 return pl.read_parquet(ref["pnl_path"]).head(i + 1)
         return None
-
 
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
@@ -470,6 +387,76 @@ class Portfolio(BaseClass, BaseManager):
 
         return memory_map
 
+    def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
+        indicator_pool, params_pool = {}, {}
+        psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
+        
+        timeline = self.datetime_timeline
+        sd = self.sim_data
+
+        # 1. Agregação e Separação (Long/Short)
+        # Extraímos as Series já calculadas no load
+        aggr_models_ret = {k: v["pnl"] for k, v in sd.items() if len(k) == 2 and v.get("type") == "aggr"}
+        aggr_strats_ret = {k: v["pnl"] for k, v in sd.items() if len(k) == 3 and v.get("type") == "aggr"}
+        aggr_assets_ret = {k: v["aggr_pnl"] for k, v in sd.items() if len(k) == 4 and "aggr_pnl" in v}
+
+        # Aplica lógica de Long/Short se necessário (gera novas chaves no dict)
+        aggr_models_ret = BaseClass.separate_long_short_returns(aggr_models_ret)
+        aggr_strats_ret = BaseClass.separate_long_short_returns(aggr_strats_ret)
+        aggr_assets_ret = BaseClass.separate_long_short_returns(aggr_assets_ret)
+
+        # --- PORTFOLIO LEVEL ---
+        p_magrs = sm_mm_map.get("managers", {})
+        
+        # System Manager (PSM)
+        psm = p_magrs.get("psm") or PortfolioSystemManager(PortfolioSystemManagerParams())
+        indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, aggr_models_ret, indicator_pool)
+        psm_sch[self.name] = psm.get_schedule(timeline)
+        p_magrs["psm"] = psm
+            
+        # Money Manager (PMM)
+        pmm = p_magrs.get("pmm") or PortfolioMoneyManager(PortfolioMoneyManagerParams())
+        indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, aggr_models_ret, indicator_pool)
+        pmm_sch[self.name] = pmm.get_schedule(timeline)
+        p_magrs["pmm"] = pmm
+
+        # --- MODELS LEVEL ---
+        for m_name, m_info in sm_mm_map.get("models", {}).items():
+            m_magrs = m_info.get("managers", {})
+            m_strats_filter = {k: v for k, v in aggr_strats_ret.items() if k[1] == m_name}
+
+            # Model System Manager (MSM)
+            msm = m_magrs.get("msm") or ModelSystemManager(ModelSystemManagerParams())
+            indicator_pool, sd, params_pool = msm.pre_compute(global_assets, timeline, sd, m_strats_filter, indicator_pool)
+            msm_sch[m_name] = msm.get_schedule(timeline)
+            m_magrs["msm"] = msm
+
+            # Model Money Manager (MMM)
+            mmm = m_magrs.get("mmm") or ModelMoneyManager(ModelMoneyManagerParams())
+            indicator_pool, sd, params_pool = mmm.pre_compute(global_assets, timeline, sd, m_strats_filter, indicator_pool)
+            mmm_sch[m_name] = mmm.get_schedule(timeline)
+            m_magrs["mmm"] = mmm
+
+            # --- STRATS LEVEL ---
+            for s_name, s_info in m_info.get("strats", {}).items():
+                s_magrs = s_info.get("managers", {})
+                s_key = (self.name, m_name, s_name)
+                s_assets_filter = {k: v for k, v in aggr_assets_ret.items() if k[:3] == s_key}
+
+                # Strat System Manager (SSM)
+                ssm = s_magrs.get("ssm") or StratSystemManager(StratSystemManagerParams())
+                indicator_pool, sd, params_pool = ssm.pre_compute(global_assets, timeline, sd, s_assets_filter, indicator_pool)
+                ssm_sch[s_key] = ssm.get_schedule(timeline)
+                s_magrs["ssm"] = ssm
+
+                # Strat Money Manager (SMM)
+                smm = s_magrs.get("smm") or StratMoneyManager(StratMoneyManagerParams())
+                indicator_pool, sd, params_pool = smm.pre_compute(global_assets, timeline, sd, s_assets_filter, indicator_pool)
+                smm_sch[s_key] = smm.get_schedule(timeline)
+                s_magrs["smm"] = smm
+
+        return indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
+    
     def _iter_portfolio_data(self):
         for op_name, op_obj in self.portfolio_data.items():
             for m_name, m_obj in op_obj.items():
@@ -594,10 +581,48 @@ class Portfolio(BaseClass, BaseManager):
 
     # ──────────────────────────────────────────────────────────────────────────── 
 
+    """"""
+    1. -> PRIORITARIO
+    - voltar operation, mudar estruturade trades, pnl_matrix, lot_matrix e wf_matrix;
+    - padronizar tuple/key EM TODO LUGAR (USAR TUPLE)
+    - trades.parquet eliminar coluna asset (vai se orientar por path)
+    - mantem mesmo path para todos
 
-    # Próximos Passos:
-    # Como separar entre LONG e SHORT? adicionar separação para cada nível! 
-    # Adicionar date_start/end para puxar assets para indicadores onde -> [date_start+lenght : date_end] assim tendo mais resultados OU MELHOR DEIXANDO CALCULAR SOBRE TODO E FILTRAR PARA DATETIME?
+    - Se pnl_matrix e not wf então pode fazer walkforward em cada nível em tempo real
+
+
+    trades.parquet = [trade_id, param_set, entry_dt, exit_dt, entry_price, exit_price, type, max_lot] 
+        - usa trades_matrix para completar dados variáveis
+        - 1 trade por linha
+        - vertical
+    
+    trades_matrix.parquet = [datetime, trade_id, lot, pnl_float, mae, mfe]
+        - usa trades para completar dados não variáveis 
+        - 1 atualização (tick/daily) por linha
+        - vertical
+    
+    wf_matrix.parquet = [datetime, param_set, ps_id]
+        - tem def para pesquisar no trades_matrix o pnl vise versa para saber o param_set por datetime
+        - 1 atualização (tick/daily) por linha
+        - vertical
+
+    # 2. Continuação
+    # -> Saidas: 
+    # Para cada trade:
+    # - Se date_exit == datetime então sai 
+    # - Se o mae ou mfe do datetime atual passou os limites de ganho ou perda do trade definido pelo MM então fecha 
+    # Para todos: se pnl do portfolio chegar a x ou y então encerra tudo (ganho/perda mês)
+
+    # -> Entradas: 
+    # - SSM decide se First Come First Serve ou 1 trade por Strat por nível ou 1 trade por Asset
+    # - Se posição aberta, verifica hierarchy, onde foi rankeado os pretendentes basedo em todos os níveis pelos SM, verifica se pode entrar durante trade aberto ou apenas na abertura
+    # - Pega e executa a entrada nos trades válidos, 1 por 1, atualizando as variáveis globais (MM) a cada etapa, ao executar ele vai calcular o lote baseado nos dados unicos do ativo que o trade foi executado, analisando o lot_min, leverage, etc.
+
+    # -> Atualização PnL:
+    # - Cada posição aberta != da aberta no datetime vai atualizar o PnL, verificando o MAE e MFE para decidir se está tudo bem, atualiza lote (def que pode ser enviada, default None)
+    # - Para cada trade em active_positions deve puxar os dados do trades_matrix, verificar se precisa atualizar o lot (diminuir ou aumentar, pode ser uma def enviada, default None, mantêm mesma coisa até saida) para saber o PnL * Lot atualizado
+    # - Criando e enviando a imagem do datetime para self.portfolio_returns
+
 
 
     def _run(self):

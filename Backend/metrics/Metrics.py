@@ -50,6 +50,13 @@ def MonteCarlo(data: Union[pl.DataFrame, Dict, List], runs: int=1000, shuffle: b
 
     return mc_runs
 
+# Monte Carlo with Regime Change, classify regimes, use transition matrixes (prob r1 to r2, r1 to r1, r2 to r1, r2 to r2) and randomly select from regimes that were selected to model return clusters (series of wins/losses)
+"""
+"""
+
+
+
+
 
 def mc_drawdown(mc_runs: np.ndarray, percentile: float=95.0, only_max_per_curve: bool=True):
     equities = np.cumsum(mc_runs, axis=1)
