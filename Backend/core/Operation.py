@@ -112,45 +112,88 @@ class Operation(BaseClass):
     def _init_data(self):
         from Storage import Storage
         storage = Storage(base_path="Backend/results")
-        meta    = storage.load_meta(self.name)
+        meta = storage.load_meta(self.name)
 
         if meta:
-            print(f"   > Found saved results for '{self.name}' — loading structure...")
-
-            # Init results map structure based on saved meta (without loading parquet data yet)
+            print(f"   > Found saved results for '{self.name}' — building timeline...")
             self._results_map[self.name] = {"models": {}}
 
-            # Iterates over Models
             for model_name, model_data in meta.get("models", {}).items():
                 self._results_map[self.name]["models"][model_name] = {"strats": {}}
-
-                # Access "strats" key enside the model
                 strats_dict = model_data.get("strats", {})
 
                 for strat_name, strat_data in strats_dict.items():
                     self._results_map[self.name]["models"][model_name]["strats"][strat_name] = {"assets": {}}
-
-                    # Iterates over Assets lists
                     assets_list = strat_data.get("assets", [])
 
                     for asset_name in assets_list:
+                        # Assumindo que storage.load agora retorna os dataframes do disco
                         asset_data = storage.load(self.name, model_name, strat_name, asset_name)
+                        
+                        trades_df = asset_data.get("trades")         # trades.parquet
+                        matrix_df = asset_data.get("trades_matrix")  # trades_matrix.parquet (antigo pnl_matrix)
+
+                        # Gera a linha do tempo unificada
+                        timeline_df = self._build_timeline(trades_df, matrix_df)
 
                         self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name] = {
-                            #"trades": asset_data.get("trades"),             # único arquivo trades.parquet
-                            "pnl_matrix": asset_data["pnl_matrix"],          # matrix/pnl_matrix.parquet
-                            "lot_matrix": asset_data["lot_matrix"],          # matrix/lot_matrix.parquet
-                            "walkforward": asset_data["wf"],                 # wfm/wf.parquet
+                            "timeline": timeline_df,  # DF pronto para o RiskManager
+                            "trades": trades_df       # Mantemos o original caso precise de metadados específicos
                         }
 
-            print(f"   > Structure loaded — ready to load parquet data.")
+            print(f"   > Timeline loaded successfully.")
         else:
             print(f"   > No saved results found for '{self.name}' — starting fresh.")
 
-        # ── DATE FILTER ───────────────────────────────────────
-        if self.date_start or self.date_end:
-            for asset in self.assets.values():
-                asset.set_date_range(self.date_start, self.date_end)
+
+    def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame) -> pl.DataFrame:
+        # Combina os dados de trades e WFM matrix em um único log de eventos cronológico.
+
+        if trades_df is None or trades_df.is_empty():
+            return pl.DataFrame()
+
+        # 1. Eventos de ENTRADA (pnl inicial = 0.0)
+        df_entries = trades_df.select([
+            pl.col("entry_datetime").alias("datetime"),
+            pl.col("trade_id"),
+            pl.lit(0.0).alias("pnl"),
+            pl.col("lot_size"),
+            pl.lit("entry").alias("event")
+        ])
+
+        # 2. Eventos de SAÍDA (pnl final = profit)
+        df_exits = trades_df.select([
+            pl.col("exit_datetime").alias("datetime"),
+            pl.col("trade_id"),
+            pl.col("profit").alias("pnl"),
+            pl.col("lot_size"),
+            pl.lit("exit").alias("event")
+        ])
+
+        dfs_to_concat = [df_entries, df_exits]
+
+        # 3. Eventos INTRA-TRADE (Updates vindos da Matrix, se existirem)
+        if matrix_df is not None and not matrix_df.is_empty():
+            df_intra = matrix_df.select([
+                pl.col("ts").alias("datetime"),  # ts já deve estar em pl.Datetime conforme definido antes
+                pl.col("trade_id"),
+                pl.col("pnl"),
+                pl.col("lot").alias("lot_size"), # O DuckDB salvou como 'lot'
+                pl.lit("update").alias("event")
+            ])
+            dfs_to_concat.append(df_intra)
+
+        # 4. Empilha tudo em uma tabela longa
+        timeline_df = pl.concat(dfs_to_concat, how="diagonal")
+
+        # 5. Faz um Join com 'trades_df' para resgatar ps_id e asset, e ordena o tempo
+        timeline_df = timeline_df.join(
+            trades_df.select(["trade_id", "ps_id", "asset"]),
+            on="trade_id",
+            how="left"
+        ).sort(["datetime", "trade_id"])
+
+        return timeline_df
 
     # || ===================================================================== || II - Data Processing || ===================================================================== ||
 
@@ -273,7 +316,7 @@ class Operation(BaseClass):
                                     model_timeframe=model_tf,
                                     ind_name=ind_key,
                                     ind_obj=ind_obj,
-                                    param_set_dict=ps_dict,
+                                    eff_params=eff_params,
                                     curr_asset_obj=base_asset_df,
                                     asset_name=asset_name,
                                     datetime_candle_references=asset_class.datetime_candle_references
@@ -283,7 +326,6 @@ class Operation(BaseClass):
                                     c: temp_ind_df[c].cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
                                     for c in novas_colunas
                                 }
-
                             ps_ind_keys[ps_name].append(unique_key)
 
                         if sig_key_params is not None:
@@ -453,29 +495,29 @@ class Operation(BaseClass):
                     print(f"   > [OP] fase4={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
 
                     # ── Fase 5: Monta asset_batch ──────────────────────────────
-                    smm = strat_obj.strat_money_manager  # None → neutro
-
-                    if smm is not None:
-                        if smm.compound_fract_series is not None:
-                            indicators_pool["compound_fract"] = (
-                                smm.compound_fract_series.cast(pl.Float64)
-                                .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
-                            )
-                        if smm.dist_signal_ref is not None:
-                            indicators_pool["dist_ref"] = (
-                                smm.dist_signal_ref.cast(pl.Float64)
-                                .fill_null(0.0).to_numpy().astype(np.float64)
-                            )
-                        if smm.custom_lot_size_long is not None:
-                            indicators_pool["custom_lot_size_long"] = (
-                                smm.custom_lot_size_long.cast(pl.Float64)
-                                .fill_null(1.0).to_numpy().astype(np.float64)
-                            )
-                        if smm.custom_lot_size_short is not None:
-                            indicators_pool["custom_lot_size_short"] = (
-                                smm.custom_lot_size_short.cast(pl.Float64)
-                                .fill_null(1.0).to_numpy().astype(np.float64)
-                            )
+                    # Not necessary?
+                    # smm = strat_obj.strat_money_manager  # None → neutro
+                    # if smm is not None:
+                    #     if smm.compound_fract_series is not None:
+                    #         indicators_pool["compound_fract"] = (
+                    #             smm.compound_fract_series.cast(pl.Float64)
+                    #             .fill_null(smm.compound_fract).to_numpy().astype(np.float64)
+                    #         )
+                    #     if smm.dist_signal_ref is not None:
+                    #         indicators_pool["dist_ref"] = (
+                    #             smm.dist_signal_ref.cast(pl.Float64)
+                    #             .fill_null(0.0).to_numpy().astype(np.float64)
+                    #         )
+                    #     if smm.custom_lot_size_long is not None:
+                    #         indicators_pool["custom_lot_size_long"] = (
+                    #             smm.custom_lot_size_long.cast(pl.Float64)
+                    #             .fill_null(1.0).to_numpy().astype(np.float64)
+                    #         )
+                    #     if smm.custom_lot_size_short is not None:
+                    #         indicators_pool["custom_lot_size_short"] = (
+                    #             smm.custom_lot_size_short.cast(pl.Float64)
+                    #             .fill_null(1.0).to_numpy().astype(np.float64)
+                    #         )
 
                     asset_batch = {
                         "asset_header":         f"{model_name}_{strat_name}_{asset_name}",
@@ -494,7 +536,7 @@ class Operation(BaseClass):
                             'trades': []
                         }
 
-                        mm_params = smm.to_sim_params() if smm is not None else {"method": "neutral"}
+                        mm_params = {"method": "neutral"} #smm.to_sim_params() if smm is not None else {"method": "neutral"}
                         mm_params["tick"]         = getattr(asset_class, "tick",         0.01)
                         mm_params["tick_fin_val"] = getattr(asset_class, "tick_fin_val", 1.0)
                         mm_params["min_lot"]      = getattr(asset_class, "min_lot",      0.01)
@@ -536,19 +578,17 @@ class Operation(BaseClass):
                     )
                     if os.path.exists(wfm_db_path): os.remove(wfm_db_path)
 
-                    wfm_con = duckdb.connect(wfm_db_path)
+                    wfm_con = duckdb.connect(wfm_db_path) # WIP will be able to save directly to cloud db
                     wfm_con.execute("""
                         CREATE TABLE wfm_raw (
                             ts BIGINT,
                             pnl DOUBLE,
-                            lot DOUBLE,
+                            lot_size DOUBLE,
                             mae DOUBLE,
                             mfe DOUBLE,
-                            ps_id INTEGER
+                            trade_id VARCHAR
                         )
                     """)
-
-                    ps_id_offset = 0
 
                     for batch_start in range(0, n_ps, batch_size):
                         batch_sims = all_sim[batch_start:batch_start+batch_size]
@@ -556,61 +596,42 @@ class Operation(BaseClass):
 
                         full_output = self._run_cpp_operation(asset_batch)
 
-                        # 🔹 TRADES + WFM (ACUMULA)
-                        self._save_trades(
-                            full_output=full_output,
-                            m_name=model_name,
-                            s_name=strat_name,
-                            a_name=asset_name,
-                            wfm_con=wfm_con,
-                            ps_id_offset=ps_id_offset
-                        )
-
-                        ps_id_offset += len(batch_sims)
-
+                        self._save_trades(full_output, model_name, strat_name, asset_name, wfm_con)
 
                     # ── FINALIZA WFM (pivot) ───────────────────────────────────
 
                     row_count = wfm_con.execute("SELECT COUNT(*) FROM wfm_raw").fetchone()[0]
 
-                    matrix_pnl, matrix_lot = None, None
-
                     if row_count > 0:
-                        matrix_pnl, matrix_lot = self._try_pivot_with_backoff(
-                            wfm_con, all_ps_names, None
+                        # Extracts DuckDB data already in final format for parquet
+                        long_matrix = self._process_wfm_from_duckdb(wfm_con)
+
+                        # Saves using new format
+                        self._save_asset_results(
+                            m_name=model_name,
+                            s_name=strat_name,
+                            a_name=asset_name,
+                            matrix_df=long_matrix
                         )
 
                     wfm_con.close()
                     if os.path.exists(wfm_db_path): os.remove(wfm_db_path)
 
-
-                    # ── SAVE FINAL (MATRIX + TRADES) ───────────────────────────
-
-                    if matrix_pnl is not None:
-                        self._save_asset_results(
-                            m_name=model_name,
-                            s_name=strat_name,
-                            a_name=asset_name,
-                            matrix_pnl=matrix_pnl,
-                            matrix_lot=matrix_lot
-                        )
                     print(f"   > [OP] fase5_prep={time.perf_counter()-_t:.2f}s"); _t = time.perf_counter()
         return True
 
-    def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, param_set_dict, curr_asset_obj, asset_name, datetime_candle_references):        
-        final_output = None
+    def _calculate_indicator(self, model_timeframe, ind_name, ind_obj, eff_params, curr_asset_obj, asset_name, datetime_candle_references):        
 
         # 1. Resolução de Alvos (Asset e Timeframe onde o indicador "mora")
         target_asset = ind_obj.asset if ind_obj.asset else asset_name
         target_tf = ind_obj.timeframe if ind_obj.timeframe else model_timeframe
 
-        # Validação de Timeframe (Garante que não tentamos olhar o futuro/LTF)
+        # Validação de Timeframe (WIP LTF->HTF)
         if self._tf_to_seconds(target_tf) < self._tf_to_seconds(model_timeframe):
             raise ValueError(f"Indicador '{ind_name}' ({target_tf}) não pode ser menor que o TF da Estratégia ({model_timeframe}).")
 
         # 2. Setup do Cache de Dados BRUTOS (Raw)
-        effective_params = self.effective_params_from_global(ind_obj.params, param_set_dict)
-        params_suffix = self.param_suffix(effective_params)
+        params_suffix = self.param_suffix(eff_params)
 
         if not hasattr(self, '_indicators_cache'): 
             self._indicators_cache = {}
@@ -635,52 +656,38 @@ class Operation(BaseClass):
                 df_source = df_source.filter(pl.col("datetime") <= pl.lit(self.date_end).str.to_datetime("%Y-%m-%d"))
             
             # Cálculo Real (Chama a lógica matemática do indicador)
-            calc_res = ind_obj.calculate(df_source, param_set_dict=param_set_dict, ind_name=ind_name)
+            expr = ind_obj.get_expression(param_set=eff_params, alias=ind_name)
 
             # Normalização do Raw: Garante que temos um DataFrame com a coluna 'datetime' para o join
-            if isinstance(calc_res, pl.Series):
-                raw_result = pl.DataFrame({
-                    "datetime": df_source["datetime"], 
-                    ind_name: calc_res.fill_null(0.0)
-                })
+            if isinstance(expr, list):
+                calc_df = df_source.select(expr)                    # Multi column
             else:
-                raw_result = calc_res.fill_null(0.0)
-                if "datetime" not in raw_result.columns:
-                    raw_result = raw_result.with_columns(df_source["datetime"])
+                calc_df = df_source.select(expr.alias(ind_name))    # Single column
 
-            # SALVA NO CACHE: Guardamos o dado no TF nativo (Ex: Diário)
-            tf_cache[params_suffix] = raw_result
+                if "datetime" not in calc_df.columns:
+                    calc_df = calc_df.with_columns(df_source["datetime"])
+
+            # Saves to cache: Guardamos o dado no TF nativo (Ex: Diário)
+            raw_result = calc_df.fill_null(0.0)
+            tf_cache[self.param_suffix] = raw_result
 
         # --- CAMADA 2: Alinhamento (Sincronização HTF -> LTF) ---
         is_same_asset = (target_asset == asset_name)
         is_same_tf = (target_tf == model_timeframe)
 
         if not (is_same_asset and is_same_tf):
-            # Se o indicador for de outro ativo ou timeframe maior, precisamos alinhar
-            # Ex: Pegar SMA(200) do Diário e expandir para cada minuto do intraday
             print(f'      > Synchronizing: {ind_name} ({target_asset} {target_tf}) -> {asset_name} ({model_timeframe})')
-            
-            # Criamos um esqueleto apenas com o datetime do gráfico atual (LTF)
             temp_align_df = curr_asset_obj.select("datetime")
-            
-            # Transferimos todas as colunas do indicador (exceto datetime) para o LTF
             for col in raw_result.columns:
                 if col == "datetime": continue
-                
-                # Preparamos o dado HTF para o transfer_htf_columns
-                htf_data_to_align = raw_result.select(["datetime", col])
-                temp_align_df = self.transfer_htf_columns(temp_align_df, htf_data_to_align, col)
-            
-            # O resultado final não deve conter o datetime, apenas os valores alinhados
+                temp_align_df = self.transfer_htf_columns(temp_align_df, raw_result.select(["datetime", col]), col)
             final_output = temp_align_df.drop("datetime")
         else:
-            # Caso seja o mesmo ativo e TF, apenas removemos colunas de sistema/ohlc
-            # para evitar duplicidade no payload do C++
-            cols_to_drop = [c for c in raw_result.columns if c in ['datetime', 'date', 'ativo', 'open', 'high', 'low', 'close', 'tick_volume', 'real_volume', 'spread']]
+            cols_to_drop = [c for c in raw_result.columns if c in
+                            ['datetime', 'date', 'ativo', 'open', 'high', 'low', 'close',
+                            'tick_volume', 'real_volume', 'spread']]
             final_output = raw_result.drop(cols_to_drop)
 
-        # 3. Limpeza Final e Retorno
-        # fill_nan(0) é importante pois joins HTF podem gerar NaNs no início do histórico
         return final_output.fill_nan(0.0).fill_null(0.0)
 
     # || ===================================================================== || III - Portfolio Simulator || ===================================================================== ||
@@ -787,14 +794,80 @@ class Operation(BaseClass):
             import traceback; traceback.print_exc()
             return {"trades_columnar": None, "wfm_columnar": None, "ps_names": []}
 
+    def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str,
+                     wfm_con=None):
+        if not full_output: return
+ 
+        tc       = full_output.get("trades_columnar")
+        wfm_col  = full_output.get("wfm_columnar")
+        ps_names = full_output.get("ps_names", [])
+ 
+        # ── Trades (Memória para o results_map) ───────────────────────────
+        if tc:
+            offsets = tc.pop("sim_offsets", [])
+            df_all = pl.DataFrame(tc).with_columns(pl.lit(a_name).alias("asset"))
+            
+            for sim_idx, ps_name in enumerate(ps_names):
+                if not ps_name: continue
+                try:
+                    target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
+                    s = int(offsets[sim_idx])
+                    e = int(offsets[sim_idx + 1])
+                    target["trades"] = df_all.slice(s, e - s) if e > s else pl.DataFrame()
+                except (KeyError, IndexError) as ex:
+                    print(f"DEBUG: Erro no slice: {ex} | ps_name: {ps_name}")
+ 
+        # ── WFM: INSERT direto no DuckDB (Layout Vertical/Longo) ──────────
+        if wfm_col and wfm_con:
+            # Note: wfm_col já vem no formato [ts, pnl, lot_size, mae, mfe, trade_id]
+            batch_df = pl.DataFrame(wfm_col) 
+            wfm_con.execute("INSERT INTO wfm_raw SELECT * FROM batch_df")
 
+    def _save_asset_results(self, m_name, s_name, a_name, matrix_df):
+        from Storage import Storage
+        storage = Storage()
 
-    # 1. Corrigir bug com indicadores, aproveitar e já adicionar o calc_single (usuário adiciona lógica aqui), calculate (chama essa para calcular usando rolling) e calc_parsets (para calcular com multi parametros)
-    # 2. Corrigir forma de tratamento de dados trades_matrix e trades
-    # 3. Se acima funcionar bem, então adicionar novas colunas para trades_matrix e eliminar algumas de trades, e registrar trades_matrix apenas na atualização diário, entrada e saida não faz
+        # Salva a matriz no formato vertical (Long Format)
+        # Se o seu storage.save_matrix_data exigir dois DFs, recomendo 
+        # atualizar o storage para aceitar o formato longo em uma única chamada.
+        storage.save_matrix_data(
+            op=self.name,
+            model=m_name,
+            strat=s_name,
+            asset=a_name,
+            matrix_df=matrix_df  
+        )
 
+        # TRADES (Concatena os DFs que guardamos no results_map)
+        param_sets = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"]
+        dfs = [obj["trades"].with_columns(pl.lit(name).alias("ps_id")) 
+               for name, obj in param_sets.items() if obj.get("trades") is not None]
 
+        if dfs:
+            storage.save_batch_trades(
+                op=self.name,
+                model=m_name,
+                strat=s_name,
+                asset=a_name,
+                df_all_trades=pl.concat(dfs)
+            )
 
+    def _process_wfm_from_duckdb(self, wfm_con):
+        # Reads wfm_raw from DuckDB -> Polars DataFrame in long format
+        # Doesn't use pivot, it's extremely quickly and doesn't generate OOM
+
+        df = wfm_con.execute("""
+            SELECT ts, pnl, lot_size, mae, mfe, trade_id
+            FROM wfm_raw
+            ORDER BY ts
+        """).pl()
+ 
+        return df.with_columns(
+            pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S")
+        )  
+    
+
+    '''
     def _save_asset_results(self, m_name, s_name, a_name, matrix_pnl, matrix_lot):
         from Storage import Storage
         storage = Storage()
@@ -846,8 +919,8 @@ class Operation(BaseClass):
                 "take_profit":    tc["take_profit"],
                 "profit":         tc["profit"],
                 "profit_r":       tc["profit_r"],
-                "mfe":            tc["mfe"],
-                "mae":            tc["mae"],
+                #"mfe":            tc["mfe"],
+                #"mae":            tc["mae"],
                 "bars_held":      tc["bars_held"],
                 "closed":         tc["closed"],
                 "id":             tc["id"],
@@ -870,175 +943,67 @@ class Operation(BaseClass):
  
         # ── WFM: INSERT direto no DuckDB — zero acumulação em RAM ─────────
         if wfm_col is not None and wfm_con is not None:
-            ts       = wfm_col.get("ts")
-            pnl      = wfm_col.get("pnl")
-            lot_size = wfm_col.get("lot_size")
-            ps_id    = wfm_col.get("ps_id")
+            ts          = wfm_col.get("ts")
+            pnl         = wfm_col.get("pnl")
+            lot_size    = wfm_col.get("lot_size")
+            mae         = wfm_col.get("mae")
+            mfe         = wfm_col.get("mfe")
+            trade_id    = wfm_col.get("trade_id")
  
             if ts is not None and len(ts) > 0:
                 # Cria DataFrame Polars temporário e insere via Arrow — eficiente
-                batch_df = pl.DataFrame({
-                    "ts":       pl.Series(ts,                dtype=pl.Int64),
-                    "pnl":      pl.Series(pnl,               dtype=pl.Float64),
-                    "lot_size": pl.Series(lot_size,           dtype=pl.Float64),
-                    "ps_id":    pl.Series(ps_id + ps_id_offset, dtype=pl.Int32),
+                batch_df =          pl.DataFrame({
+                    "ts":           pl.Series(ts,           dtype=pl.Int64),
+                    "pnl":          pl.Series(pnl,          dtype=pl.Float64),
+                    "lot_size":     pl.Series(lot_size,     dtype=pl.Float64),
+                    "mae":          pl.Series(mae,          dtype=pl.Float64),
+                    "mfe":          pl.Series(mfe,          dtype=pl.Float64),
+                    "trade_id":     pl.Series(trade_id,     dtype=pl.String),
                 })
                 wfm_con.execute("INSERT INTO wfm_raw SELECT * FROM batch_df")
 
-    def _process_wfm_to_polars(self, wfm_col: dict, ps_names: list = None):
+    def _process_wfm_to_polars(self, wfm_col: dict):
+        # Converts directly form memory (doesn't use DuckDB) for long format
         df = pl.DataFrame({
-            "ts":       pl.Series(wfm_col["ts"],       dtype=pl.Int64),
-            "pnl":      pl.Series(wfm_col["pnl"],      dtype=pl.Float64),
-            "lot_size": pl.Series(wfm_col["lot_size"], dtype=pl.Float64),
-            "ps_id":    pl.Series(wfm_col["ps_id"],    dtype=pl.Int32),
+            "ts":       pl.Series(wfm_col.get("ts"),       dtype=pl.Int64),
+            "pnl":      pl.Series(wfm_col.get("pnl"),      dtype=pl.Float64),
+            "lot_size": pl.Series(wfm_col.get("lot_size"), dtype=pl.Float64),
+            "mae":      pl.Series(wfm_col.get("mae"),      dtype=pl.Float64), # Corrigido
+            "mfe":      pl.Series(wfm_col.get("mfe"),      dtype=pl.Float64), # Corrigido
+            "trade_id": pl.Series(wfm_col.get("trade_id"), dtype=pl.String),
         })
 
-        df = df.with_columns(
-            pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S"),
-            (pl.col("pnl") * pl.col("lot_size")).alias("pnl_weighted"),
-        )
-
-        # Pivot pnl×lot → Walkforward
-        matrix_pnl = df.pivot(
-            on="ps_id", index="ts",
-            values="pnl_weighted",
-            aggregate_function="sum"
-        ).sort("ts").fill_null(0.0)
-
-        # Pivot lot_size → Portfolio Simulator
-        matrix_lot = df.pivot(
-            on="ps_id", index="ts",
-            values="lot_size",
-            aggregate_function="last"
-        ).sort("ts").fill_null(0.0)
-
-        def rename_cols(m, suffix=""):
-            if ps_names:
-                rename_map = {str(i): f"ps_{ps_names[i]}{suffix}"
-                            for i in range(len(ps_names)) if str(i) in m.columns}
-            else:
-                rename_map = {col: f"ps_{col}{suffix}"
-                            for col in m.columns if col != "ts"}
-            return m.rename(rename_map) if rename_map else m
-
-        matrix_pnl = rename_cols(matrix_pnl)
-        matrix_lot = rename_cols(matrix_lot)
-
-        return matrix_pnl, matrix_lot
-    
-    def _process_wfm_from_duckdb(self, wfm_con, ps_names: list):
-        """
-        Pivot de wfm_raw → matrix_pnl e matrix_lot via DuckDB + Polars.
-        GROUP BY antes do pivot reduz cardinalidade — eficiente em escala.
-        """
-        # Agrega por ts+ps_id antes do pivot
-        # LAST por rowid para lot_size (último valor do período)
-        df = wfm_con.execute("""
-            SELECT
-                ts,
-                ps_id,
-                SUM(pnl * lot_size)                      AS pnl_weighted,
-                LAST(lot_size ORDER BY rowid)             AS lot_size_last
-            FROM wfm_raw
-            GROUP BY ts, ps_id
-            ORDER BY ts
-        """).pl()
- 
-        # Converte ts INT64 → datetime
-        df = df.with_columns(
+        return df.with_columns(
             pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S")
         )
- 
-        # Pivot pnl_weighted → Walkforward matrix
-        matrix_pnl = df.pivot(
-            on="ps_id", index="ts",
-            values="pnl_weighted",
-            aggregate_function="sum"
-        ).sort("ts").fill_null(0.0)
- 
-        # Pivot lot_size → Portfolio Simulator matrix
-        matrix_lot = df.pivot(
-            on="ps_id", index="ts",
-            values="lot_size_last",
-            aggregate_function="last"
-        ).sort("ts").fill_null(0.0)
- 
-        def rename_cols(m):
-            if ps_names:
-                rename_map = {
-                    str(i): f"ps_{ps_names[i]}"
-                    for i in range(len(ps_names)) if str(i) in m.columns
-                }
-            else:
-                rename_map = {
-                    col: f"ps_{col}"
-                    for col in m.columns if col != "ts"
-                }
-            return m.rename(rename_map) if rename_map else m
- 
-        return rename_cols(matrix_pnl), rename_cols(matrix_lot)
+    
 
     # Saving memory defs
-    def _try_pivot_with_backoff(self, wfm_con, ps_names: list, raw_path: str):
-        # Tries complete pivo, if OOM, divides ps_ids in chuncks of memory
-        # Fallback final return None->deferred
-        # raw_path: path wfm_raw.parquet already saved in disk
+    def _process_trades_to_polars(self, trades_col: dict):
+        # Treats trades_columnar return from cpp to generate trades.parquet
 
-        from functools import reduce
- 
-        n = len(ps_names)
-        # Sequência de chunk_sizes: completo → metade → quarto → oitavo → deferred
-        chunk_sizes = list(dict.fromkeys([n, max(n//2, 1), max(n//4, 1), max(n//8, 1), 0]))
- 
-        for chunk_size in chunk_sizes:
-            if chunk_size == 0:
-                return None, None  # todos os chunks falharam → deferred
- 
-            try:
-                if chunk_size == n:
-                    # Caminho normal — pivot completo
-                    return self._process_wfm_from_duckdb(wfm_con, ps_names)
- 
-                # Pivot incremental por chunks de ps_id
-                print(f"   > OOM — retrying with chunk_size={chunk_size}...")
-                chunks = [ps_names[i:i+chunk_size] for i in range(0, n, chunk_size)]
-                matrices_pnl, matrices_lot = [], []
- 
-                for chunk in chunks:
-                    ids_str = ",".join(
-                        str(i) for i, name in enumerate(ps_names) if name in chunk
-                    )
-                    sub_con = duckdb.connect()
-                    sub_con.execute(f"""
-                        CREATE TABLE wfm_raw AS
-                        SELECT * FROM read_parquet('{raw_path}')
-                        WHERE ps_id IN ({ids_str})
-                    """)
-                    mpnl, mlot = self._process_wfm_from_duckdb(sub_con, chunk)
-                    sub_con.close()
-                    matrices_pnl.append(mpnl)
-                    matrices_lot.append(mlot)
- 
-                # Merge full outer por ts — preserva todos os timestamps
-                matrix_pnl = reduce(
-                    lambda a, b: a.join(b, on="ts", how="full", coalesce=True),
-                    matrices_pnl
-                ).sort("ts").fill_null(0.0)
- 
-                matrix_lot = reduce(
-                    lambda a, b: a.join(b, on="ts", how="full", coalesce=True),
-                    matrices_lot
-                ).sort("ts").fill_null(0.0)
- 
-                return matrix_pnl, matrix_lot
- 
-            except MemoryError:
-                continue
-            except Exception as e:
-                print(f"   > Pivot error at chunk_size={chunk_size}: {e}")
-                continue
- 
-        return None, None
+        df = pl.DataFrame(trades_col)
+        
+        # Converte strings de datas para objetos datetime nativos
+        return df.with_columns(
+            pl.col("entry_datetime").str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False),
+            pl.col("exit_datetime").str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False)
+        )
+
+    '''
+
+
+
+
+
+
+
+
+
+    # 1. Corrigir bug com indicadores, aproveitar e já adicionar o calc_single (usuário adiciona lógica aqui), calculate (chama essa para calcular usando rolling) e calc_parsets (para calcular com multi parametros)
+    # 2. Corrigir forma de tratamento de dados trades_matrix e trades
+    # 3. Se acima funcionar bem, então adicionar novas colunas para trades_matrix e eliminar algumas de trades, e registrar trades_matrix apenas na atualização diário, entrada e saida não faz
+
 
     # Batch System Defs
     def _estimate_paramset_size_mb(self, df: pl.DataFrame):
@@ -1063,10 +1028,9 @@ class Operation(BaseClass):
         return max(min_batch, min(z, max_batch))
  
     def prepare_time_params(self, settings: dict) -> dict:
-        """
-        Converte strings 'HH:MM' para minutos totais desde a meia-noite.
-        Garante valores sentinela para o C++ caso os campos sejam None.
-        """
+        # Converte strings 'HH:MM' para minutos totais desde a meia-noite.
+        # Garante valores sentinela para o C++ caso os campos sejam None.
+        
         def to_min(t):
             if t is None or t == "" or t is False:
                 return None
@@ -1241,64 +1205,14 @@ class Operation(BaseClass):
                 asset_names = list(s_obj.get("assets", {}).keys())
                 meta["models"][m_name]["strats"][s_name] = {"assets": asset_names}
 
-                for a_name, a_obj in s_obj.get("assets", {}).items():
-                    self._resolve_deferred_pivots(a_obj, m_name, s_name, a_name)
-                    storage.save_matrix_data(
-                        op=self.name, model=m_name, strat=s_name, asset=a_name,
-                        pnl_df=a_obj.get("wfm_matrix_data"),
-                        lot_df=a_obj.get("wfm_lot_data"),
-                    )
-
         storage.save_operation_meta(self.name, meta)
         self._deep_clean_memory(models_map)
         print(f"   > [Operation] All results saved and memory cleared for {self.name}")
 
-    def _resolve_deferred_pivots(self, asset_data: dict, model_name: str, strat_name: str, asset_name: str):
-        """
-        Transforma os dados brutos de WFM (armazenados em disco pelo DuckDB) 
-        em matrizes Polars prontas para o Storage.
-        """
-        import duckdb, os
-        raw_path = asset_data.get("wfm_deferred_path")
-        
-        if not raw_path or not os.path.exists(raw_path):
-            return
-
-        print(f"   > [DuckDB] Resolving deferred pivot: {model_name} | {asset_name}")
-        
-        try:
-            con = duckdb.connect()
-            # Carrega o arquivo temporário que foi salvo durante a execução dos parsets
-            con.execute(f"CREATE TABLE wfm_raw AS SELECT * FROM read_parquet('{raw_path}')")
-            
-            ps_names = list(asset_data.get("param_sets", {}).keys())
-            
-            # Tenta realizar o pivot (transformar linhas de parsets em colunas)
-            matrix_pnl, matrix_lot = self._try_pivot_with_backoff(con, ps_names, raw_path)
-            con.close()
-
-            if matrix_pnl is not None:
-                # Atualiza o dicionário com as matrizes finais
-                asset_data["wfm_matrix_data"] = matrix_pnl
-                asset_data["wfm_lot_data"]    = matrix_lot
-                
-                # Remove o arquivo bruto temporário para liberar espaço em disco
-                if os.path.exists(raw_path):
-                    os.remove(raw_path)
-                
-                # Limpa a referência do caminho
-                asset_data.pop("wfm_deferred_path", None)
-            else:
-                print(f"   > [Error] Pivot failed for {asset_name}. Raw file preserved.")
-
-        except Exception as e:
-            print(f"   > [Critical] Error during DuckDB pivot for {asset_name}: {e}")
-
     def _deep_clean_memory(self, models_dict: dict):
-            """
-            Limpeza agressiva de memória para garantir que grandes DataFrames 
-            sejam liberados após o salvamento.
-            """
+            # Limpeza agressiva de memória para garantir que grandes DataFrames 
+            # sejam liberados após o salvamento.
+            
             import gc
             
             for m_data in models_dict.values():
@@ -1316,6 +1230,9 @@ class Operation(BaseClass):
                         # 3. Limpa qualquer cache de sinal ou indicador que possa ter sobrado
                         a_data.pop("signals", None)
                         a_data.pop("indicators", None)
+
+                        # 4. Limpa caminhos tempoários se existirem
+                        a_data.pop("wfm_deferred_path", None)
 
             # Força o Garbage Collector do Python a rodar imediatamente
             gc.collect()
@@ -1590,18 +1507,17 @@ class Operation(BaseClass):
                     if load_from_storage: 
                         asset_data = storage.load(self.name, m_name, s_name, a_name)
                         pnl_matrix = asset_data.get("pnl_matrix")
-                        lot_matrix = asset_data.get("lot_matrix") # WIP
+                        #lot_matrix = asset_data.get("lot_matrix") # WIP
                     else:
                         a_obj = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
                         pnl_matrix = a_obj.get("pnl_matrix")
-                        lot_matrix = a_obj.get("lot_matrix") # WIP
+                        #lot_matrix = a_obj.get("lot_matrix") # WIP
 
                     if pnl_matrix is None or pnl_matrix.is_empty():
                         print("   > Skip: no matrix")
                         continue
 
-                    if lot_matrix is not None:
-                        pnl_matrix = self.multiply_matrices(pnl_matrix, lot_matrix)
+                    #if lot_matrix is not None: pnl_matrix = self.multiply_matrices(pnl_matrix, lot_matrix)
 
                     #if "datetime" in pnl_matrix.columns and "ts" not in pnl_matrix.columns:
                     #    pnl_matrix = pnl_matrix.rename({"datetime": "ts"}) # wip change ts->datetime

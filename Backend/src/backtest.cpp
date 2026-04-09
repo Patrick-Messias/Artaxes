@@ -245,7 +245,12 @@ SimulationOutput Backtest::run_simulation(
             return std::string(buf);
         };
 
-        auto update_mae_mfe = [&](Trade& t, bool is_long, bool pct, size_t idx) {
+        auto update_mae_mfe = [&](Trade& t, bool is_long, bool pct, size_t idx, double denominator) {
+
+            // ERRADO, DEVE CONSIDERAR price PARA QUE PODE SER t.entry_price PORQUE
+            //PODE SER O OPEN DO DIA POR EXEMPLO
+
+
             if (pct) {
                 if (is_long) {
                     double hi = (high[idx] - t.entry_price) / t.entry_price;

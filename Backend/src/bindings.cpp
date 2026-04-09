@@ -146,7 +146,7 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
         p_wfm_lot_size[i] = res.wfm_data[i].lot_size;
         p_wfm_mae[i] = res.wfm_data[i].mae;
         p_wfm_mfe[i] = res.wfm_data[i].mfe;
-
+        
         //p_trade_id[i] = res.wfm_data[i].trade_id;
         l_wfm_trade_id[i] = py::cast(data.trade_id);
     }

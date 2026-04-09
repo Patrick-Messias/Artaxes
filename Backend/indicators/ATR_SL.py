@@ -1,6 +1,31 @@
 import polars as pl
-from Indicator import Indicator
+from Indicator import Indicator # type: ignore
 
+class ATR_SL(Indicator):
+    # Average True Range based Stop Loss helper.
+    # Returns a single expression calculating the rolling mean of the range.
+
+    def __init__(self, asset=None, timeframe=None, **params):
+        defaults = {'window': 21, 'high_col': 'high', 'low_col': 'low'}
+        defaults.update(params)
+        super().__init__(asset, timeframe, **defaults)
+        self.name = self.__class__.__name__.lower()
+
+    def _get_expr(self, **kwargs) -> pl.Expr:
+        window = int(kwargs.get('window'))
+        high_col = kwargs.get('high_col')
+        low_col = kwargs.get('low_col')
+
+        # Polars handles case-insensitive column selection via selectors or 
+        # simple strings if already normalized. 
+        # Pure Expression Logic:
+        return (
+            (pl.col(high_col) - pl.col(low_col))
+            .rolling_mean(window_size=window)
+            .fill_null(0)
+        )
+
+"""
 class ATR_SL(Indicator):
     def __init__(self, asset=None, timeframe=None, **params):
         super().__init__(asset, timeframe, **params)
@@ -31,3 +56,9 @@ class ATR_SL(Indicator):
             )
             .to_series()
         )
+"""
+
+
+
+
+

@@ -14,15 +14,43 @@ class Storage:
     def _asset_path(self, op: str, model: str, strat: str, asset: str) -> Path:
         return self.base_path / op / model / strat / asset
     
-    def save_matrix_data(self, op: str, model: str, strat: str, asset: str,
-                         pnl_df: Optional[pl.DataFrame], lot_df: Optional[pl.DataFrame]):
+    def save_matrix_data(self, op: str, model: str, strat: str, asset: str, matrix_df: pl.DataFrame):
+        # Salva a matriz de resultados no formato vertical (Long Format).
+        # Contém ts, pnl, lot, mae, mfe e trade_id.
+        
+        if matrix_df is None or matrix_df.is_empty():
+            return
+
         path = self._asset_path(op, model, strat, asset) / "matrix"
         path.mkdir(parents=True, exist_ok=True)
 
-        if pnl_df is not None: 
-            pnl_df.write_parquet(path / "pnl_matrix.parquet")
-        if lot_df is not None:
-            lot_df.write_parquet(path / "lot_matrix.parquet")
+        # Salvamos em um arquivo único 'trades_matrix.parquet'
+        file_path = path / "trades_matrix.parquet"
+        
+        matrix_df.write_parquet(
+            file_path,
+            compression="zstd",
+            statistics=True
+        )
+        print(f"      > [Storage] Saved Matrix ({len(matrix_df)} rows) to {file_path}")
+
+    def save_batch_trades(self, op: str, model: str, strat: str, asset: str, df_all_trades: pl.DataFrame):
+        # Salva todos os trades detalhados de todos os parsets em um único arquivo.
+
+        if df_all_trades is None or df_all_trades.is_empty():
+            return
+
+        path = self._asset_path(op, model, strat, asset) / "trades"
+        path.mkdir(parents=True, exist_ok=True)
+        
+        file_path = path / "trades.parquet"
+        
+        df_all_trades.write_parquet(
+            file_path, 
+            compression="zstd", 
+            statistics=True 
+        )
+        print(f"      > [Storage] Saved {len(df_all_trades)} trades to {file_path}")
 
     def save_walkforward(self, op, model, strat, asset, wf_id, all_runs):
         path = self._asset_path(op, model, strat, asset) / "wfm"
@@ -57,53 +85,6 @@ class Storage:
             new_df = pl.concat([old, new_df])
 
         new_df.sort("datetime").write_parquet(file_path)
-
-    # def save_param_sets(self, op: str, model: str, strat: str, asset: str,
-    #                     pnl_df: Optional[pl.DataFrame],
-    #                     lot_df: Optional[pl.DataFrame] = None):
-    #     """
-    #     Salva 1 parquet wide com todas as curvas PnL dos param_sets
-    #     e opcionalmente 1 parquet wide com os lots.
- 
-    #     Esquema esperado: primeira coluna = 'datetime', demais = ps_ids.
-    #     """
-    #     path = self._asset_path(op, model, strat, asset)
-    #     path.mkdir(parents=True, exist_ok=True)
- 
-    #     if pnl_df is not None:
-    #         pnl_df.write_parquet(path / "param_sets.parquet")
-    #     if lot_df is not None:
-    #         lot_df.write_parquet(path / "lot_matrix.parquet")
- 
-    def save_batch_trades(self, op: str, model: str, strat: str, asset: str, df_all_trades: pl.DataFrame):
-        """
-        Salva todos os trades de todos os parsets de um asset em um único arquivo.
-        O DataFrame deve conter a coluna 'ps_id' para distinguir os parsets.
-        """
-        if df_all_trades.is_empty():
-            return
-
-        path = self._asset_path(op, model, strat, asset) / "trades"
-        path.mkdir(parents=True, exist_ok=True)
-        
-        # Nome único para o lote de resultados do asset
-        file_path = path / "trades.parquet"
-        
-        # Salvamento otimizado
-        df_all_trades.write_parquet(
-            file_path, 
-            compression="zstd", 
-            statistics=True # Ajuda o Polars/DuckDB a filtrar ps_id rapidamente
-        )
-        print(f"      > [Storage] Saved {len(df_all_trades)} trades to {file_path}")
-
-    # def save_individual_trade(self, op, model, strat, asset, ps_name, trades_df):
-    #     path = self.base_path / op / model / strat / asset / "trades"
-    #     path.mkdir(parents=True, exist_ok=True)
-        
-    #     # Sanitiza o nome do arquivo (remove caracteres que o Windows não gosta)
-    #     safe_ps_name = "".join([c if c.isalnum() or c in "-_" else "_" for c in ps_name])
-    #     trades_df.write_parquet(path / f"{safe_ps_name}.parquet")
 
     def save_operation_meta(self, op_name: str, meta_dict: dict):
         path = self.base_path / op_name / "operation_meta.json"

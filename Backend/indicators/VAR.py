@@ -1,20 +1,64 @@
-import polars as pl
-import numpy as np
-from Indicator import Indicator
-
+import polars as pl, numpy as np
+from typing import Union, List
+from Indicator import Indicator # type: ignore
 
 class VAR(Indicator):
-    """
-    Value at Risk (VaR) rolante baseado em retornos do ativo.
+    # Value at Risk (VaR) indicator.
+    # Methods:
+    #     "parametric" -> VaR = mean - (z_score * std)
+    #     "historical" -> VaR = alpha-percentile of returns
 
-    Métodos:
-        "parametric"  → VaR = mean - z_score × std  (distribuição normal)
-        "historical"  → VaR = percentil alpha dos retornos históricos
+    def __init__(self, asset=None, timeframe=None, **params):
+        defaults = {
+            'window': 20, 
+            'alpha': 0.05, 
+            'var_type': 'historical', 
+            'price_col': 'close'
+        }
+        defaults.update(params)
+        super().__init__(asset, timeframe, **defaults)
+        self.name = "var"
 
-    Retorna série de VaR (valores negativos = perda esperada).
-    Útil como proxy de volatilidade para position sizing — lote = risk_pct / |VaR|.
-    """
+    def _get_expr(self, **kwargs) -> pl.Expr:
+        window = int(kwargs.get('window'))
+        alpha = float(kwargs.get('alpha'))
+        var_type = str(kwargs.get('var_type')).lower()
+        price_col = str(kwargs.get('price_col'))
 
+        # 1. Transform Price to Returns inside the expression
+        returns = pl.col(price_col).pct_change().fill_null(0.0)
+
+        if var_type == 'historical':
+            # native rolling_quantile is extremely fast in Polars
+            return returns.rolling_quantile(
+                quantile=alpha,
+                interpolation='linear',
+                window_size=window
+            ).fill_null(0.0)
+
+        elif var_type == 'parametric':
+            # Scalar calculation for z-score (happens once in Python)
+            from scipy.stats import norm
+            z_score = float(norm.ppf(1 - alpha))
+
+            # Calculation using Polars Expressions
+            rolling_mean = returns.rolling_mean(window_size=window)
+            rolling_std = returns.rolling_std(window_size=window)
+
+            return (rolling_mean - (rolling_std * z_score)).fill_null(0.0)
+
+        raise ValueError(f"VaR type '{var_type}' not supported.")
+
+
+"""
+class VAR(Indicator):    
+    # Value at Risk (VaR) rolante baseado em retornos do ativo.
+    # Métodos:
+    #     "parametric"  → VaR = mean - z_score × std  (distribuição normal)
+    #     "historical"  → VaR = percentil alpha dos retornos históricos
+    # Retorna série de VaR (valores negativos = perda esperada).
+    # Útil como proxy de volatilidade para position sizing — lote = risk_pct / |VaR|.
+    
     def __init__(self, asset=None, timeframe=None, **params):
         super().__init__(asset, timeframe, **params)
         self.name = "var"
@@ -60,3 +104,13 @@ class VAR(Indicator):
             raise ValueError(f"Type of VaR not supported: '{var_type}'. Use 'historical' or 'parametric'.")
 
         return var_series.fill_null(0.0).alias("var")
+"""    
+
+
+
+
+
+
+
+
+
