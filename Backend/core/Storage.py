@@ -182,11 +182,22 @@ class Storage:
             ])
             dfs_to_concat.append(df_intra)
 
+        # 1. Concatena as fontes
         timeline_df = pl.concat(dfs_to_concat, how="diagonal_relaxed")
 
-        # Traz o ps_id do trades_df para mapear na timeline
+        # 2. APLICAÇÃO DO CAST (Ponto Crítico)
+        # Convertemos 'datetime' para Datetime real e garantimos que IDs sejam strings limpas
+        timeline_df = timeline_df.with_columns([
+            pl.col("datetime").str.to_datetime("%Y%m%d %H%M%S"),
+            pl.col("trade_id").cast(pl.Utf8)
+        ])
+
+        # 3. Join e Sort (agora com tipos compatíveis)
         timeline_df = timeline_df.join(
-            trades_df.select(["trade_id", "ps_id"]),
+            trades_df.select([
+                pl.col("trade_id").cast(pl.Utf8), 
+                "ps_id"
+            ]),
             on="trade_id",
             how="left"
         ).sort(["datetime", "trade_id"])

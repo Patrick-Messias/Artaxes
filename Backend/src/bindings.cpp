@@ -90,7 +90,7 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
             p_mae[idx]         = t.mae;
             p_bars_held[idx]   = t.bars_held;
             p_closed[idx]      = t.closed ? 1 : 0;
-            l_trade_id[idx]          = py::str(t.trade_id);
+            l_trade_id[idx]    = py::str(t.trade_id);
             l_entry_dt[idx]    = py::str(t.entry_datetime);
             l_exit_dt[idx]     = t.closed ? py::object(py::str(t.exit_datetime)) : py::none();
             l_exit_reason[idx] = t.closed ? py::object(py::str(t.exit_reason))   : py::none();
