@@ -131,7 +131,7 @@ class Portfolio(BaseClass, BaseManager):
         # If any of the two need to run, populate data
         if (psm and dt in psm_sch.get(self.name, set())) or (pmm and dt in pmm_sch.get(self.name, set())):
             # Use helpers to take aggr PnL
-            p_key = (list(self.portfolio_data.keys())[0],)
+            p_key = (list(self.portfolio_data.keys())[0])
             op_df = self._populate_sim_data(p_key, i, data_type="aggr")
             
             if op_df is not None:
@@ -226,25 +226,47 @@ class Portfolio(BaseClass, BaseManager):
     # ── Data Handling ───────────────────────────────────────────────
 
     # Used to pull real data from parquet from selected source
-    def _populate_sim_data(self, key, i, data_type="pnl"):
+    def _populate_sim_data(self, key, i, idx_start=None, data_type="pnl"):
         ref = self.sim_data.get(key)
         if not ref: return None
 
-        # Se pediu o Aggr de Strat/Model/Portfolio
+        # Adjusts slice start
+        s_idx = 0 if idx_start is None else idx_start
+        length = (i+1) - s_idx
+
+        # Slices timeline
+        current_timeline = self.datetime_timeline[s_idx:i+1]
+
+        # If Aggr by Strat/Model/Portfolio
         if ref["type"] == "aggr":
             return pl.DataFrame({
-                "datetime": self.datetime_timeline[:i+1], 
-                "pnl": ref["pnl"].slice(0, i + 1) # slice é mais seguro que head no Polars Series
+                "datetime": current_timeline, 
+                "pnl": ref["pnl"].slice(s_idx, length)
             })
-            #return pl.DataFrame({"datetime": self.datetime_timeline[:i+1], "pnl": ref["pnl"].head(i + 1)})
 
-        # Se for Nível Asset
+        # Asset Level (Disk)
         if ref["type"] == "disk":
-            if data_type == "aggr": # ---> NOVO: Manager querendo rankear ativos
-                return pl.DataFrame({"datetime": self.datetime_timeline[:i+1], "pnl": ref["aggr_pnl"].head(i + 1)})
+            # A. Manager wanting ranking (aggr_pnl in memory)
+            if data_type == "aggr":
+                return pl.DataFrame({
+                    "datetime": current_timeline,
+                    "pnl": ref["aggr_pnl"].slice(s_idx, length)
+                })
             
-            if data_type == "pnl":  # ---> Manager querendo rodar WF (lê o disco)
-                return pl.read_parquet(ref["pnl_path"]).head(i + 1)
+            # B. Manager wanting complete data (WF)
+            if data_type == "pnl":
+                if "pnl_cache" not in ref: # Cache logic to aviud repetitive I/O
+                    full_df = pl.read_parquet(ref["pnl_path"])
+                    
+                    # Column name standarnization
+                    if "pnl" not in full_df.columns:
+                        val_col = next((c for c in full_df.columns if c.lower() in ["pnl", "equity", "cum_pnl"]), full_df.columns[-1])
+                        full_df = full_df.rename({val_col: "pnl"})
+                    
+                    ref["pnl_cache"] = full_df
+
+                # Returns cache slice (complete DF)
+                return ref["pnl_cache"].slice(s_idx, length)
         return None
 
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 

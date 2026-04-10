@@ -306,12 +306,12 @@ class BaseManager():
         freq = self.reb_frequency 
 
         if not freq or freq == "never": 
-            return pl.DataFrame({"ts": None}) # Updates every datetime
+            return set() # Never runs
 
         df = pl.DataFrame({"ts": timeline})
 
         if freq == "tick":
-            return df # Will always run
+            return set(timeline) # Will always run
         
         if freq == "daily":
             condition = pl.col("ts").dt.date() != pl.col("ts").dt.date().shift(1)
