@@ -582,29 +582,11 @@ class Portfolio(BaseClass, BaseManager):
     # ──────────────────────────────────────────────────────────────────────────── 
 
     """"""
-    1. -> PRIORITARIO
-    - voltar operation, mudar estruturade trades, pnl_matrix, lot_matrix e wf_matrix;
-    - padronizar tuple/key EM TODO LUGAR (USAR TUPLE)
-    - trades.parquet eliminar coluna asset (vai se orientar por path)
-    - mantem mesmo path para todos
+    # 1. -> PRIORITARIO
+    # - usar timeline unificada de Storage.load para tudo
+    # - padronizar tuple/key EM TODO LUGAR (USAR TUPLE)
+    # - mantem mesmo path para todos
 
-    - Se pnl_matrix e not wf então pode fazer walkforward em cada nível em tempo real
-
-
-    trades.parquet = [trade_id, param_set, entry_dt, exit_dt, entry_price, exit_price, type, max_lot] 
-        - usa trades_matrix para completar dados variáveis
-        - 1 trade por linha
-        - vertical
-    
-    trades_matrix.parquet = [datetime, trade_id, lot, pnl_float, mae, mfe]
-        - usa trades para completar dados não variáveis 
-        - 1 atualização (tick/daily) por linha
-        - vertical
-    
-    wf_matrix.parquet = [datetime, param_set, ps_id]
-        - tem def para pesquisar no trades_matrix o pnl vise versa para saber o param_set por datetime
-        - 1 atualização (tick/daily) por linha
-        - vertical
 
     # 2. Continuação
     # -> Saidas: 
