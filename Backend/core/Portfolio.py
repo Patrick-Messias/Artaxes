@@ -251,139 +251,119 @@ class Portfolio(BaseClass, BaseManager):
     def _load_selected_saved_returns_data(self): 
         storage = Storage(base_path=self.data_storage_base_path)
         self.sim_data = {}
+
         strat_acc = {} # (op, mod, strat):  [series, series] 
         model_acc = {} # (op, mod):         [series, series]
         portf_acc = {} # (op)               [series, series]
         unique_dts = set()
 
-        # 1. GARANTE A TIMELINE PRIMEIRO (Filtro Global)
-        if not hasattr(self, 'datetime_timeline') or not self.datetime_timeline:
-            for op_name, _, m_name, _, s_name, _, a_name, _ in self._iter_portfolio_data():
-                base_path = storage._asset_path(op_name, m_name, s_name, a_name)
-                # Escaneia de forma "lazy" apenas a coluna de tempo para poupar RAM
-                df_dates = pl.scan_parquet(base_path / "matrix" / "pnl_matrix.parquet").select(
-                    pl.col("^ts|Ts|datetime$").alias("datetime")
-                ).collect()
-                unique_dts.update(df_dates["datetime"].to_list())
-            
-            self._map_all_unique_datetimes(external_dts=unique_dts)
-
-        # DataFrame oficial com exatamente os 38k datetimes (Âncora)
-        timeline_df = pl.DataFrame({"datetime": self.datetime_timeline})
-
-        # 2. CARREGAMENTO E ALINHAMENTO POR ATIVO
+        # 2. Loading and Alignment of Data
         for op_name, _, m_name, _, s_name, _, a_name, _ in self._iter_portfolio_data():
             a_key = (op_name, m_name, s_name, a_name)
             s_key = (op_name, m_name, s_name)
 
-            base_path = storage._asset_path(op_name, m_name, s_name, a_name)
-            pnl_path = str(base_path / "matrix" / "pnl_matrix.parquet")
-            lot_path = str(base_path / "matrix" / "lot_matrix.parquet")
-            wf_path = str(base_path / "wfm" / "wf.parquet")
+            # Loads via Storage.load()
+            asset_data = storage.load(op_name, m_name, s_name, a_name)
 
+            timeline_df = asset_data.get("timeline")
+            #trade_df = asset_data.get("trades")
+            wf_df = asset_data.get("wf")
+
+            if timeline_df is None or timeline_df.is_empty():
+                print(f"    < [Portfolio._load_selected_saved_returns_data] No timeline for {a_name}, skipping")
+                continue
+
+            # Colects unique datetimes from current assets results
+            unique_dts.update(timeline_df['datetime'].to_list())
+
+            # Registers lazy reference in sim_data (path to disk)
+            base_path = storage._asset_path(op_name, m_name, s_name, a_name)
             self.sim_data[a_key] = {
-                "pnl_path": pnl_path,
-                "lot_path": str(base_path / "matrix" / "lot_matrix.parquet"),
-                "wf_path": wf_path,
-                "type": "disk"
+                "type":          "disk",
+                "trades_path":   str(base_path / "trades" / "trades.parquet"),
+                "matrix_path":   str(base_path / "matrix" / "trades_matrix.parquet"),
+                "wf_path":       str(base_path / "wfm"    / "wf.parquet"),
             }
 
-            # Carrega e padroniza data (Parsets)
-            pnl_df = pl.read_parquet(pnl_path)
-            time_col = [c for c in pnl_df.columns if c in ["ts", "Ts", "datetime"]][0]
-            if time_col != "datetime": pnl_df = pnl_df.rename({time_col: "datetime"})
+            # WF memory map (if wf.parquet exists)
+            if wf_df is not None and not wf_df.is_empty(): # timeline already has ps_id linked via trade_id, use exits to map
+                #exits = timeline_df.filter(pl.col("event") == "exit")
+                self.sim_data[a_key]["wf_memory_map"] = self._build_wf_memory_map(wf_df, timeline_df) # exits
 
-            ps_cols = [c for c in pnl_df.columns if c != "datetime"]
-            asset_aggr_df = pnl_df.select([
-                pl.col("datetime"),
-                pl.mean_horizontal(ps_cols).alias("pnl_mean")
-            ])
+            # RAM aggregated series (avg of parsets by datetime)
+            #exits_only = timeline_df.filter(pl.col("event") == "exit")
+            if not timeline_df.is_empty(): #exits_only
+                asset_mean = (
+                    timeline_df #exits_only
+                    .group_by("datetime")
+                    .agg(pl.col("pnl").mean())
+                    .sort("datetime")["pnl"]
+                    .alias(a_name)
+                )
+                self.sim_data[a_key]["aggr_pnl"] = asset_mean
+                strat_acc.setdefault(s_key, []).append(asset_mean)
 
-            asset_aggr_df = asset_aggr_df.rename({"pnl_mean": "final_pnl"})
+        # Constructs global timeline from collected data
+        self.datetime_timeline = sorted(unique_dts)
+        timeline_global = pl.DataFrame({"datetime": self.datetime_timeline})
 
-            # --- O FILTRO MATADOR (Shape Force) ---
-            # Aqui os 129k viram 38k. Junta na timeline_df e preenche buracos com 0.0
-            asset_aggr_df = timeline_df.join(
-                asset_aggr_df.select(["datetime", "final_pnl"]), 
-                on="datetime", 
-                how="left"
-            ).fill_null(0.0)
-
-            asset_series = asset_aggr_df["final_pnl"].alias(a_name)
-
-            self.sim_data[a_key]["aggr_pnl"] = asset_series
-            strat_acc.setdefault(s_key, []).append(asset_series)
-
-        # 3. CONSOLIDAÇÃO HIERÁRQUICA (Correção Polars Syntax)
-        # Aggr Strat: Avg of Assets
+        # Aligns all series to global timeline and consolidates hierarchy
         for s_key, asset_list in strat_acc.items():
-            strat_mean = pl.DataFrame(asset_list).select(pl.mean_horizontal(pl.all())).to_series().alias(s_key[2])
+            aligned = [
+                timeline_global.join(
+                    pl.DataFrame({"datetime": self.datetime_timeline, "pnl": s}),
+                    on="datetime", how="left"
+                ).fill_null(0.0)["pnl"]
+                for s in asset_list
+            ]
+            strat_mean = pl.DataFrame(aligned).select(pl.mean_horizontal(pl.all())).to_series().alias(s_key[2])
             self.sim_data[s_key] = {"pnl": strat_mean, "type": "aggr"}
             model_acc.setdefault((s_key[0], s_key[1]), []).append(strat_mean)
 
-        # Aggr Model: Avg of Strats
         for m_key, strat_list in model_acc.items():
             model_mean = pl.DataFrame(strat_list).select(pl.mean_horizontal(pl.all())).to_series().alias(m_key[1])
             self.sim_data[m_key] = {"pnl": model_mean, "type": "aggr"}
-            portf_acc.setdefault((m_key[0],), []).append(model_mean)
+            portf_acc.setdefault((m_key[0]), []).append(model_mean)
 
-        # Aggr Portfolio: Avg of Models
         for op_key, model_list in portf_acc.items():
             port_mean = pl.DataFrame(model_list).select(pl.mean_horizontal(pl.all())).to_series().alias(op_key[0])
             self.sim_data[op_key] = {"pnl": port_mean, "type": "aggr"}
 
-        # Creates WF map
-        self.sim_data[a_key]["wf_memory_map"] = self.pre_load_wf_memory_map(wf_path, pnl_path, lot_path)
+        if self.datetime_timeline:
+            print(f"     > Timeline: {self.datetime_timeline[0]} → {self.datetime_timeline[-1]} ({len(self.datetime_timeline)} pts)")
 
         return True
     
-    def pre_load_wf_memory_map(self, wf_path: str, pnl_path: str, lot_path: str) -> dict:
+    def _build_wf_memory_map(self, wf_df: pl.DataFrame, trades_df: pl.DataFrame) -> dict:
+        # Constructs O(1) access map for WF data during a simulation
+        # # wf_df: wf.parquet - datetime | pnl | best_param | wf_id
+        # trades_df: trade data with - datetime | ps_id | pnl | lot_size 
+        # returns {datetime: {wf_id: (pnl, lot_size)}}
 
-        # wf_map = self.sim_data[(o_name, m_name, s_name, a_name)].get("wf_memory_map", {})
-        # pnl, lot = wf_map.get(dt, {}).get("20_20_20", (0.0, 0.0))
-        # print(pnl, lot)
-        # Exemplo de Uso
+        if wf_df is None or wf_df.is_empty():
+            return {}
+        
+        # Normalizes names to lowercase to garantee match
+        wf_df = wf_df.with_columns(pl.col("best_param").str.to_lowercase())
+        trades_df = trades_df.with_columns(pl.col("ps_id").str.to_lowercase())
 
+        # Join: for each WF line, takes pnl and lot_size from exits_df in same datetime and ps_id
+        joined = (
+            wf_df
+            .join(
+                trades_df.select(["datetime", "ps_id", "pnl", "lot_size"])
+                        .rename({"ps_id": "best_param", "pnl": "val_pnl", "lot_size": "val_lot"}),
+                on=["datetime", "best_param"],
+                how="left"
+            )
+            .fill_null(0.0)
+        )
 
-        # 1. Carrega os Parquets
-        df_wf = pl.read_parquet(wf_path)
-        df_pnl = pl.read_parquet(pnl_path)
-        df_lot = pl.read_parquet(lot_path)
-
-        # 2. Padroniza colunas de tempo
-        df_wf = df_wf.rename({df_wf.columns[0]: "datetime"})
-        df_pnl = df_pnl.rename({df_pnl.columns[0]: "datetime"})
-        df_lot = df_lot.rename({df_lot.columns[0]: "datetime"})
-
-        # 3. NORMALIZAÇÃO PARA LOWERCASE (O Fix)
-        # No WF, transformamos os valores da coluna best_param
-        df_wf = df_wf.with_columns(pl.col("best_param").str.to_lowercase())
-
-        # Nas Matrizes, transformamos os NOMES das colunas (exceto datetime)
-        df_pnl.columns = [c.lower() if c != "datetime" else c for c in df_pnl.columns]
-        df_lot.columns = [c.lower() if c != "datetime" else c for c in df_lot.columns]
-
-        # 4. Unpivot (Melt)
-        df_pnl_melt = df_pnl.unpivot(index="datetime", variable_name="best_param", value_name="val_pnl")
-        df_lot_melt = df_lot.unpivot(index="datetime", variable_name="best_param", value_name="val_lot")
-
-        # 5. Join (Agora o match "ps_..." == "ps_..." vai funcionar)
-        joined = df_wf.join(
-            df_pnl_melt, on=["datetime", "best_param"], how="left"
-        ).join(
-            df_lot_melt, on=["datetime", "best_param"], how="left"
-        ).fill_null(0.0)
-
-        # 6. Construção do Mapa
         memory_map = {}
         for row in joined.iter_rows(named=True):
-            dt = row["datetime"]
+            dt  = row["datetime"]
             wid = str(row["wf_id"])
-            
-            if dt not in memory_map:
-                memory_map[dt] = {}
-            
-            memory_map[dt][wid] = (row["val_pnl"], row["val_lot"])
+            memory_map.setdefault(dt, {})[wid] = (row["val_pnl"], row["val_lot"])
 
         return memory_map
 
@@ -457,30 +437,7 @@ class Portfolio(BaseClass, BaseManager):
 
         return indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
     
-    def _iter_portfolio_data(self):
-        for op_name, op_obj in self.portfolio_data.items():
-            for m_name, m_obj in op_obj.items():
-                for s_name, s_obj in m_obj.items():
-                    for a_name, a_obj in s_obj.items():
-                        yield op_name, op_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj
-
     # ── Datetime timeline mapping ───────────────────────────────────────────────
-
-    def _map_all_unique_datetimes(self, external_dts=None):
-        unique_dts = set()
-        
-        if external_dts:
-            unique_dts.update(external_dts)
-
-        # Se houver indicadores globais que não estão nos arquivos de PnL
-        if self.portfolio_system_manager and self.portfolio_system_manager.indicators:
-            unique_dts.update(self._get_all_sm_ind_datetimes())
-
-        self.datetime_timeline = sorted(list(unique_dts))
-        
-        # Print de conferência
-        if self.datetime_timeline:
-            print(f"> Timeline: {self.datetime_timeline[0]} até {self.datetime_timeline[-1]}")
     
     def _get_all_op_asset_datetimes(self, data_source="local"):
         assets = Asset.load_all() # NOTE Deletar futuramente
@@ -573,6 +530,15 @@ class Portfolio(BaseClass, BaseManager):
 
         return unique_ind_dts
 
+    # ── Global ───────────────────────────────────────────────
+
+    def _iter_portfolio_data(self):
+        for op_name, op_obj in self.portfolio_data.items():
+            for m_name, m_obj in op_obj.items():
+                for s_name, s_obj in m_obj.items():
+                    for a_name, a_obj in s_obj.items():
+                        yield op_name, op_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj
+
     # ── Portfolio Optimization ───────────────────────────────────────────────
 
     def _portfolio_optimization(self):
@@ -649,9 +615,9 @@ if __name__ == "__main__":
             "param2": range(20, 50+1, 30),
         },
         indicators={
-            'atr': VAR(asset=None, timeframe="M15", when="pre", window='param2'),
-            'var': VAR(asset="all_aggr", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
-            'var_all': VAR(asset="each_aggr", timeframe="tick", when="pre", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            'atr': VAR(asset=None, timeframe="M15", window='param2'),
+            'var': VAR(asset="all_aggr", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            'var_all': VAR(asset="each_aggr", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
         },
         assets={'EURUSD'},
     ))
@@ -842,29 +808,23 @@ if __name__ == "__main__":
 
 
 
+'''
+    def _map_all_unique_datetimes(self, external_dts=None):
+        unique_dts = set()
+        
+        if external_dts:
+            unique_dts.update(external_dts)
 
+        # Se houver indicadores globais que não estão nos arquivos de PnL
+        if self.portfolio_system_manager and self.portfolio_system_manager.indicators:
+            unique_dts.update(self._get_all_sm_ind_datetimes())
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        self.datetime_timeline = sorted(list(unique_dts))
+        
+        # Print de conferência
+        if self.datetime_timeline:
+            print(f"> Timeline: {self.datetime_timeline[0]} até {self.datetime_timeline[-1]}")
+'''
 
 
 

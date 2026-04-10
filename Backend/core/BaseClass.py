@@ -1,6 +1,6 @@
 from itertools import product
 from dataclasses import dataclass
-import polars as pl, json
+import polars as pl, json, Indicator
 from typing import Dict, Optional, Callable, List
 
 @dataclass
@@ -129,9 +129,9 @@ class BaseManager():
             u_key = self._pre_cache[ps_name][ind_key][target]
             
             # 2. Polars DataFrame Access line 'i' of the selected column
-            return indicator_pool[u_key][col][i]
+            return indicator_pool[u_key].get_column(col).item(i)
             
-        except KeyError: # Case indicator doesn't exist for this combination
+        except (KeyError, ValueError): # Case indicator doesn't exist for this combination
             return None
         except IndexError: # Case iteration higher then array size
             return None
@@ -144,11 +144,14 @@ class BaseManager():
             timeline_df = timeline
 
         time_col = next((c for c in timeline_df.columns if c.lower() in ['ts', 'datetime', 'time', 'date']), timeline_df.columns[0])
+        
+        # GARANTIA OBRIGATÓRIA: A timeline precisa estar ordenada para o join_asof não quebrar
+        timeline_df = timeline_df.sort(time_col)
 
-        # 2. Portfolio/Aggr Setup - CONVERSÃO DE TUPLA PARA STR AQUI
+        # 2. Portfolio/Aggr Setup
         portfolio_series = None
         if aggr_ret:
-            # Converte chaves (tuplas) para strings ("OP-MOD") para o Polars aceitar como colunas
+            # Converte chaves (tuplas) para strings para o Polars aceitar como colunas
             str_aggr_ret = {
                 "-".join(map(str, k)) if isinstance(k, (tuple, list)) else str(k): v 
                 for k, v in aggr_ret.items()
@@ -169,7 +172,7 @@ class BaseManager():
                 ind_p_hash = self.param_suffix(eff_params)
                 self._pre_cache[ps_name][ind_key] = {}
 
-                # --- LÓGICA POR ATIVO (Asset ou List) ---
+                # --- LÓGICA POR ATIVO ---
                 if ind_obj.asset is None or (not isinstance(ind_obj.asset, str) or ind_obj.asset not in ["each_aggr", "all_aggr"]):
                     if self.assets is None and ind_obj.asset is None: continue
                     target_assets = ind_obj.asset if isinstance(ind_obj.asset, list) else ([ind_obj.asset] if ind_obj.asset else self.assets)
@@ -187,11 +190,10 @@ class BaseManager():
                                 ind_result = self._calculate_indicator(asset_df, ind_obj, eff_params)
                                 indicator_pool[unique_key] = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
 
-                # --- LÓGICA AGREGADA (each_aggr ou all_aggr) ---
+                # --- LÓGICA AGREGADA ---
                 elif aggr_ret:
                     if ind_obj.asset == "each_aggr": 
                         for m_key, m_obj_series in aggr_ret.items():
-                            # Normaliza o nome para a unique_key não conter parênteses de tupla
                             m_str = "-".join(map(str, m_key)) if isinstance(m_key, (tuple, list)) else str(m_key)
                             unique_key = f"each_aggr_{m_str}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
 
@@ -215,35 +217,29 @@ class BaseManager():
                 
         return indicator_pool
     
-    def _calculate_indicator(self, data, ind_obj, eff_params):
-        # data: Can be pl.DataFrame (OHLC) or pl.Series (PnL Aggregated / Tick)
-        # eff_params: Dict with params that only this indicator uses
+    def _calculate_indicator(self, data: pl.DataFrame, ind_obj: Indicator, eff_params: dict):
+        # Find time column
+        time_col = next(c for c in data.columns if c.lower() in ['ts', 'datetime', 'time', 'date']) 
 
-        if isinstance(data, pl.DataFrame):
-            time_col = next(c for c in data.columns if c.lower() in ['ts', 'datetime', 'time', 'date'])
-            ts_series = data.get_column(time_col)
-        else: #
-            raise ValueError("data must countain time reference (ts/datetime/date/time)")
-        
-        # Executes Indicator, ind_obj must be able to accept Series + params
-        ind_results = ind_obj._calculate_logic(data, **eff_params)
+        # Case ind uses price_col and == 'close' but only has 'main' uses the latter
+        if 'price_col' in eff_params:
+            if eff_params['price_col'] not in data.columns and 'main' in data.columns:
+                eff_params = eff_params.copy()
+                eff_params['price_col'] = 'main'
+                print(f"ind {eff_params['price_col']}")
+        else: print('price_col not in ind')
 
-        # If indicator returned lazy expression, execute on original DF and convert to Series
-        if isinstance(ind_results, pl.Expr):
-            if isinstance(data, pl.DataFrame):
-                ind_results = data.select(ind_results).to_series()
+        # Gets indicator expression
+        exprs = ind_obj.get_expression(eff_params)
 
-        if isinstance(ind_results, pl.Series): # Stitches results with ts in a final DataFrame
-            ind_results = ind_results.alias("main") if ind_results.name == "" else ind_results
-            return pl.DataFrame({time_col: ts_series, ind_results.name: ind_results})
-        elif isinstance(ind_results, dict): # Case of indicator returning multiple lines
-            df_dict = {time_col: ts_series}
-            df_dict.update(ind_results)
-            return pl.DataFrame(df_dict)
-        elif isinstance(ind_results, pl.DataFrame): # Indicator already returned a DataFrame, just makes shure ts is present
-            if time_col not in ind_results.columns:
-                ind_results = ind_results.with_columns(ts_series)
-        return ind_results
+        # Executes expression in native and optimized form
+        if isinstance(exprs, list): # For mult lines ind returns DataFrame with time + columns
+            return data.select([pl.col(time_col)] + exprs)
+        else: # For singles indicator
+            return data.select([
+                pl.col(time_col),
+                exprs.alias("main")
+            ])
 
     def _align_IND_to_TIMELINE(self, timeline_df: pl.DataFrame, indicator_df: pl.DataFrame, time_col="datetime", fills_nulls="forward") -> pl.DataFrame:
         
