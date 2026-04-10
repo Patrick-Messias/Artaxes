@@ -127,73 +127,17 @@ class Operation(BaseClass):
                     assets_list = strat_data.get("assets", [])
 
                     for asset_name in assets_list:
-                        # Assumindo que storage.load agora retorna os dataframes do disco
                         asset_data = storage.load(self.name, model_name, strat_name, asset_name)
                         
-                        trades_df = asset_data.get("trades")         # trades.parquet
-                        matrix_df = asset_data.get("trades_matrix")  # trades_matrix.parquet (antigo pnl_matrix)
-
-                        # Gera a linha do tempo unificada
-                        timeline_df = self._build_timeline(trades_df, matrix_df)
-
                         self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name] = {
-                            "timeline": timeline_df,  # DF pronto para o RiskManager
-                            "trades": trades_df       # Mantemos o original caso precise de metadados específicos
+                            "timeline": asset_data.get("timeline"),
+                            "trades": asset_data.get("trades"), # Apenas o DF de trades
+                            "walkforward": asset_data.get("wf")  # Resultados de WF anteriores, se existirem
                         }
-
+ 
             print(f"   > Timeline loaded successfully.")
         else:
             print(f"   > No saved results found for '{self.name}' — starting fresh.")
-
-
-    def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame) -> pl.DataFrame:
-        # Combina os dados de trades e WFM matrix em um único log de eventos cronológico.
-
-        if trades_df is None or trades_df.is_empty():
-            return pl.DataFrame()
-
-        # 1. Eventos de ENTRADA (pnl inicial = 0.0)
-        df_entries = trades_df.select([
-            pl.col("entry_datetime").alias("datetime"),
-            pl.col("trade_id"),
-            pl.lit(0.0).alias("pnl"),
-            pl.col("lot_size"),
-            pl.lit("entry").alias("event")
-        ])
-
-        # 2. Eventos de SAÍDA (pnl final = profit)
-        df_exits = trades_df.select([
-            pl.col("exit_datetime").alias("datetime"),
-            pl.col("trade_id"),
-            pl.col("profit").alias("pnl"),
-            pl.col("lot_size"),
-            pl.lit("exit").alias("event")
-        ])
-
-        dfs_to_concat = [df_entries, df_exits]
-
-        # 3. Eventos INTRA-TRADE (Updates vindos da Matrix, se existirem)
-        if matrix_df is not None and not matrix_df.is_empty():
-            df_intra = matrix_df.select([
-                pl.col("ts").alias("datetime"),  # ts já deve estar em pl.Datetime conforme definido antes
-                pl.col("trade_id"),
-                pl.col("pnl"),
-                pl.col("lot").alias("lot_size"), # O DuckDB salvou como 'lot'
-                pl.lit("update").alias("event")
-            ])
-            dfs_to_concat.append(df_intra)
-
-        # 4. Empilha tudo em uma tabela longa
-        timeline_df = pl.concat(dfs_to_concat, how="diagonal")
-
-        # 5. Faz um Join com 'trades_df' para resgatar ps_id e asset, e ordena o tempo
-        timeline_df = timeline_df.join(
-            trades_df.select(["trade_id", "ps_id", "asset"]),
-            on="trade_id",
-            how="left"
-        ).sort(["datetime", "trade_id"])
-
-        return timeline_df
 
     # || ===================================================================== || II - Data Processing || ===================================================================== ||
 
@@ -551,7 +495,7 @@ class Operation(BaseClass):
                                 sim_signal_refs["lot_size_short"] = "custom_lot_size_short"
 
                         asset_batch["simulations"].append({
-                            "id":             ps_name,
+                            "ps_id":             ps_name,
                             "params":         {**ps_dict, "money_manager": mm_params},
                             "indicator_keys": ps_ind_col_keys[ps_name],
                             "signal_arrays":  ps_signal_arrays[ps_name],
@@ -570,7 +514,7 @@ class Operation(BaseClass):
                     print(f"   > [Batching]: {n_ps} sims | batch_size={batch_size} | n_batches={n_batches}")
 
                     # ── Fase 6: Envio para C++ ─────────────────────────────────
-                    all_ps_names = [s.get("id", "") for s in all_sim]
+                    all_ps_names = [s.get("ps_id", "") for s in all_sim]
 
                     wfm_db_path = os.path.join(
                         tempfile.gettempdir(),
@@ -764,13 +708,13 @@ class Operation(BaseClass):
                     sig_arrays[name] = arr.astype(np.uint8) if arr.dtype != np.uint8 else arr
 
                 sim_params.append({
-                    "id":            sim.get("id", ""),
+                    "ps_id":            sim.get("ps_id", ""),
                     "params":        sim.get("params", {}),
                     "signal_arrays": sig_arrays,
                     "signal_refs":   sim.get("signal_refs", {}),
                 })
 
-            ps_names = [s.get("id", "") for s in asset_batch.get("simulations", [])]
+            ps_names = [s.get("ps_id", "") for s in asset_batch.get("simulations", [])]
             raw_output = engine_cpp.execute(
                 asset_batch.get('asset_header', 'Unknown'),
                 ohlc_arrays,
@@ -867,142 +811,11 @@ class Operation(BaseClass):
         )  
     
 
-    '''
-    def _save_asset_results(self, m_name, s_name, a_name, matrix_pnl, matrix_lot):
-        from Storage import Storage
-        storage = Storage()
-
-        # # MATRIX
-        storage.save_matrix_data(
-            op=self.name,
-            model=m_name,
-            strat=s_name,
-            asset=a_name,
-            pnl_df=matrix_pnl,
-            lot_df=matrix_lot
-        )
-
-        # TRADES (batch único)
-        param_sets = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"]
-
-        dfs = []
-        for ps_name, ps_obj in param_sets.items():
-            df = ps_obj.get("trades")
-            if df is not None and not df.is_empty():
-                dfs.append(df.with_columns(pl.lit(ps_name).alias("ps_id")))
-
-        if dfs:
-            df_all = pl.concat(dfs)
-            storage.save_batch_trades(
-                op=self.name,
-                model=m_name,
-                strat=s_name,
-                asset=a_name,
-                df_all_trades=df_all
-            )
-
-    def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str,
-                     wfm_con=None, ps_id_offset: int = 0):
-        if not full_output: return
- 
-        tc       = full_output.get("trades_columnar")
-        wfm_col  = full_output.get("wfm_columnar")
-        ps_names = full_output.get("ps_names", [])
- 
-        # ── Trades ────────────────────────────────────────────────────────
-        if tc:
-            df_all = pl.DataFrame({
-                "entry_price":    tc["entry_price"],
-                "exit_price":     tc["exit_price"],
-                "lot_size":       tc["lot_size"],
-                "stop_loss":      tc["stop_loss"],
-                "take_profit":    tc["take_profit"],
-                "profit":         tc["profit"],
-                "profit_r":       tc["profit_r"],
-                #"mfe":            tc["mfe"],
-                #"mae":            tc["mae"],
-                "bars_held":      tc["bars_held"],
-                "closed":         tc["closed"],
-                "id":             tc["id"],
-                "entry_datetime": tc["entry_datetime"],
-                "exit_datetime":  tc["exit_datetime"],
-                "exit_reason":    tc["exit_reason"],
-                "status":         tc["status"],
-            }).with_columns(pl.lit(a_name).alias("asset"))
- 
-            offsets = tc["sim_offsets"]
-            for sim_idx, ps_name in enumerate(ps_names):
-                if not ps_name: continue
-                try:
-                    target = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]["param_sets"][ps_name]
-                    s = int(offsets[sim_idx])
-                    e = int(offsets[sim_idx + 1])
-                    target["trades"] = df_all.slice(s, e - s) if e > s else pl.DataFrame()
-                except KeyError as ex:
-                    print(f"DEBUG: key not found: {ex} | {m_name}->{s_name}->{a_name}->{ps_name}")
- 
-        # ── WFM: INSERT direto no DuckDB — zero acumulação em RAM ─────────
-        if wfm_col is not None and wfm_con is not None:
-            ts          = wfm_col.get("ts")
-            pnl         = wfm_col.get("pnl")
-            lot_size    = wfm_col.get("lot_size")
-            mae         = wfm_col.get("mae")
-            mfe         = wfm_col.get("mfe")
-            trade_id    = wfm_col.get("trade_id")
- 
-            if ts is not None and len(ts) > 0:
-                # Cria DataFrame Polars temporário e insere via Arrow — eficiente
-                batch_df =          pl.DataFrame({
-                    "ts":           pl.Series(ts,           dtype=pl.Int64),
-                    "pnl":          pl.Series(pnl,          dtype=pl.Float64),
-                    "lot_size":     pl.Series(lot_size,     dtype=pl.Float64),
-                    "mae":          pl.Series(mae,          dtype=pl.Float64),
-                    "mfe":          pl.Series(mfe,          dtype=pl.Float64),
-                    "trade_id":     pl.Series(trade_id,     dtype=pl.String),
-                })
-                wfm_con.execute("INSERT INTO wfm_raw SELECT * FROM batch_df")
-
-    def _process_wfm_to_polars(self, wfm_col: dict):
-        # Converts directly form memory (doesn't use DuckDB) for long format
-        df = pl.DataFrame({
-            "ts":       pl.Series(wfm_col.get("ts"),       dtype=pl.Int64),
-            "pnl":      pl.Series(wfm_col.get("pnl"),      dtype=pl.Float64),
-            "lot_size": pl.Series(wfm_col.get("lot_size"), dtype=pl.Float64),
-            "mae":      pl.Series(wfm_col.get("mae"),      dtype=pl.Float64), # Corrigido
-            "mfe":      pl.Series(wfm_col.get("mfe"),      dtype=pl.Float64), # Corrigido
-            "trade_id": pl.Series(wfm_col.get("trade_id"), dtype=pl.String),
-        })
-
-        return df.with_columns(
-            pl.col("ts").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S")
-        )
-    
-
-    # Saving memory defs
-    def _process_trades_to_polars(self, trades_col: dict):
-        # Treats trades_columnar return from cpp to generate trades.parquet
-
-        df = pl.DataFrame(trades_col)
-        
-        # Converte strings de datas para objetos datetime nativos
-        return df.with_columns(
-            pl.col("entry_datetime").str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False),
-            pl.col("exit_datetime").str.strptime(pl.Datetime, "%Y-%m-%d %H:%M:%S", strict=False)
-        )
-
-    '''
-
-
-
-
-
-
-
-
 
     # 1. Corrigir bug com indicadores, aproveitar e já adicionar o calc_single (usuário adiciona lógica aqui), calculate (chama essa para calcular usando rolling) e calc_parsets (para calcular com multi parametros)
     # 2. Corrigir forma de tratamento de dados trades_matrix e trades
     # 3. Se acima funcionar bem, então adicionar novas colunas para trades_matrix e eliminar algumas de trades, e registrar trades_matrix apenas na atualização diário, entrada e saida não faz
+
 
 
     # Batch System Defs
@@ -1504,51 +1317,49 @@ class Operation(BaseClass):
                     print(f"\n>>> WF: {m_name} | {s_name} | {a_name}")
                     
                     # ── Data  ─────────────────────────────
-                    if load_from_storage: 
-                        asset_data = storage.load(self.name, m_name, s_name, a_name)
-                        pnl_matrix = asset_data.get("pnl_matrix")
-                        #lot_matrix = asset_data.get("lot_matrix") # WIP
+                    if load_from_storage:
+                        data = storage.load(self.name, m_name, s_name, a_name)
+                        timeline_df = data.get("timeline")
                     else:
-                        a_obj = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
-                        pnl_matrix = a_obj.get("pnl_matrix")
-                        #lot_matrix = a_obj.get("lot_matrix") # WIP
+                        asset_map = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
+                        timeline_df = asset_map.get("timeline")
 
-                    if pnl_matrix is None or pnl_matrix.is_empty():
-                        print("   > Skip: no matrix")
+                    if timeline_df is None or timeline_df.is_empty():
+                        print(f"   > Skip: No timeline data found.")
                         continue
 
-                    #if lot_matrix is not None: pnl_matrix = self.multiply_matrices(pnl_matrix, lot_matrix)
+                    pnl_matrix = storage.load_wf_prep(timeline_df)
 
-                    #if "datetime" in pnl_matrix.columns and "ts" not in pnl_matrix.columns:
-                    #    pnl_matrix = pnl_matrix.rename({"datetime": "ts"}) # wip change ts->datetime
+                    if pnl_matrix is None or pnl_matrix.is_empty():
+                        print(f"   > Skip: Failed to extract PnL matrix.")
+                        continue
 
                     # ── RUN WF ─────────────────────────────────────
                     wfm_engine = s_obj.operation
                     wfm_engine.matrix = pnl_matrix
+                    wf_results = wfm_engine.analyze()
 
-                    wf_final_results = wfm_engine.analyze()
-
-                    if not wf_final_results:
-                        print(f"   > WF failed")
+                    if not wf_results:
+                        print(f"   > WF Analysis returned no results")
                         continue
 
                     # ── SAVE ──────────────────────────────────────
                     for config_key, config_data in wfm_engine.all_wf_results.items():
                         if config_key == "__meta__": continue
-
-                        runs_list = config_data.get("runs", [])
-                        if not runs_list: continue
+                        
+                        runs = config_data.get("runs", [])
+                        if not runs: continue
 
                         storage.save_walkforward(
-                            op=self.name,
-                            model=m_name,
-                            strat=s_name,
+                            op=self.name, 
+                            model=m_name, 
+                            strat=s_name, 
                             asset=a_name,
-                            wf_id=config_key,
-                            all_runs=runs_list
+                            wf_id=config_key, 
+                            all_runs=runs
                         )
 
-                    print(f"   > WF saved")
+                    print(f"   > WF results saved to disk.")
                     wfm_engine.matrix = None
                     
         return True

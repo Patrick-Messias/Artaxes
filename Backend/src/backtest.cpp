@@ -245,31 +245,26 @@ SimulationOutput Backtest::run_simulation(
             return std::string(buf);
         };
 
-        auto update_mae_mfe = [&](Trade& t, bool is_long, bool pct, size_t idx, double denominator) {
-
-            // ERRADO, DEVE CONSIDERAR price PARA QUE PODE SER t.entry_price PORQUE
-            //PODE SER O OPEN DO DIA POR EXEMPLO
-
-
+        auto update_mae_mfe = [&](Trade& t, bool is_long, bool pct, double best_val, double worst_val) {
             if (pct) {
                 if (is_long) {
-                    double hi = (high[idx] - t.entry_price) / t.entry_price;
-                    double lo = (low[idx] - t.entry_price) / t.entry_price;
+                    double hi = (best_val - t.entry_price) / t.entry_price;
+                    double lo = (worst_val - t.entry_price) / t.entry_price;
                     if (hi > t.max_fav_price) t.max_fav_price = hi;
                     if (lo < t.max_adv_price) t.max_adv_price = lo;
                 } else {
-                    double hi = (t.entry_price - low[idx]) / t.entry_price;   
-                    double lo = (t.entry_price - high[idx]) / t.entry_price;  
+                    double hi = (t.entry_price - worst_val) / t.entry_price;   
+                    double lo = (t.entry_price - best_val) / t.entry_price;  
                     if (hi > t.max_fav_price) t.max_fav_price = hi;
                     if (lo < t.max_adv_price) t.max_adv_price = lo;
                 }
             } else {
                 if (is_long) {
-                    if (high[idx] > t.max_fav_price) t.max_fav_price = high[idx];
-                    if (low[idx] < t.max_adv_price) t.max_adv_price = low[idx];
+                    if (best_val > t.max_fav_price) t.max_fav_price = best_val;
+                    if (worst_val < t.max_adv_price || t.max_adv_price == 0) t.max_adv_price = worst_val;
                 } else {
-                    if (low[idx] < t.max_fav_price || t.max_fav_price == 0) t.max_fav_price = low[idx];
-                    if (high[idx] > t.max_adv_price || t.max_adv_price == 0) t.max_adv_price = high[idx];
+                    if (worst_val < t.max_fav_price || t.max_fav_price == 0) t.max_fav_price = worst_val;
+                    if (best_val > t.max_adv_price || t.max_adv_price == 0) t.max_adv_price = best_val;
                 }
             }
         };
@@ -298,8 +293,6 @@ SimulationOutput Backtest::run_simulation(
             t.exit_reason = reason;
             t.status      = "closed";
             t.closed      = true;
-            //t.mae         = t.max_adv_price;
-            //t.mfe         = t.max_fav_price;
             t.profit      = net_pnl;
             temp_cumulative_pnl += net_pnl;
             trade_profits.push_back(net_pnl);
@@ -311,16 +304,9 @@ SimulationOutput Backtest::run_simulation(
                           << " Net: " << std::setprecision(4) << net_pnl << "%" << std::endl;
 
             // Closing price's mae/mfe
-            update_mae_mfe(t, is_long, is_pct_mode, bar_idx);
-
-            daily_results_matrix.push_back({
-                format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]),
-                dv,
-                t.lot_size,
-                t.max_adv_price,
-                t.max_fav_price,
-                t.id,
-            });
+            update_mae_mfe(t, is_long, is_pct_mode, std::max(exit_price, open[bar_idx]), std::min(exit_price, open[bar_idx]));
+            t.mae         = t.max_adv_price;
+            t.mfe         = t.max_fav_price;
         };
 
         auto open_trade = [&](Trade& t, double raw_fill, size_t idx, bool is_long) {
@@ -361,7 +347,7 @@ SimulationOutput Backtest::run_simulation(
                     }
                 }
             }
- 
+            /*
             daily_results_matrix.push_back({
                 format_datetime_to_int_from_parts(bar_dates[idx], bar_times[idx]),
                 0.0,
@@ -369,7 +355,7 @@ SimulationOutput Backtest::run_simulation(
                 t.max_adv_price,
                 t.max_fav_price,
                 t.id,
-            });
+            });*/
         };
 
         auto update_trailing = [&](Trade& t, bool is_long, double ref, size_t idx) {
@@ -551,7 +537,7 @@ SimulationOutput Backtest::run_simulation(
                     auto execute_entry = [&](bool is_long) {
                         if (order_type == "market" || is_price_only) {
                             // price_only sempre market — sem ordens pendentes
-                            Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
+                            Trade t; t.trade_id=generate_id(); t.asset=asset_name; t.path=trade_path;
                             open_trade(t, fill_price, i, is_long);
                             if (!is_pct_mode) {
                                 double sl=t.stop_loss, tp=t.take_profit;
@@ -569,7 +555,7 @@ SimulationOutput Backtest::run_simulation(
                             // limit/stop — só em ohlc
                             const RefResult& lim_r = is_long ? ref_limit_long : ref_limit_short;
                             if (!ref_valid(lim_r, i) || ref_val(lim_r, i) <= 0.0) {
-                                Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
+                                Trade t; t.trade_id=generate_id(); t.asset=asset_name; t.path=trade_path;
                                 open_trade(t, open[i], i, is_long);
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
@@ -583,13 +569,13 @@ SimulationOutput Backtest::run_simulation(
                             if (diff > limit_perc_treshold) return;
                             bool already_hit = (is_long && target<=open[i]) || (!is_long && target>=open[i]);
                             if (already_hit && gap_market_fallback) {
-                                Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
+                                Trade t; t.trade_id=generate_id(); t.asset=asset_name; t.path=trade_path;
                                 open_trade(t, open[i], i, is_long);
                                 active_trades.push_back(std::move(t));
                                 is_long ? ++day_trades_long : ++day_trades_short;
                                 return;
                             }
-                            Trade t; t.id=generate_id(); t.asset=asset_name; t.path=trade_path;
+                            Trade t; t.trade_id=generate_id(); t.asset=asset_name; t.path=trade_path;
                             t.entry_price=target; t.status="pending";
                             { auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
                             t.bars_held=0; t.lot_size=is_long?1.0:-1.0; t.exit_reason=pos_type;
@@ -673,7 +659,7 @@ SimulationOutput Backtest::run_simulation(
                         trade.daily_pnl_accum  = curr_p;
                     }
 
-                    update_mae_mfe(trade, is_long, is_pct_mode, i);
+                    update_mae_mfe(trade, is_long, is_pct_mode, close[i], close[i]);
  
                     daily_results_matrix.push_back({
                         format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
@@ -681,7 +667,7 @@ SimulationOutput Backtest::run_simulation(
                         trade.lot_size,
                         trade.max_adv_price,
                         trade.max_fav_price,
-                        trade.id,
+                        trade.trade_id,
                     });
                 }
             }
@@ -703,7 +689,7 @@ SimulationOutput Backtest::run_simulation(
                         trade.daily_pnl_accum  = curr_p;
                     }
 
-                    update_mae_mfe(trade, is_long, is_pct_mode, i);
+                    update_mae_mfe(trade, is_long, is_pct_mode, high[i], low[i]);
  
                     daily_results_matrix.push_back({
                         format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
@@ -711,7 +697,7 @@ SimulationOutput Backtest::run_simulation(
                         trade.lot_size,
                         trade.max_adv_price,
                         trade.max_fav_price,
-                        trade.id,
+                        trade.trade_id,
                     });
                 }
             }

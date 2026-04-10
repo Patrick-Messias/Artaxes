@@ -51,12 +51,12 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto a_take_profit  = py::array_t<double>(total_trades);
     auto a_profit       = py::array_t<double>(total_trades);
     auto a_profit_r     = py::array_t<double>(total_trades);
-    //auto a_mfe          = py::array_t<double>(total_trades);
-    //auto a_mae          = py::array_t<double>(total_trades);
+    auto a_mfe          = py::array_t<double>(total_trades);
+    auto a_mae          = py::array_t<double>(total_trades);
     auto a_bars_held    = py::array_t<int32_t>(total_trades);
     auto a_closed       = py::array_t<uint8_t>(total_trades);
 
-    py::list l_id(total_trades);
+    py::list l_trade_id(total_trades);
     py::list l_entry_dt(total_trades);
     py::list l_exit_dt(total_trades);
     py::list l_exit_reason(total_trades);
@@ -70,8 +70,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto* p_take_profit = a_take_profit.mutable_data();
     auto* p_profit      = a_profit.mutable_data();
     auto* p_profit_r    = a_profit_r.mutable_data();
-    //auto* p_mfe         = a_mfe.mutable_data();
-    //auto* p_mae         = a_mae.mutable_data();
+    auto* p_mfe         = a_mfe.mutable_data();
+    auto* p_mae         = a_mae.mutable_data();
     auto* p_bars_held   = a_bars_held.mutable_data();
     auto* p_closed      = a_closed.mutable_data();
 
@@ -86,11 +86,11 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
             p_take_profit[idx] = t.take_profit;
             p_profit[idx]      = t.profit;
             p_profit_r[idx]    = t.profit_r;
-            //p_mfe[idx]         = t.mfe;
-            //p_mae[idx]         = t.mae;
+            p_mfe[idx]         = t.mfe;
+            p_mae[idx]         = t.mae;
             p_bars_held[idx]   = t.bars_held;
             p_closed[idx]      = t.closed ? 1 : 0;
-            l_id[idx]          = py::str(t.id);
+            l_trade_id[idx]          = py::str(t.trade_id);
             l_entry_dt[idx]    = py::str(t.entry_datetime);
             l_exit_dt[idx]     = t.closed ? py::object(py::str(t.exit_datetime)) : py::none();
             l_exit_reason[idx] = t.closed ? py::object(py::str(t.exit_reason))   : py::none();
@@ -109,11 +109,11 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     trades_col["take_profit"]    = a_take_profit;
     trades_col["profit"]         = a_profit;
     trades_col["profit_r"]       = a_profit_r;
-    //trades_col["mfe"]            = a_mfe;
-    //trades_col["mae"]            = a_mae;
+    trades_col["mfe"]            = a_mfe;
+    trades_col["mae"]            = a_mae;
     trades_col["bars_held"]      = a_bars_held;
     trades_col["closed"]         = a_closed;
-    trades_col["id"]             = l_id;
+    trades_col["trade_id"]             = l_trade_id;
     trades_col["entry_datetime"] = l_entry_dt;
     trades_col["exit_datetime"]  = l_exit_dt;
     trades_col["exit_reason"]    = l_exit_reason;
@@ -192,7 +192,7 @@ static py::dict execute_wrapper(
     for (const auto& sim_obj : sim_params_py) {
         py::dict sim = sim_obj.cast<py::dict>();
         SimParams sp;
-        sp.id     = sim["id"].cast<std::string>();
+        sp.id     = sim["ps_id"].cast<std::string>(); //id
         sp.params = py_to_json(sim["params"].cast<py::object>());
         if (sim.contains("signal_arrays")) {
             for (auto& item : sim["signal_arrays"].cast<py::dict>()) {
