@@ -7,7 +7,7 @@ struct Trade {
     std::string asset;
     std::string path;
     std::string status;
-    char   entry_datetime[20] = {};   // "YYYYMMDD HHMMSS\0" — sem heap alloc
+    long long entry_datetime = 0;   // Standarnizing to epoch timestamp
     double entry_price    = 0.0;
     double position_value = 0.0;
     double lot_size       = 0.0;
@@ -20,7 +20,7 @@ struct Trade {
     double mfe            = 0.0; // Final Maximum Favorable Excursion
     double mae            = 0.0; // Final Maximum Adverse Excursion
     double exit_price     = 0.0;
-    char   exit_datetime[20] = {};
+    long long exit_datetime = 0;
     std::string exit_reason;
     double profit   = 0.0;
     double profit_r = 0.0;

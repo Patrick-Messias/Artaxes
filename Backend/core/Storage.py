@@ -149,22 +149,37 @@ class Storage:
         return asset_data
 
     def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame) -> pl.DataFrame:
-        # Combina trades e matrix em um Log de Eventos Vertical (Event Sourcing).
-        
         if trades_df is None or trades_df.is_empty():
             return pl.DataFrame()
 
+        # Formato numérico exato vindo do C++ (ex: 20210412013000)
+        fmt = "%Y%m%d%H%M%S"
+
+        def cast_datetime(column_name):
+            # Tenta converter de forma inteligente:
+            # 1. Se for Int/Float (YYYYMMDD...), vira String -> Datetime
+            # 2. Se já for Datetime (carregado do Parquet), ignora o cast
+            return (
+                pl.col(column_name)
+                .replace(0, None)
+                .cast(pl.Utf8)
+                .str.to_datetime(fmt, strict=False) # strict=False evita o crash se houver lixo
+                .alias("datetime")
+            )
+
+        # 1. ENTRIES
         df_entries = trades_df.select([
-            pl.col("entry_datetime").alias("datetime"),
-            "trade_id",
+            cast_datetime("entry_datetime"),
+            pl.col("trade_id").cast(pl.Utf8),
             pl.lit(0.0).alias("pnl"),
             pl.col("lot_size"),
             pl.lit("entry").alias("event")
         ])
 
+        # 2. EXITS
         df_exits = trades_df.select([
-            pl.col("exit_datetime").alias("datetime"),
-            "trade_id",
+            cast_datetime("exit_datetime"),
+            pl.col("trade_id").cast(pl.Utf8),
             pl.col("profit").alias("pnl"),
             pl.col("lot_size"),
             pl.lit("exit").alias("event")
@@ -172,27 +187,24 @@ class Storage:
 
         dfs_to_concat = [df_entries, df_exits]
 
+        # 3. MATRIX (se existir)
         if matrix_df is not None and not matrix_df.is_empty():
             df_intra = matrix_df.select([
-                pl.col("ts").alias("datetime"),
-                "trade_id",
+                cast_datetime("ts"),
+                pl.col("trade_id").cast(pl.Utf8),
                 pl.col("pnl"),
                 pl.col("lot_size"),
                 pl.lit("update").alias("event")
             ])
             dfs_to_concat.append(df_intra)
 
-        # 1. Concatena as fontes
-        timeline_df = pl.concat(dfs_to_concat, how="diagonal_relaxed")
+        # 4. CONCATENA TUDO
+        timeline_df = (
+            pl.concat(dfs_to_concat, how="diagonal_relaxed")
+            .filter(pl.col("datetime").is_not_null())
+        )
 
-        # 2. APLICAÇÃO DO CAST (Ponto Crítico)
-        # Convertemos 'datetime' para Datetime real e garantimos que IDs sejam strings limpas
-        timeline_df = timeline_df.with_columns([
-            pl.col("datetime").str.to_datetime("%Y%m%d %H%M%S"),
-            pl.col("trade_id").cast(pl.Utf8)
-        ])
-
-        # 3. Join e Sort (agora com tipos compatíveis)
+        # 5. REACOPLA O ps_id (Fundamental para o Walkforward funcionar)
         timeline_df = timeline_df.join(
             trades_df.select([
                 pl.col("trade_id").cast(pl.Utf8), 
@@ -200,41 +212,29 @@ class Storage:
             ]),
             on="trade_id",
             how="left"
-        ).sort(["datetime", "trade_id"])
+        ).sort("datetime")
 
         return timeline_df
     
 
     def load_wf_prep(self, timeline_df: pl.DataFrame) -> pl.DataFrame:
         if timeline_df is None or timeline_df.is_empty():
+            print(f"   < [Storage.load_wf_prep] timeline_df is None or empty")
             return None
 
         # Certifique-se que a coluna de tempo é temporal antes de qualquer operação
-        df_updates = timeline_df.filter(pl.col("event") == "update")
-        
-        # Se o C++ envia string, convertemos aqui:
-        df_updates = df_updates.with_columns(
-            pl.col("datetime").str.to_datetime() # Converte string para Datetime real
-        )
+        target = "update" if (timeline_df["event"] == "update").any() else "exit"
 
-        if df_updates.is_empty():
-            return None
-
-        wide_df = (
-            df_updates
+        return (
+            timeline_df
+            .filter(pl.col("event") == target)
             .group_by(["datetime", "ps_id"])
             .agg(pl.col("pnl").sum())
-            .pivot(
-                values="pnl",
-                index="datetime",
-                columns="ps_id"
-            )
+            .pivot(values="pnl", index="datetime", columns="ps_id")
             .rename({"datetime": "ts"}) 
             .fill_null(0.0)
             .sort("ts")
         )
-        
-        return wide_df
 
     # ─────────────────────────────────────────────────────────────────────────
     # Internos

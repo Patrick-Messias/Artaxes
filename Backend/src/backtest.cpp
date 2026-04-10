@@ -289,7 +289,7 @@ SimulationOutput Backtest::run_simulation(
             }
  
             t.exit_price  = exit_price;
-            { auto _s = make_dt_str(bar_idx); std::memcpy(t.exit_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.exit_datetime))); }
+            t.exit_datetime = format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]); //{ auto _s = make_dt_str(bar_idx); std::memcpy(t.exit_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.exit_datetime))); }
             t.exit_reason = reason;
             t.status      = "closed";
             t.closed      = true;
@@ -315,7 +315,7 @@ SimulationOutput Backtest::run_simulation(
             t.entry_price    = fill;
             t.status         = "open";
             auto _s = make_dt_str(idx);
-            std::memcpy(t.entry_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.entry_datetime)));
+            t.entry_datetime = format_datetime_to_int_from_parts(bar_dates[idx], bar_times[idx]); //std::memcpy(t.entry_datetime, _s.c_str(), std::min(_s.size()+1, sizeof(t.entry_datetime)));
             t.bars_held      = 0;
             t.profit         = 0.0;  // acumulador pct_mode
  
@@ -577,7 +577,7 @@ SimulationOutput Backtest::run_simulation(
                             }
                             Trade t; t.trade_id=generate_id(); t.asset=asset_name; t.path=trade_path;
                             t.entry_price=target; t.status="pending";
-                            { auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
+                            t.entry_datetime = format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]); //{ auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
                             t.bars_held=0; t.lot_size=is_long?1.0:-1.0; t.exit_reason=pos_type;
                             pending_orders.push_back(std::move(t));
                         }

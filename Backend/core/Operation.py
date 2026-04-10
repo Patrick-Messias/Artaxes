@@ -812,9 +812,7 @@ class Operation(BaseClass):
     
 
 
-    # 1. Corrigir bug com indicadores, aproveitar e já adicionar o calc_single (usuário adiciona lógica aqui), calculate (chama essa para calcular usando rolling) e calc_parsets (para calcular com multi parametros)
-    # 2. Corrigir forma de tratamento de dados trades_matrix e trades
-    # 3. Se acima funcionar bem, então adicionar novas colunas para trades_matrix e eliminar algumas de trades, e registrar trades_matrix apenas na atualização diário, entrada e saida não faz
+    #-> trades and trades_matrix have different ts type, needs to change all to be the same
 
 
 
@@ -1325,13 +1323,13 @@ class Operation(BaseClass):
                         timeline_df = asset_map.get("timeline")
 
                     if timeline_df is None or timeline_df.is_empty():
-                        print(f"   > Skip: No timeline data found.")
+                        print(f"   < [Operation._run_walkforward]: No timeline data found.")
                         continue
 
                     pnl_matrix = storage.load_wf_prep(timeline_df)
 
                     if pnl_matrix is None or pnl_matrix.is_empty():
-                        print(f"   > Skip: Failed to extract PnL matrix.")
+                        print(f"   < [Operation._run_walkforward]: Failed to extract PnL matrix.")
                         continue
 
                     # ── RUN WF ─────────────────────────────────────
@@ -1340,7 +1338,7 @@ class Operation(BaseClass):
                     wf_results = wfm_engine.analyze()
 
                     if not wf_results:
-                        print(f"   > WF Analysis returned no results")
+                        print(f"   < [Operation._run_walkforward]: WF Analysis returned no results")
                         continue
 
                     # ── SAVE ──────────────────────────────────────
@@ -1359,7 +1357,7 @@ class Operation(BaseClass):
                             all_runs=runs
                         )
 
-                    print(f"   > WF results saved to disk.")
+                    print(f"   < [Operation._run_walkforward]: WF results saved to disk.")
                     wfm_engine.matrix = None
                     
         return True

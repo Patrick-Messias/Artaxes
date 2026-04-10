@@ -55,10 +55,10 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto a_mae          = py::array_t<double>(total_trades);
     auto a_bars_held    = py::array_t<int32_t>(total_trades);
     auto a_closed       = py::array_t<uint8_t>(total_trades);
+    auto a_entry_dt     = py::array_t<int64_t>(total_trades);
+    auto a_exit_dt      = py::array_t<int64_t>(total_trades);
 
     py::list l_trade_id(total_trades);
-    py::list l_entry_dt(total_trades);
-    py::list l_exit_dt(total_trades);
     py::list l_exit_reason(total_trades);
     py::list l_status(total_trades);
 
@@ -74,6 +74,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto* p_mae         = a_mae.mutable_data();
     auto* p_bars_held   = a_bars_held.mutable_data();
     auto* p_closed      = a_closed.mutable_data();
+    auto* p_entry_dt    = a_entry_dt.mutable_data();
+    auto* p_exit_dt    = a_exit_dt.mutable_data();
 
     size_t idx = 0;
     for (size_t si = 0; si < n_sims; ++si) {
@@ -90,11 +92,13 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
             p_mae[idx]         = t.mae;
             p_bars_held[idx]   = t.bars_held;
             p_closed[idx]      = t.closed ? 1 : 0;
+            p_entry_dt[idx]    = t.entry_datetime;
+            p_exit_dt[idx]     = t.closed ? t.exit_datetime : 0;
+
             l_trade_id[idx]    = py::str(t.trade_id);
-            l_entry_dt[idx]    = py::str(t.entry_datetime);
-            l_exit_dt[idx]     = t.closed ? py::object(py::str(t.exit_datetime)) : py::none();
             l_exit_reason[idx] = t.closed ? py::object(py::str(t.exit_reason))   : py::none();
             l_status[idx]      = py::str(t.status);
+
             ++idx;
         }
     }
@@ -113,9 +117,9 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     trades_col["mae"]            = a_mae;
     trades_col["bars_held"]      = a_bars_held;
     trades_col["closed"]         = a_closed;
-    trades_col["trade_id"]             = l_trade_id;
-    trades_col["entry_datetime"] = l_entry_dt;
-    trades_col["exit_datetime"]  = l_exit_dt;
+    trades_col["entry_datetime"] = a_entry_dt;
+    trades_col["exit_datetime"]  = a_exit_dt;
+    trades_col["trade_id"]       = l_trade_id;
     trades_col["exit_reason"]    = l_exit_reason;
     trades_col["status"]         = l_status;
 
