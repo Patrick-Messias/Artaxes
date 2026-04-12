@@ -125,6 +125,12 @@ class Portfolio(BaseClass, BaseManager):
 
     # ── Portfolio Defs ───────────────────────────────────────────────
 
+
+
+    #-> PSM está funcionando, mas preciso identificar e padronizar TODAS as keys em tudo e corrigir a partir de PMM
+
+
+
     def _system_money_managers(self, i, dt, hierarchy, indicator_pool, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
         m_map = self.sm_mm_map
         p_name = self.name
@@ -134,29 +140,30 @@ class Portfolio(BaseClass, BaseManager):
         # If any of the two need to run, populate data
         if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
             # Use helpers to take aggr PnL
-            model_keys = [(p_name, m_name) for m_name in p_data_node.keys()]
+            model_keys = list({(o, m) for o, _, m, *_ in self._iter_portfolio_data()})
             op_df = self._get_wide_pnl_df(model_keys, i)
-  
+
             if op_df is not None:
                 psm = m_map.get("managers", {}).get("psm")
-                if psm and dt in psm_sch.get(self.name, []):
+                if psm and dt in psm_sch.get(p_name, []):
                     #print("PSM")
                     hierarchy = psm.main(dt, hierarchy, indicator_pool, op_df, self.portfolio_returns)
                 pmm = m_map.get("managers", {}).get("pmm")
-                if pmm and dt in pmm_sch.get(self.name, []):
+                if pmm and dt in pmm_sch.get(p_name, []):
                     #print("PMM")
                     hierarchy = pmm.main(dt, hierarchy, indicator_pool, op_df, self.portfolio_returns)
 
         # Model and Strat Levels
-        for m_name, strats in self.portfolio_data[p_name].items():
-            #for m_name, m_obj in o_obj.items():
-            msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
-            mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
+        for m_name, strats_dict in p_data_node.items():
+            m_key = (p_name, m_name)            
 
             # Rebalancing of Models
-            if (msm and dt in msm_sch.get(m_name, set())) or (mmm and dt in mmm_sch.get(m_name, set())):
-                strat_keys = [(p_name, m_name, s_name) for s_name in strats.keys()]
+            if (dt in msm_sch.get(m_key, set())) or (dt in mmm_sch.get(m_key, set())):
+                strat_keys = [(o, m, s) for o, _, m, _, s, *_ in self._iter_portfolio_data() if m == m_name]
                 model_df = self._get_wide_pnl_df(strat_keys, i)
+
+                msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
+                mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
     
                 if model_df is not None:
                     #print("msM")
@@ -165,14 +172,16 @@ class Portfolio(BaseClass, BaseManager):
                     if mmm: hierarchy = mmm.main(dt, hierarchy, indicator_pool, model_df, self.portfolio_returns)
 
             # Strat Level
-            for s_name, assets in strats.items():
+            for s_name, assets_dict in strats_dict.items():
                 s_key = (p_name, m_name, s_name)
-                ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
-                smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
-                if (ssm and dt in ssm_sch.get(s_key, set())) or (smm and dt in smm_sch.get(s_key, set())):
-                    asset_keys = [(p_name, m_name, s_name, a_name) for a_name in assets.keys()]
+                if (dt in ssm_sch.get(s_key, set())) or (dt in smm_sch.get(s_key, set())):
+                    asset_keys = [(o, m, s, a) for o, _, m, _, s, _, a, _ in self._iter_portfolio_data() 
+                                if m == m_name and s == s_name]
                     strat_df = self._get_wide_pnl_df(asset_keys, i)
+
+                    ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
+                    smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
                     if strat_df is not None:
                         #print("ssm")
@@ -236,8 +245,7 @@ class Portfolio(BaseClass, BaseManager):
         
         if not dfs: return None
         
-        # Faz um join de todos os DataFrames pela coluna 'datetime'
-        # Isso gera: [datetime, Filho_1, Filho_2, Filho_3...]
+        # Faz o merge horizontal de todos os modelos/estratégias
         wide_df = dfs[0]
         for next_df in dfs[1:]:
             wide_df = wide_df.join(next_df, on="datetime", how="left")
@@ -247,21 +255,28 @@ class Portfolio(BaseClass, BaseManager):
     # Used to pull real data from parquet from selected source
     def _populate_sim_data(self, key, i, idx_start=None, data_type="pnl"):
         ref = self.sim_data.get(key)
-        if not ref: return None
+        if not ref and isinstance(key, (tuple, list)):
+            ref = self.sim_data.get(key[-1])
+
+        if not ref: 
+            print(f"DEBUG: Chave não encontrada no sim_data: {key} (Tipo: {type(key)})")
+            return None
+        
+        entity_name = key[-1] if isinstance(key, (tuple, list)) else key
 
         s_idx = 0 if idx_start is None else idx_start
         length = (i + 1) - s_idx
         current_timeline = self.datetime_timeline[s_idx : i + 1]
-
+ 
         # DINÂMICO: Usa o nome real do modelo/estratégia/parset como nome da coluna
         # Se key é ("Portfolio", "MA Trend Following"), entity_name será "MA Trend Following"
-        entity_name = str(key[-1])
+        entity_name = key[-1] if isinstance(key, (tuple, list)) else key
 
         # Se for Nível Agregado (Strat/Model/Portfolio)
         if ref["type"] == "aggr":
             return pl.DataFrame({
                 "datetime": current_timeline, 
-                entity_name: ref["pnl"].slice(s_idx, length)
+                str(entity_name): ref["pnl"].slice(s_idx, length)
             })
 
         # Se for Nível Asset (Disk)
@@ -363,7 +378,7 @@ class Portfolio(BaseClass, BaseManager):
         for m_key, strat_list in model_acc.items():
             model_mean = pl.DataFrame(strat_list).select(pl.mean_horizontal(pl.all())).to_series().alias(m_key[1])
             self.sim_data[m_key] = {"pnl": model_mean, "type": "aggr"}
-            portf_acc.setdefault((m_key[0]), []).append(model_mean)
+            portf_acc.setdefault((m_key[0],), []).append(model_mean)
 
         for op_key, model_list in portf_acc.items():
             port_mean = pl.DataFrame(model_list).select(pl.mean_horizontal(pl.all())).to_series().alias(op_key[0])
@@ -408,11 +423,12 @@ class Portfolio(BaseClass, BaseManager):
         return memory_map
 
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
-        indicator_pool, params_pool = {}, {}
         psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
+        indicator_pool, params_pool = {}, {}
         
         timeline = self.datetime_timeline
         sd = self.sim_data
+        p_name = self.name
 
         # 1. Agregação e Separação (Long/Short)
         # Extraímos as Series já calculadas no load
@@ -427,34 +443,38 @@ class Portfolio(BaseClass, BaseManager):
 
         # --- PORTFOLIO LEVEL ---
         p_magrs = sm_mm_map.get("managers", {})
+
+        # Models of this one specific operation (for key purposes only)
+        p_models_filter = {k: v for k, v in aggr_models_ret.items() if k[0] == p_name}
         
         # System Manager (PSM)
         psm = p_magrs.get("psm") or PortfolioSystemManager(PortfolioSystemManagerParams())
-        indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, aggr_models_ret, indicator_pool)
-        psm_sch[self.name] = psm.get_schedule(timeline)
+        indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, p_models_filter, indicator_pool)
+        psm_sch[p_name] = psm.get_schedule(timeline)
         p_magrs["psm"] = psm
             
         # Money Manager (PMM)
         pmm = p_magrs.get("pmm") or PortfolioMoneyManager(PortfolioMoneyManagerParams())
-        indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, aggr_models_ret, indicator_pool)
-        pmm_sch[self.name] = pmm.get_schedule(timeline)
+        indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, p_models_filter, indicator_pool)
+        pmm_sch[p_name] = pmm.get_schedule(timeline)
         p_magrs["pmm"] = pmm
 
         # --- MODELS LEVEL ---
         for m_name, m_info in sm_mm_map.get("models", {}).items():
+            m_key = (p_name, m_name)
             m_magrs = m_info.get("managers", {})
-            m_strats_filter = {k: v for k, v in aggr_strats_ret.items() if k[1] == m_name}
+            m_strats_filter = {k: v for k, v in aggr_strats_ret.items() if k[:2] == m_key}
 
             # Model System Manager (MSM)
             msm = m_magrs.get("msm") or ModelSystemManager(ModelSystemManagerParams())
             indicator_pool, sd, params_pool = msm.pre_compute(global_assets, timeline, sd, m_strats_filter, indicator_pool)
-            msm_sch[m_name] = msm.get_schedule(timeline)
+            msm_sch[m_key] = msm.get_schedule(timeline) # Indexado por Tupla
             m_magrs["msm"] = msm
 
             # Model Money Manager (MMM)
             mmm = m_magrs.get("mmm") or ModelMoneyManager(ModelMoneyManagerParams())
             indicator_pool, sd, params_pool = mmm.pre_compute(global_assets, timeline, sd, m_strats_filter, indicator_pool)
-            mmm_sch[m_name] = mmm.get_schedule(timeline)
+            mmm_sch[m_key] = mmm.get_schedule(timeline) # Indexado por Tupla
             m_magrs["mmm"] = mmm
 
             # --- STRATS LEVEL ---
@@ -466,13 +486,13 @@ class Portfolio(BaseClass, BaseManager):
                 # Strat System Manager (SSM)
                 ssm = s_magrs.get("ssm") or StratSystemManager(StratSystemManagerParams())
                 indicator_pool, sd, params_pool = ssm.pre_compute(global_assets, timeline, sd, s_assets_filter, indicator_pool)
-                ssm_sch[s_key] = ssm.get_schedule(timeline)
+                ssm_sch[s_key] = ssm.get_schedule(timeline) # Indexado por Tupla
                 s_magrs["ssm"] = ssm
 
                 # Strat Money Manager (SMM)
                 smm = s_magrs.get("smm") or StratMoneyManager(StratMoneyManagerParams())
                 indicator_pool, sd, params_pool = smm.pre_compute(global_assets, timeline, sd, s_assets_filter, indicator_pool)
-                smm_sch[s_key] = smm.get_schedule(timeline)
+                smm_sch[s_key] = smm.get_schedule(timeline) # Indexado por Tupla
                 s_magrs["smm"] = smm
 
         return indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch

@@ -60,7 +60,7 @@ class SystemManager(BaseClass, BaseManager):
 
 #||=========================================================================================||
 
-    # ── SM Rebalance Func ───────────────────────────────────────────────────────
+    # ── Every Datetime [i] ───────────────────────────────────────────────
 
     def rank(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> Dict[str, float]:
         # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]

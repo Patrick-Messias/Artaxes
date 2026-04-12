@@ -43,59 +43,62 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
         return indicator_pool, sim_data
                        
+    # ── Every Datetime [i] ───────────────────────────────────────────────
+    
     def _default_rank(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> dict:
-            """
-            op_data: DataFrame Largo [datetime, Modelo_A, Modelo_B, ...]
-            hierarchy: dicionário contendo a lista de modelos ativos em hierarchy["models"]
-            """
-            models_to_rank = hierarchy.get("models", [])
-            
-            # Se não houver dados ou modelos para rankear, retorna a hierarquia original
-            if not models_to_rank or op_data is None:
-                return hierarchy
+        """
+        Rankea os modelos baseados na performance contida no DataFrame op_data.
+        """
+        # No nível de Portfólio, os 'filhos' são modelos.
+        # Tentamos buscar 'models', se não existir, buscamos 'strats' (para reuso da lógica)
+        children_key = "models" if "models" in hierarchy else "strats"
+        entities_to_rank = hierarchy.get(children_key, [])
 
-            # 1. Extraímos a última linha (estado atual) como um dicionário
-            # { "MA Trend Following": [0.00883], "Outro Modelo": [0.005] }
-            last_values = op_data.tail(1).to_dict(as_series=False)
-            
-            # 2. Define a direção da ordenação (highest = descendente)
-            descending = self.model_hierarchy.get("order_by", "highest") == "highest"
-
-            # 3. Ordenação baseada nos valores das colunas correspondentes
-            # O str(m) garante que comparamos o nome do modelo com o nome da coluna no DF
-            ranked = sorted(
-                models_to_rank, 
-                key=lambda m: last_values.get(str(m), [-float("inf")])[0], 
-                reverse=descending
-            )
-
-            # 4. Atualizamos a lista na hierarquia
-            hierarchy["models"] = ranked
-            
+        if not entities_to_rank or op_data is None:
             return hierarchy
 
-    def _default_filter(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> List[str]:
-
-        for m_name, m_obj in op_data.items():
-            #var = self.get_ind("var", m_name, step_dt, indicator_pool, ) # NOTE COMO USUÁRIO VAI SABER O PS_KEY? NÃO DEVERIA PRECISAR, APENAS PUXAR PARA O NIVEL ATUAL AUTOMATICO
-            if hierarchy["models"][m_name]["pnl"] < 0.4: hierarchy["models"][m_name]["pnl"] = -float("inf") 
-        return hierarchy # By default doesn't filter out any model
-
-    def _default_rebalance(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> List[str]:
-        models = hierarchy["models"]
-
+        # 1. Extraímos o estado atual (última linha)
+        last_values = op_data.tail(1).to_dict(as_series=False)
+        
+        # 2. Direção da ordenação
         descending = self.model_hierarchy.get("order_by", "highest") == "highest"
-        ranked = sorted(models, key=lambda m: models['pnl'].get(m, -float("inf")), reverse=descending)
 
-        if self.max_active_models:
-            hierarchy["models"] = ranked[:self.max_active_models]
+        # 3. Ordenação segura: usamos str(e) para bater com o nome da coluna no Polars
+        ranked = sorted(
+            entities_to_rank, 
+            key=lambda e: last_values.get(str(e), [-float("inf")])[0], 
+            reverse=descending
+        )
+
+        hierarchy[children_key] = ranked
+        return hierarchy
+
+    def _default_filter(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> dict:
+        """
+        Filtra entidades. Por padrão, mantém todas. 
+        Pode ser expandido para remover modelos com drawdown excessivo usando o op_data.
+        """
+        return hierarchy 
+
+    def _default_rebalance(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> dict:
+        """
+        Aplica o limite de modelos ativos (max_active_models) após o ranking.
+        """
+        children_key = "models" if "models" in hierarchy else "strats"
+        entities = hierarchy.get(children_key, [])
+
+        if not entities:
+            return hierarchy
+
+        # O ranking já foi feito no _default_rank (chamado pelo main antes do rebalance)
+        # Aqui apenas aplicamos o corte de quantidade (Slicing)
+        if self.max_active_models is not None:
+            hierarchy[children_key] = entities[:self.max_active_models]
 
         return hierarchy
 
-    # ── Every Datetime [i] ───────────────────────────────────────────────
-    
     def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
-        print(op_data)
+     
         hierarchy = self.rank(step_dt, hierarchy, indicator_pool, op_data, port_returns)
         hierarchy = self.filter(step_dt, hierarchy, indicator_pool, op_data, port_returns)
         hierarchy = self.rebalance(step_dt, hierarchy, indicator_pool, op_data, port_returns)

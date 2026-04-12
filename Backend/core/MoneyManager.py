@@ -62,44 +62,30 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         self._fn_risk_guard     = mm_params.fn_risk_guard
         self._fn_main           = mm_params.fn_main
 
-    # ── SM Rebalance Func ───────────────────────────────────────────────────────
-
-    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
-
-        # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
-        
-        return indicator_pool, sim_data
-            
-    def allocate(self, context: dict) -> Dict[str, float]:
-        # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
-        return self._call(self._fn_allocate, self._default_allocate, context)
-
-    def size(self, context: dict) -> List[str]:
-        # Removes models that don't pass the filter function
-        # Returns list of model_names that are active
-        return self._call(self._fn_size, self._default_size, context)
-
-    def risk_guard(self, context: dict) -> List[str]:
-        # Orchestrates rank -> filter -> selection
-        # Returns ordered list of active models
-        return self._call(self._fn_risk_guard, self._default_risk_guard, context)
+#||=========================================================================================||
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
+
+    def allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> Dict[str, float]:
+        # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
+        return self._call(self._fn_allocate, self._default_allocate, step_dt, hierarchy, indicator_pool, op_data, port_returns)
+
+    def size(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
+        # Removes models that don't pass the filter function
+        # Returns list of model_names that are active
+        return self._call(self._fn_size, self._default_size, step_dt, hierarchy, indicator_pool, op_data, port_returns)
+
+    def risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
+        # Orchestrates rank -> filter -> selection
+        # Returns ordered list of active models
+        return self._call(self._fn_risk_guard, self._default_risk_guard, step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
     def main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
         return self._call(self._fn_main, self._default_main, step_dt, hierarchy, indicator_pool, op_data, port_returns)
     
-    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
-
-        # Calculates Live Indicators
-
-        # Rebalances
-
-        return hierarchy
-
-    #||=========================================================================================||
+#||=========================================================================================||
 
     
 
