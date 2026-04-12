@@ -226,7 +226,6 @@ class BaseManager():
             if eff_params['price_col'] not in data.columns and 'main' in data.columns:
                 eff_params = eff_params.copy()
                 eff_params['price_col'] = 'main'
-                print(f"ind {eff_params['price_col']}")
         else: print('price_col not in ind')
 
         # Gets indicator expression
@@ -262,7 +261,7 @@ class BaseManager():
         if fills_nulls == 0: return aligned_df.fill_null(0)
         elif fills_nulls == "forward": return aligned_df.fill_null(strategy="forward")
 
-    # Tow below for other use, _calculate_and_map_indicators already handles Indicator Data to Timeline
+    # Tow below for other uses, _calculate_and_map_indicators already handles Indicator Data to Timeline
     def align_HTF_to_LTF(timeline_df, higher_tf_df): 
         # timeline_df: DataFrame com a coluna 'ts' (ex: 1 min ou ticks)
         # higher_tf_df: DataFrame com o indicador calculado (ex: 1 hora)

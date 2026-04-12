@@ -62,20 +62,24 @@ class SystemManager(BaseClass, BaseManager):
 
     # ── SM Rebalance Func ───────────────────────────────────────────────────────
 
-    def rank(self, context: dict) -> Dict[str, float]:
+    def rank(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> Dict[str, float]:
         # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
-        return self._call(self._fn_rank, self._default_rank, context)
+        return self._call(self._fn_rank, self._default_rank, step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
-    def filter(self, context: dict) -> List[str]:
+    def filter(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
         # Removes models that don't pass the filter function
         # Returns list of model_names that are active
-        return self._call(self._fn_filter, self._default_filter, context)
+        return self._call(self._fn_filter, self._default_filter, step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
-    def rebalance(self, context: dict) -> List[str]:
+    def rebalance(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
         # Orchestrates rank -> filter -> selection
         # Returns ordered list of active models
-        return self._call(self._fn_rebalance, self._default_rebalance, context)
+        return self._call(self._fn_rebalance, self._default_rebalance, step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
+    def main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
+        # Called every datetime for each model and asset
+        # Returns True if model can operate now
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
     # def __repr__(self):
     #     return f"<{self.__class__.__name__} name={self.name}>"

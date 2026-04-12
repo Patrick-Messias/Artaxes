@@ -40,62 +40,65 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 #||=========================================================================================||
 
     def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
-
         # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
-        
         return indicator_pool, sim_data
                        
-    def _default_rank(self, context: dict) -> Dict[str, float]:
-        history  = context.get("history", {})
-        lookback = self.reb_lookback_n
-        scores   = {}
+    def _default_rank(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> dict:
+            """
+            op_data: DataFrame Largo [datetime, Modelo_A, Modelo_B, ...]
+            hierarchy: dicionário contendo a lista de modelos ativos em hierarchy["models"]
+            """
+            models_to_rank = hierarchy.get("models", [])
+            
+            # Se não houver dados ou modelos para rankear, retorna a hierarquia original
+            if not models_to_rank or op_data is None:
+                return hierarchy
 
-        for model, df in history.items():
-            if df.is_empty():
-                scores[model] = -float("inf")
-                continue
-            tail = df.tail(lookback)["pnl"]
-            if self.reb_metric == "sharpe":
-                scores[model] = float(tail.mean() / (tail.std() + 1e-9))
-            elif self.reb_metric == "pnl_dd":
-                eq  = tail.cum_sum()
-                dd  = float((eq.cum_max() - eq).max() + 1e-9)
-                scores[model] = float(tail.sum()) / dd
-            else:  # pnl
-                scores[model] = float(tail.sum())
+            # 1. Extraímos a última linha (estado atual) como um dicionário
+            # { "MA Trend Following": [0.00883], "Outro Modelo": [0.005] }
+            last_values = op_data.tail(1).to_dict(as_series=False)
+            
+            # 2. Define a direção da ordenação (highest = descendente)
+            descending = self.model_hierarchy.get("order_by", "highest") == "highest"
 
-        return scores
+            # 3. Ordenação baseada nos valores das colunas correspondentes
+            # O str(m) garante que comparamos o nome do modelo com o nome da coluna no DF
+            ranked = sorted(
+                models_to_rank, 
+                key=lambda m: last_values.get(str(m), [-float("inf")])[0], 
+                reverse=descending
+            )
 
-    def _default_filter(self, context: dict) -> List[str]:
-        models = context.get("models", []) 
-        return models # By default doesn't filter out any model
+            # 4. Atualizamos a lista na hierarquia
+            hierarchy["models"] = ranked
+            
+            return hierarchy
 
-    def _default_rebalance(self, context: dict) -> List[str]:
-        scores = self.rank(context)
-        context["scores"] = scores
+    def _default_filter(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> List[str]:
 
-        passed = self.filter(context)
+        for m_name, m_obj in op_data.items():
+            #var = self.get_ind("var", m_name, step_dt, indicator_pool, ) # NOTE COMO USUÁRIO VAI SABER O PS_KEY? NÃO DEVERIA PRECISAR, APENAS PUXAR PARA O NIVEL ATUAL AUTOMATICO
+            if hierarchy["models"][m_name]["pnl"] < 0.4: hierarchy["models"][m_name]["pnl"] = -float("inf") 
+        return hierarchy # By default doesn't filter out any model
+
+    def _default_rebalance(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> List[str]:
+        models = hierarchy["models"]
+
         descending = self.model_hierarchy.get("order_by", "highest") == "highest"
-        ranked = sorted(passed, key=lambda m: scores.get(m, -float("inf")), reverse=descending)
+        ranked = sorted(models, key=lambda m: models['pnl'].get(m, -float("inf")), reverse=descending)
 
         if self.max_active_models:
-            ranked = ranked[:self.max_active_models]
+            hierarchy["models"] = ranked[:self.max_active_models]
 
-        self._active_models = ranked
-        return ranked
+        return hierarchy
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
-
-    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
-        # Called every datetime for each model and asset
-        # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
     
-    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
-
-        # Calculates Live Indicators
-
-        # Rebalances
+    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
+        print(op_data)
+        hierarchy = self.rank(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy = self.filter(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy = self.rebalance(step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
         return hierarchy
    

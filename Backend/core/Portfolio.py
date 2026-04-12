@@ -68,7 +68,7 @@ class Portfolio(BaseClass, BaseManager):
 
         # SM and MM Pre-Compute Metrics, Indicators and Rebalance Schedule
         indicator_pool, params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch \
-        = self._pre_compute_and_calc_rebalance_schedule(self.global_assets, self.sm_mm_map)
+        = self._pre_compute_and_calc_rebalance_schedule(self.global_assets, self.sm_mm_map) # NOTE Futuramente salvar os indicadores calculados para SQL/parquet para não pesar memória
 
         # 2 - Run Timeline
         for i, step_dt in enumerate(self.datetime_timeline):
@@ -110,9 +110,13 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
 
             # Updates System and Money Managers - Top Down - at [i] ends
-            hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
+            hierarchy = self._system_money_managers(i, step_dt, hierarchy, indicator_pool, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
 
             #||=====================================================================================||#
+
+            if i == 150:
+                data = self._populate_sim_data((list(self.portfolio_data.keys())[0]), i, 0,  data_type="aggr")
+                print(data)
 
             if i < 3 or i > len(self.datetime_timeline)-3: 
                 print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
@@ -121,62 +125,60 @@ class Portfolio(BaseClass, BaseManager):
 
     # ── Portfolio Defs ───────────────────────────────────────────────
 
-    def _system_money_managers(self, i, dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
+    def _system_money_managers(self, i, dt, hierarchy, indicator_pool, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
         m_map = self.sm_mm_map
+        p_name = self.name
 
-        # Portfolio Level
-        psm = m_map.get("managers", {}).get("psm")
-        pmm = m_map.get("managers", {}).get("pmm")
-        
+        p_data_node = self.portfolio_data.get(p_name, self.portfolio_data)
+
         # If any of the two need to run, populate data
-        if (psm and dt in psm_sch.get(self.name, set())) or (pmm and dt in pmm_sch.get(self.name, set())):
+        if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
             # Use helpers to take aggr PnL
-            p_key = (list(self.portfolio_data.keys())[0])
-            op_df = self._populate_sim_data(p_key, i, data_type="aggr")
-            
+            model_keys = [(p_name, m_name) for m_name in p_data_node.keys()]
+            op_df = self._get_wide_pnl_df(model_keys, i)
+  
             if op_df is not None:
+                psm = m_map.get("managers", {}).get("psm")
                 if psm and dt in psm_sch.get(self.name, []):
                     #print("PSM")
-                    hierarchy = psm.main(dt, hierarchy, op_df, self.portfolio_returns)
+                    hierarchy = psm.main(dt, hierarchy, indicator_pool, op_df, self.portfolio_returns)
+                pmm = m_map.get("managers", {}).get("pmm")
                 if pmm and dt in pmm_sch.get(self.name, []):
                     #print("PMM")
-                    hierarchy = pmm.main(dt, hierarchy, op_df, self.portfolio_returns)
+                    hierarchy = pmm.main(dt, hierarchy, indicator_pool, op_df, self.portfolio_returns)
 
         # Model and Strat Levels
-        for o_name, o_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj in self._iter_portfolio_data():
+        for m_name, strats in self.portfolio_data[p_name].items():
             #for m_name, m_obj in o_obj.items():
-            m_key = (o_name, m_name)
-            s_key = (self.name, m_name, s_name)
-            
             msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
             mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
             # Rebalancing of Models
             if (msm and dt in msm_sch.get(m_name, set())) or (mmm and dt in mmm_sch.get(m_name, set())):
-                model_df = self._populate_sim_data(m_key, i, data_type="aggr")
-                
+                strat_keys = [(p_name, m_name, s_name) for s_name in strats.keys()]
+                model_df = self._get_wide_pnl_df(strat_keys, i)
+    
                 if model_df is not None:
-                    if msm and dt in msm_sch.get(m_name, set()):
-                        #print("msm")
-                        hierarchy = msm.main(dt, hierarchy, model_df, self.portfolio_returns)
-                    if mmm and dt in mmm_sch.get(m_name, set()):
-                        #print("mmm")
-                        hierarchy = mmm.main(dt, hierarchy, model_df, self.portfolio_returns)
+                    #print("msM")
+                    if msm: hierarchy = msm.main(dt, hierarchy, indicator_pool, model_df, self.portfolio_returns)
+                    #print("mmM")
+                    if mmm: hierarchy = mmm.main(dt, hierarchy, indicator_pool, model_df, self.portfolio_returns)
 
             # Strat Level
-            ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
-            smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
-            
-            if (ssm and dt in ssm_sch.get(s_key, set())) or (smm and dt in smm_sch.get(s_key, set())):
-                strat_df = self._populate_sim_data((o_name, m_name, s_name), i, data_type="aggr")
-                
-                if strat_df is not None:
-                    if ssm and dt in ssm_sch.get(s_key, set()):
+            for s_name, assets in strats.items():
+                s_key = (p_name, m_name, s_name)
+                ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
+                smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
+
+                if (ssm and dt in ssm_sch.get(s_key, set())) or (smm and dt in smm_sch.get(s_key, set())):
+                    asset_keys = [(p_name, m_name, s_name, a_name) for a_name in assets.keys()]
+                    strat_df = self._get_wide_pnl_df(asset_keys, i)
+
+                    if strat_df is not None:
                         #print("ssm")
-                        hierarchy = ssm.main(dt, hierarchy, strat_df, self.portfolio_returns)
-                    if smm and dt in smm_sch.get(s_key, set()):
+                        if ssm: hierarchy = ssm.main(dt, hierarchy, indicator_pool, strat_df, self.portfolio_returns)
                         #print("smm")
-                        hierarchy = smm.main(dt, hierarchy, strat_df, self.portfolio_returns)
+                        if smm: hierarchy = smm.main(dt, hierarchy, indicator_pool, strat_df, self.portfolio_returns)
 
         return hierarchy
 
@@ -225,47 +227,63 @@ class Portfolio(BaseClass, BaseManager):
 
     # ── Data Handling ───────────────────────────────────────────────
 
+    def _get_wide_pnl_df(self, keys, i, idx_start=0):
+        dfs = []
+        for k in keys:
+            df = self._populate_sim_data(k, i, idx_start=idx_start, data_type="aggr")
+            if df is not None:
+                dfs.append(df)
+        
+        if not dfs: return None
+        
+        # Faz um join de todos os DataFrames pela coluna 'datetime'
+        # Isso gera: [datetime, Filho_1, Filho_2, Filho_3...]
+        wide_df = dfs[0]
+        for next_df in dfs[1:]:
+            wide_df = wide_df.join(next_df, on="datetime", how="left")
+        
+        return wide_df
+
     # Used to pull real data from parquet from selected source
     def _populate_sim_data(self, key, i, idx_start=None, data_type="pnl"):
         ref = self.sim_data.get(key)
         if not ref: return None
 
-        # Adjusts slice start
         s_idx = 0 if idx_start is None else idx_start
-        length = (i+1) - s_idx
+        length = (i + 1) - s_idx
+        current_timeline = self.datetime_timeline[s_idx : i + 1]
 
-        # Slices timeline
-        current_timeline = self.datetime_timeline[s_idx:i+1]
+        # DINÂMICO: Usa o nome real do modelo/estratégia/parset como nome da coluna
+        # Se key é ("Portfolio", "MA Trend Following"), entity_name será "MA Trend Following"
+        entity_name = str(key[-1])
 
-        # If Aggr by Strat/Model/Portfolio
+        # Se for Nível Agregado (Strat/Model/Portfolio)
         if ref["type"] == "aggr":
             return pl.DataFrame({
                 "datetime": current_timeline, 
-                "pnl": ref["pnl"].slice(s_idx, length)
+                entity_name: ref["pnl"].slice(s_idx, length)
             })
 
-        # Asset Level (Disk)
+        # Se for Nível Asset (Disk)
         if ref["type"] == "disk":
-            # A. Manager wanting ranking (aggr_pnl in memory)
             if data_type == "aggr":
                 return pl.DataFrame({
                     "datetime": current_timeline,
-                    "pnl": ref["aggr_pnl"].slice(s_idx, length)
+                    entity_name: ref["aggr_pnl"].slice(s_idx, length)
                 })
             
-            # B. Manager wanting complete data (WF)
             if data_type == "pnl":
-                if "pnl_cache" not in ref: # Cache logic to aviud repetitive I/O
+                if "pnl_cache" not in ref:
                     full_df = pl.read_parquet(ref["pnl_path"])
-                    
-                    # Column name standarnization
-                    if "pnl" not in full_df.columns:
-                        val_col = next((c for c in full_df.columns if c.lower() in ["pnl", "equity", "cum_pnl"]), full_df.columns[-1])
-                        full_df = full_df.rename({val_col: "pnl"})
-                    
+                    # Garante que a coluna de valor no cache também tenha o nome da entidade
+                    if "pnl" in full_df.columns:
+                        full_df = full_df.rename({"pnl": entity_name})
+                    else:
+                        # Fallback caso o parquet use outro nome
+                        val_col = [c for c in full_df.columns if c != "datetime"][0]
+                        full_df = full_df.rename({val_col: entity_name})
                     ref["pnl_cache"] = full_df
 
-                # Returns cache slice (complete DF)
                 return ref["pnl_cache"].slice(s_idx, length)
         return None
 

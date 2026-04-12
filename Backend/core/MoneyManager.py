@@ -86,12 +86,12 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+    def main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, indicator_pool, op_data, port_returns)
     
-    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
 
         # Calculates Live Indicators
 
