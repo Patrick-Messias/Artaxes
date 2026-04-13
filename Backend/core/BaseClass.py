@@ -70,25 +70,7 @@ class BaseClass():
                 eff[k] = v
         return eff
     
-    @staticmethod
-    def separate_long_short_returns(df: pl.DataFrame) -> pl.DataFrame:
-        # df needs at least: 'datetime', 'return', 'lot'
-        
-        # If dict with DataFrames
-        if isinstance(df, dict):
-            return {k: BaseClass.separate_long_short_returns(v) for k, v in df.items()}
-        
-        if isinstance(df, pl.DataFrame):
-            if "lot" not in df.columns: 
-                return df
-            
-            return df.with_columns([
-                pl.when(pl.col("lot") > 0).then(pl.col("return")).otherwise(0.0).alias("long_return"),
-                pl.when(pl.col("lot") < 0).then(pl.col("return")).otherwise(0.0).alias("short_return"),
-                pl.when(pl.col("lot") > 0).then(1).when(pl.col("lot") < 0).then(-1).otherwise(0).alias("position_direction")
-            ])
-        return df
-
+    
 @dataclass
 class BaseManager():
 
@@ -111,110 +93,100 @@ class BaseManager():
 
         return indicator_pool, sim_data, param_sets
 
+    def get_aggr_pnl_by_side(self, df: pl.DataFrame, side: str, alias: str) -> pl.Series:
+        if side=="long" and "lot_size" in df.columns:
+            filtered = df.filter(pl.col("lot_size") > 0)
+        if side=="short" and "lot_size" in df.columns:
+            filtered = df.filter(pl.col("lot_size") < 0)
+        else:
+            filtered = df # Default is both
+        if filtered.is_empty(): return pl.Series(alias, [], dtype=pl.Float64)
+
+        return (
+            filtered
+            .group_by("datetime")
+            .agg(pl.col("pnl").mean())
+            .sort("datetime")["pnl"]
+            .alias(alias)
+        )
+    
     # ── Indicators ───────────────────────────────────────────────────────
 
-    def get_ind(self, ind_key: str, target: str, i: int, indicator_pool: dict, ps_name: str, col: str = "main"):
-        """
-        Searches in O(1) indicator value aligned to the current iteration
+    def get_ind(self, ind_key, target, i, ps_name=None): # if ps_name=None returns all parsets
+        # O(1) search, with parset ensemble support 
         
-        :param ind_key: Indicator name (ex: "rsi", "trend_ma")
-        :param target: Asset/Model name (ex: "BTC"), model (ex: "Model_A") or "total"
-        :param i: Timeline iteration current index 
-        :param indicator_pool: Global dictionary that holds aligned dfs
-        :param ps_name: Parset name (ex: "default")
-        :param col: Indicator column to select (default is "main")
-        """
-        try:
-            # 1. Recovers unique cache hash
-            u_key = self._pre_cache[ps_name][ind_key][target]
-            
-            # 2. Polars DataFrame Access line 'i' of the selected column
-            return indicator_pool[u_key].get_column(col).item(i)
-            
-        except (KeyError, ValueError): # Case indicator doesn't exist for this combination
-            return None
-        except IndexError: # Case iteration higher then array size
-            return None
+        try: # Direct O(1) access to global dict tuple (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
+            ps_dict = self.indicator_pool[ind_key][target]
 
-    def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets):
-        # 1. Timeline Setup
-        if isinstance(timeline, list):
-            timeline_df = pl.DataFrame({"datetime": timeline})
-        else:
-            timeline_df = timeline
-
-        time_col = next((c for c in timeline_df.columns if c.lower() in ['ts', 'datetime', 'time', 'date']), timeline_df.columns[0])
+            # Specific parset request case
+            if ps_name is not None:
+                return ps_dict[ps_name][i]
+            
+            # Doesn't have a request but only 1 parset (ex: rsi_score = sum(1 for val in rsi.values() if val > 70))
+            if len(ps_dict) == 1:
+                return next(iter(ps_dict.values()))[i]
+            
+            # Case multiple parset and none specifically requested
+            return {ps: arr[i] for ps, arr in ps_dict.items()}
         
-        # GARANTIA OBRIGATÓRIA: A timeline precisa estar ordenada para o join_asof não quebrar
-        timeline_df = timeline_df.sort(time_col)
+        except (KeyError, IndexError):
+            return None
+        
+    def _resolve_data_source(self, address, ind_obj, aggr_ret, global_assets, timeline_df, time_col='datetime'):
+        # Transforma qualquer string/tupla em um DataFrame [datetime, main]
 
-        # 2. Portfolio/Aggr Setup
-        portfolio_series = None
-        if aggr_ret:
-            # Converte chaves (tuplas) para strings para o Polars aceitar como colunas
-            str_aggr_ret = {
-                "-".join(map(str, k)) if isinstance(k, (tuple, list)) else str(k): v 
-                for k, v in aggr_ret.items()
-            }
-            
-            all_models_df = pl.DataFrame(str_aggr_ret)
-            portfolio_series = pl.DataFrame({
-                time_col: timeline_df.get_column(time_col),
-                "main": all_models_df.select(pl.mean_horizontal(pl.all())).to_series()
-            })
+        # 1. Caso seja um Ativo Físico (ex: "EURUSD")
+        if isinstance(address, str) and address in global_assets:
+            return global_assets[address].data_get(ind_obj.timeframe)
 
-        # 3. Loop de Parsets e Indicadores
+        # 2. Caso seja um Caminho Exato no sim_data (Tupla)
+        if isinstance(address, tuple) and address in aggr_ret:
+            return pl.DataFrame({time_col: timeline_df[time_col], "main": aggr_ret[address]})
+
+        # 3. Caso seja uma Query de Agregação (Ex: "@total_long")
+        if isinstance(address, str) and address.startswith("@total"):
+            side_pref = address.split("_")[-1] if "_" in address else "both"
+            target_series = [v for k, v in aggr_ret.items() if k[-1] == side_pref]
+            if target_series:
+                main_v = pl.DataFrame(target_series).select(pl.mean_horizontal(pl.all())).to_series()
+                return pl.DataFrame({time_col: timeline_df[time_col], "main": main_v})
+        return None
+
+    def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets, time_col='datetime'):
+        # 1. Timeline Setup (Garantia de ordenação para join_asof)
+        timeline_df = (pl.DataFrame({time_col: timeline}) if isinstance(timeline, list) else timeline).sort(time_col)
+
         for ps_name, ps_dict in param_sets.items():
-            self._pre_cache[ps_name] = {}
-
             for ind_key, ind_obj in self.indicators.items():
                 eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
-                ind_p_hash = self.param_suffix(eff_params)
-                self._pre_cache[ps_name][ind_key] = {}
 
-                # --- LÓGICA POR ATIVO ---
-                if ind_obj.asset is None or (not isinstance(ind_obj.asset, str) or ind_obj.asset not in ["each_aggr", "all_aggr"]):
-                    if self.assets is None and ind_obj.asset is None: continue
-                    target_assets = ind_obj.asset if isinstance(ind_obj.asset, list) else ([ind_obj.asset] if ind_obj.asset else self.assets)
+                # 1. Path resolve
+                # Determines final adress list
+                raw_addr = ind_obj.asset
 
-                    for a_name in target_assets:
-                        a_obj = global_assets.get(a_name)
-                        if not a_obj: continue
+                # Case A: Dinamic Expansion (ex: "@each_long", "@each_both")
+                if isinstance(raw_addr, str) and raw_addr.startswith("@each"):
+                    side_pref = raw_addr.split("_")[-1] if "_" in raw_addr else "both"
+                    resolved_addresses = [k for k in aggr_ret.keys() if k[-1] == side_pref]
 
-                        unique_key = f"{a_name}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-                        self._pre_cache[ps_name][ind_key][a_name] = unique_key
-                        
-                        if unique_key not in indicator_pool: 
-                            asset_df = a_obj.data_get(ind_obj.timeframe)
-                            if asset_df is not None: 
-                                ind_result = self._calculate_indicator(asset_df, ind_obj, eff_params)
-                                indicator_pool[unique_key] = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
+                # Case B: Manual adresses key
+                elif isinstance(raw_addr, list):
+                    resolved_addresses = raw_addr
 
-                # --- LÓGICA AGREGADA ---
-                elif aggr_ret:
-                    if ind_obj.asset == "each_aggr": 
-                        for m_key, m_obj_series in aggr_ret.items():
-                            m_str = "-".join(map(str, m_key)) if isinstance(m_key, (tuple, list)) else str(m_key)
-                            unique_key = f"each_aggr_{m_str}_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
+                # Case C: Only 1 adress (Str, Tuple or None)
+                else:
+                    resolved_addresses = [raw_addr if raw_addr is not None else "@total_both"]
 
-                            self._pre_cache[ps_name][ind_key][m_key] = unique_key
+                # 2. Calculation
+                for addr in resolved_addresses:
+                    indicator_pool.setdefault(ind_key, {}).setdefault(addr, {})
 
-                            if unique_key not in indicator_pool: 
-                                m_df = pl.DataFrame({
-                                    time_col: timeline_df.get_column(time_col),
-                                    "main": m_obj_series
-                                })
-                                ind_result = self._calculate_indicator(m_df, ind_obj, eff_params)
-                                indicator_pool[unique_key] = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
-
-                    elif ind_obj.asset == "all_aggr" and portfolio_series is not None: 
-                        unique_key = f"all_aggr_{ind_obj.timeframe}_{ind_key}_{ind_p_hash}"
-                        self._pre_cache[ps_name][ind_key]["total"] = unique_key
-
-                        if unique_key not in indicator_pool: 
-                            ind_result = self._calculate_indicator(portfolio_series, ind_obj, eff_params)
-                            indicator_pool[unique_key] = self._align_IND_to_TIMELINE(timeline_df, ind_result, time_col)
-                
+                    if ps_name not in indicator_pool[ind_key][addr]:
+                        data_df = self._resolve_data_source(addr, ind_obj, aggr_ret, global_assets, timeline_df)
+                        if data_df is not None:
+                            res_df = self._calculate_indicator(data_df, ind_obj, eff_params)
+                            aligned_series = self._align_IND_to_TIMELINE(timeline_df, res_df, time_col)
+                            indicator_pool[ind_key][addr][ps_name] = aligned_series.to_numpy()
         return indicator_pool
     
     def _calculate_indicator(self, data: pl.DataFrame, ind_obj: Indicator, eff_params: dict):
@@ -260,6 +232,7 @@ class BaseManager():
         # Fills nulls with zero
         if fills_nulls == 0: return aligned_df.fill_null(0)
         elif fills_nulls == "forward": return aligned_df.fill_null(strategy="forward")
+
 
     # Tow below for other uses, _calculate_and_map_indicators already handles Indicator Data to Timeline
     def align_HTF_to_LTF(timeline_df, higher_tf_df): 
