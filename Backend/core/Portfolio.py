@@ -111,8 +111,8 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
 
             # Updates System and Money Managers - Top Down - at [i] ends
-            hierarchy = self._system_money_managers(i, step_dt, hierarchy, self.indicator_pool, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
-
+            hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
+                                                    
             #||=====================================================================================||#
 
             if i == 150:
@@ -350,11 +350,11 @@ class Portfolio(BaseClass, BaseManager):
 
             # A. Calcula o PnL Principal (O que rola pro Portfólio)
             # Se o usuário escolheu "LONG", a via "both" do sistema será alimentada apenas por trades de compra.
-            main_pnl = self.get_aggr_pnl_by_side(timeline_df, side_pref, a_name)
-            
+            main_pnl_df = self.get_aggr_pnl_by_side(timeline_df, side_pref, a_name)
             a_key_both = (op_name, m_name, s_name, a_name, "both")
-            _register_sim_data(a_key_both, base_path, main_pnl, wf_memory_map)
-            strat_acc.setdefault((op_name, m_name, s_name, "both"), []).append(main_pnl)
+            #self.sim_data[a_key_both]["aggr_pnl_df"] = main_pnl_df
+            _register_sim_data(a_key_both, base_path, main_pnl_df, wf_memory_map)
+            strat_acc.setdefault((op_name, m_name, s_name, "both"), []).append(main_pnl_df)
 
             # B. Calcula as Vias Separadas (Apenas se requisitado para análises finas do Manager)
             if separate_ls:
@@ -375,23 +375,17 @@ class Portfolio(BaseClass, BaseManager):
 
         # Alinha e Agrega Nível Estratégia
         for s_key, asset_list in strat_acc.items():
-            aligned = [
-                timeline_global.join(
-                    pl.DataFrame({"datetime": self.datetime_timeline, "pnl": s}),
-                    on="datetime", how="left"
-                ).fill_null(0.0)["pnl"]
-                for s in asset_list if len(s) > 0
-            ]
-            if aligned:
-                strat_mean = pl.DataFrame(aligned).select(pl.mean_horizontal(pl.all())).to_series().alias(s_key[2])
-            else:
-                strat_mean = pl.Series(s_key[2], [0.0]*len(self.datetime_timeline), dtype=pl.Float64)
+            a_name_col = s_key[2]  # nome da strat como coluna
+            merged = timeline_global
+            for asset_df in asset_list:
+                col_name = [c for c in asset_df.columns if c != "datetime"][0]
+                merged = merged.join(asset_df, on="datetime", how="left").fill_null(0.0)
             
+            # Média horizontal de todas as colunas de asset
+            asset_cols = [c for c in merged.columns if c != "datetime"]
+            strat_mean = merged.select(pl.mean_horizontal(asset_cols)).to_series().alias(s_key[2])
             self.sim_data[s_key] = {"pnl": strat_mean, "type": "aggr"}
-            
-            # Passa para o modelo mantendo a via (ex: s_key[-1] = "both" ou "long")
-            m_key = (s_key[0], s_key[1], s_key[-1])
-            model_acc.setdefault(m_key, []).append(strat_mean)
+            model_acc.setdefault((s_key[0], s_key[1], s_key[-1]), []).append(strat_mean)
 
         # Alinha e Agrega Nível Modelo
         for m_key, strat_list in model_acc.items():

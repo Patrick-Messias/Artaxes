@@ -28,7 +28,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         self.reb_method                         = psm_params.reb_method
         self.reb_closes_open_trades_on_rebalance = psm_params.reb_closes_open_trades_on_rebalance
 
-        self._pre_cache: Dict = {}   # Metrics and Indicators
+        #self._pre_cache: Dict = {}   # Metrics and Indicators
         # self._pre_cache = {
         #     "models": {
         #         "Model_A": {

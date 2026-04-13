@@ -93,21 +93,27 @@ class BaseManager():
 
         return indicator_pool, sim_data, param_sets
 
-    def get_aggr_pnl_by_side(self, df: pl.DataFrame, side: str, alias: str) -> pl.Series:
-        if side=="long" and "lot_size" in df.columns:
-            filtered = df.filter(pl.col("lot_size") > 0)
-        if side=="short" and "lot_size" in df.columns:
-            filtered = df.filter(pl.col("lot_size") < 0)
+    def get_aggr_pnl_by_side(self, df: pl.DataFrame, side: str, alias: str) -> pl.DataFrame:
+        # Retorna DataFrame [datetime, pnl] — preserva o datetime para alinhamento posterior.
+        if "lot_size" in df.columns:
+            if side == "long":
+                filtered = df.filter(pl.col("lot_size") > 0)
+            elif side == "short":
+                filtered = df.filter(pl.col("lot_size") < 0)
+            else:
+                filtered = df
         else:
-            filtered = df # Default is both
-        if filtered.is_empty(): return pl.Series(alias, [], dtype=pl.Float64)
+            filtered = df
+
+        if filtered.is_empty():
+            return pl.DataFrame({"datetime": [], "pnl": []}).with_columns(pl.col("pnl").cast(pl.Float64))
 
         return (
             filtered
             .group_by("datetime")
             .agg(pl.col("pnl").mean())
-            .sort("datetime")["pnl"]
-            .alias(alias)
+            .sort("datetime")
+            .rename({"pnl": alias})   # coluna nomeada pelo asset para identificação
         )
     
     # ── Indicators ───────────────────────────────────────────────────────
