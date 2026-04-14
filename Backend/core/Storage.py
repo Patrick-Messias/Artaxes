@@ -123,7 +123,16 @@ class Storage:
         return [f.stem for f in sorted(path.glob("*.parquet"))]
 
     # Reads trades and trades_matrix, generates a unified vertical structure with all parsets mixed in
-    def load(self, op: str, model: str, strat: str, asset: str) -> Dict[str, Any]:
+    def load(self, *args, **kwargs) -> Dict[str, Any]:
+        # (key_tuple) or (op, model, strat, asset)
+
+        # Case of tuple
+        if len(args) == 1 and isinstance(args[0], (tuple, list)):
+            op, model, strat, asset = args[0]
+        elif len(args) == 4:
+            op, model, strat, asset = args
+        else:
+            raise ValueError("Storage.load espera uma tupla (op, m, s, a) ou 4 strings.")
 
         asset_path = self._asset_path(op, model, strat, asset)
         asset_data = {}

@@ -41,7 +41,7 @@ class Portfolio(BaseClass, BaseManager):
 
         self.date_start = portfolio_params.date_start
         self.date_end = portfolio_params.date_end
-        self.data_storage_base_path = portfolio_params.data_storage_base_path
+        #self.data_storage_base_path = portfolio_params.data_storage_base_path
         self.use_portfolio_asset_data = portfolio_params.use_portfolio_asset_data
         self.global_datetime_prefix = portfolio_params.global_datetime_prefix
 
@@ -50,6 +50,7 @@ class Portfolio(BaseClass, BaseManager):
         self.portfolio_returns: dict={}
         self.sim_data: dict= {}
         self.global_assets = Asset.load_all()
+        self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
     
 
     def _simulation(self):
@@ -115,13 +116,58 @@ class Portfolio(BaseClass, BaseManager):
                                                     
             #||=====================================================================================||#
 
-            #if i == 150:
-            #    data = self._populate_sim_data((list(self.portfolio_data.keys())[0]), i, 0,  data_type="aggr")
-            #    print(data)
+            # Dentro do seu loop principal, após o i atingir 150
+            if i == 5000:
+                print(f"\n{'='*20} TESTANDO POPULATE_SIM_DATA (i=150) {'='*20}")
+                
+                # Exemplo de chaves para os testes
+                # (Ajuste os nomes conforme sua estrutura de portfolio_data)
+                op_n = list(self.portfolio_data.keys())[0]
+                m_n = list(self.portfolio_data[op_n].keys())[0]
+                s_n = list(self.portfolio_data[op_n][m_n].keys())[0]
+                a_n = list(self.portfolio_data[op_n][m_n][s_n].keys())[0]
+                
+                m_key = (op_n, m_n)
+                s_key = (op_n, m_n, s_n)
 
-            #if i < 3 or i > len(self.datetime_timeline)-3: 
-            #    print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
+                # --- TESTE 1: Slice de Memória (Aggr) ---
+                # Pegando os últimos 10 períodos para calcular uma média móvel ou volatilidade
+                print("\n[TESTE 1] Aggr Slice (Últimos 10 candles):")
+                hist_data = self._populate_sim_data(m_key, i, start_idx=i-10, side="BOTH")
+                if hist_data:
+                    for strat, values in hist_data.items():
+                        print(f" -> Strat: {strat} | Registros: {len(values)} | Último PnL: {values[-1]:.4f}")
 
+                # --- TESTE 2: Direções Separadas (Long/Short) ---
+                print("\n[TESTE 2] Filtro por Lado (LONG):")
+                long_only = self._populate_sim_data(s_key, i, side="LONG")
+                if long_only:
+                    print(f" -> Ativos Long em {s_key}: {list(long_only.keys())}")
+                    # Como não passamos start_idx, ele deve retornar o formato do dicionário original de i
+
+                # --- TESTE 3: Parset (Disco/Parquet) ---
+                # Aqui simulamos a busca por trades específicos de um ativo
+                print("\n[TESTE 3] Parset (Leitura de Disco):")
+                a_key = (op_n, m_n, s_n, a_n)
+                # Vamos tentar pegar todos os trades desse ativo na janela de 150 candles
+                trades = self._populate_sim_data(a_key, i, start_idx=0, data_type="parset")
+                if trades:
+                    print(f" -> Sucesso! Encontrados {len(trades)} trades no parset de {a_n}")
+                else:
+                    print(f" -> Parset não encontrado ou vazio para {a_key} (Verifique storage.load)")
+
+                # --- TESTE 4: Filtragem por PS_ID (Trade Específico) ---
+                print("\n[TESTE 4] Parset com Filtro PS_ID:")
+                # Substitua 'TRADE_001' por um ID que você saiba que existe no seu parquet
+                specific_trade = self._populate_sim_data(a_key, i, data_type="parset", ps_id="param_set-3-3-2-2-2-21-8-sma-M15-21-1-0.03-False-False-0")
+                if specific_trade:
+                    print(f" -> Trade específico encontrado: {specific_trade[0]}")
+
+                print(f"\n{'='*60}\n")
+
+            if i < 3 or i > len(self.datetime_timeline)-3: 
+                print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
+            
         return True
 
     # ── Portfolio Defs ───────────────────────────────────────────────
@@ -282,31 +328,34 @@ class Portfolio(BaseClass, BaseManager):
 
         # --- CASO 2: DADOS DE PARSET (Leitura de Disco/Storage) ---
         elif data_type == "parset":
-            # Assume-se que key para parset precisa ser completa: (op, m, s, a)
-            # ou adaptada para o path do seu storage.
             try:
-                # O storage.load deve retornar um Polars DataFrame ou similar
-                raw_df = self.storage.load(key, type="results") 
+                # Chama o seu método load conforme definido na sua classe Storage
+                asset_data = self.storage.load(key)
+                
+                # O seu load retorna um dict. O que queremos para simulação é a 'timeline'
+                raw_df = asset_data.get("timeline")
                 
                 if raw_df is None or raw_df.is_empty():
                     return None
 
-                # Filtragem por PS_ID se fornecido
+                # Filtragem por PS_ID (Seu ID longo)
                 if ps_id is not None:
                     raw_df = raw_df.filter(pl.col("ps_id") == ps_id)
 
-                # Filtragem por Janela Temporal (usando os índices da timeline)
-                # Precisamos traduzir o índice 'i' e 'start_idx' para as datas reais
-                start_dt = self.datetime_timeline[start_idx]
+                # Filtragem Temporal baseada na sua timeline do backtest
                 end_dt = self.datetime_timeline[i]
                 
-                # Assume-se que o parset tem uma coluna 'datetime' ou 'exit_time'
-                raw_df = raw_df.filter(
-                    (pl.col("datetime") >= start_dt) & 
-                    (pl.col("datetime") <= end_dt)
-                )
+                if start_idx is not None:
+                    start_dt = self.datetime_timeline[start_idx]
+                    # Note que usamos a coluna 'datetime' que o seu _build_timeline cria
+                    raw_df = raw_df.filter(
+                        (pl.col("datetime") >= start_dt) & 
+                        (pl.col("datetime") <= end_dt)
+                    )
+                else:
+                    raw_df = raw_df.filter(pl.col("datetime") == end_dt)
 
-                return raw_df.to_dicts() # Retorna lista de dicionários (cada trade é um dict)
+                return raw_df.to_dicts()
             
             except Exception as e:
                 print(f"Erro ao carregar parset para {key}: {e}")
@@ -314,7 +363,7 @@ class Portfolio(BaseClass, BaseManager):
 
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
-        storage = Storage(base_path=self.data_storage_base_path)
+        storage = self.storage#Storage(base_path=self.data_storage_base_path)
         self.sim_data = {}
 
         # # Specific Aggr
