@@ -174,7 +174,7 @@ class Storage:
             asset_data["wf"] = pl.read_parquet(wf_file)
 
         if not asset_data:
-            print(f"⚠️ Aviso: Nenhum dado carregado para {op}/{model}/{strat}/{asset}")
+            print(f"    < [Storage._execute_load] ⚠️ Warning: No data found for {op}/{model}/{strat}/{asset}")
 
         return asset_data
 
