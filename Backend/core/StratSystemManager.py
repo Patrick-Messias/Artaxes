@@ -26,57 +26,27 @@ class StratSystemManager(SystemManager):
         
         return indicator_pool, sim_data
                        
-    def _default_rank(self, context: dict) -> Dict[str, float]:
-        history  = context.get("history", {})
-        lookback = self.reb_lookback_n
-        scores   = {}
+    def _default_rank(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> Dict[str, float]:
+        return hierarchy
 
-        for model, df in history.items():
-            if df.is_empty():
-                scores[model] = -float("inf")
-                continue
-            tail = df.tail(lookback)["pnl"]
-            if self.reb_metric == "sharpe":
-                scores[model] = float(tail.mean() / (tail.std() + 1e-9))
-            elif self.reb_metric == "pnl_dd":
-                eq  = tail.cum_sum()
-                dd  = float((eq.cum_max() - eq).max() + 1e-9)
-                scores[model] = float(tail.sum()) / dd
-            else:  # pnl
-                scores[model] = float(tail.sum())
+    def _default_filter(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
+        return hierarchy # By default doesn't filter out any model
 
-        return scores
-
-    def _default_filter(self, context: dict) -> List[str]:
-        models = context.get("models", []) 
-        return models # By default doesn't filter out any model
-
-    def _default_rebalance(self, context: dict) -> List[str]:
-        scores = self.rank(context)
-        context["scores"] = scores
-
-        passed = self.filter(context)
-        descending = self.model_hierarchy.get("order_by", "highest") == "highest"
-        ranked = sorted(passed, key=lambda m: scores.get(m, -float("inf")), reverse=descending)
-
-        if self.max_active_models:
-            ranked = ranked[:self.max_active_models]
-
-        self._active_models = ranked
-        return ranked
+    def _default_rebalance(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
+        return hierarchy
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+    def main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, op_data, port_returns)
+        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, indicator_pool, op_data, port_returns)
     
-    def _default_main(self, step_dt, hierarchy: dict, op_data: dict, port_returns: dict) -> bool:
+    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
 
-        # Calculates Live Indicators
-
-        # Rebalances
+        hierarchy = self.rank(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy = self.filter(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy = self.rebalance(step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
         return hierarchy
 

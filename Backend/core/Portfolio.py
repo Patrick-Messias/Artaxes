@@ -109,83 +109,89 @@ class Portfolio(BaseClass, BaseManager):
             #update_func_to_use(step_dt, active_positions)
 
             #||=====================================================================================||#
-
+            
             # Updates System and Money Managers - Top Down - at [i] ends
             hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
                                                     
             #||=====================================================================================||#
 
-            if i == 150:
-                data = self._populate_sim_data((list(self.portfolio_data.keys())[0]), i, 0,  data_type="aggr")
-                print(data)
+            #if i == 150:
+            #    data = self._populate_sim_data((list(self.portfolio_data.keys())[0]), i, 0,  data_type="aggr")
+            #    print(data)
 
-            if i < 3 or i > len(self.datetime_timeline)-3: 
-                print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
+            #if i < 3 or i > len(self.datetime_timeline)-3: 
+            #    print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
 
         return True
 
     # ── Portfolio Defs ───────────────────────────────────────────────
-    # Nível: Model | Strat | Asset | Side
-    # Keys: (op,model) | (op,model,strat) | (op,model,strat,asset) | (op,model,strat,asset,side)
 
     def _system_money_managers(self, i, dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
         m_map = self.sm_mm_map
         p_name = self.name
-
-        p_data_node = self.portfolio_data.get(p_name, self.portfolio_data)
+        p_key = (p_name,)
 
         # If any of the two need to run, populate data
         if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
-            # Use helpers to take aggr PnL
-            model_keys = list({(o, m) for o, _, m, *_ in self._iter_portfolio_data()})
-            op_df = self._get_wide_pnl_df(model_keys, i)
+            op_data = self._populate_sim_data(p_key, i)
 
-            if op_df is not None:
+            if op_data is not None:
+                op_df = op_data.get("both", op_data) 
+                
                 psm = m_map.get("managers", {}).get("psm")
-                if psm and dt in psm_sch.get(p_name, []):
-                    #print("PSM")
+                if psm and dt in psm_sch.get(p_name, set()):
                     hierarchy = psm.main(dt, hierarchy, self.indicator_pool, op_df, self.portfolio_returns)
+                    #print("PSM")
                 pmm = m_map.get("managers", {}).get("pmm")
-                if pmm and dt in pmm_sch.get(p_name, []):
-                    #print("PMM")
+                if pmm and dt in pmm_sch.get(p_name, set()):
                     hierarchy = pmm.main(dt, hierarchy, self.indicator_pool, op_df, self.portfolio_returns)
+                    #print("PMM")
 
         # Model and Strat Levels
-        for m_name, strats_dict in p_data_node.items():
-            m_key = (p_name, m_name)            
+        seen_models = set()
+        seen_strats = set()
 
-            # Rebalancing of Models
-            if (dt in msm_sch.get(m_key, set())) or (dt in mmm_sch.get(m_key, set())):
-                strat_keys = [(o, m, s) for o, _, m, _, s, *_ in self._iter_portfolio_data() if m == m_name]
-                model_df = self._get_wide_pnl_df(strat_keys, i)
+        for op_name, _, m_name, _, s_name, _, a_name, _ in self._iter_portfolio_data():
+            m_key = (op_name, m_name)
+            s_key = (op_name, m_name, s_name)
 
-                msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
-                mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
-    
-                if model_df is not None:
-                    #print("msM")
-                    if msm: hierarchy = msm.main(dt, hierarchy, self.indicator_pool, model_df, self.portfolio_returns)
-                    #print("mmM")
-                    if mmm: hierarchy = mmm.main(dt, hierarchy, self.indicator_pool, model_df, self.portfolio_returns)
+            # --- NÍVEL MODELO (MSM / MMM) ---
+            if m_key not in seen_models:
+                seen_models.add(m_key)
+                
+                if (dt in msm_sch.get(m_key, set())) or (dt in mmm_sch.get(m_key, set())):
+                    model_data = self._populate_sim_data(m_key, i)
+                    
+                    if model_data is not None:
+                        model_df = model_data.get("both", model_data)
+                        msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
+                        mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
-            # Strat Level
-            for s_name, assets_dict in strats_dict.items():
-                s_key = (p_name, m_name, s_name)
+                        if msm and dt in msm_sch.get(m_key, set()): 
+                            hierarchy = msm.main(dt, hierarchy, self.indicator_pool, model_df, self.portfolio_returns)
+                            #print("msM")
+                        if mmm and dt in mmm_sch.get(m_key, set()):
+                            hierarchy = mmm.main(dt, hierarchy, self.indicator_pool, model_df, self.portfolio_returns)
+                            #print("mmM")
 
+            # Strat level — executa apenas 1x por strat
+            if s_key not in seen_strats:
+                seen_strats.add(s_key)
+                
                 if (dt in ssm_sch.get(s_key, set())) or (dt in smm_sch.get(s_key, set())):
-                    asset_keys = [(o, m, s, a) for o, _, m, _, s, _, a, _ in self._iter_portfolio_data() 
-                                if m == m_name and s == s_name]
-                    strat_df = self._get_wide_pnl_df(asset_keys, i)
+                    strat_data = self._populate_sim_data(s_key, i)
+                    
+                    if strat_data is not None:
+                        strat_df = strat_data.get("both", strat_data)
+                        ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
+                        smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
-                    ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
-                    smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
-
-                    if strat_df is not None:
-                        #print("ssm")
-                        if ssm: hierarchy = ssm.main(dt, hierarchy, self.indicator_pool, strat_df, self.portfolio_returns)
-                        #print("smm")
-                        if smm: hierarchy = smm.main(dt, hierarchy, self.indicator_pool, strat_df, self.portfolio_returns)
-
+                        if ssm and dt in ssm_sch.get(s_key, set()):
+                            hierarchy = ssm.main(dt, hierarchy, self.indicator_pool, strat_df, self.portfolio_returns)
+                            #print("ssm")
+                        if smm and dt in smm_sch.get(s_key, set()):
+                            hierarchy = smm.main(dt, hierarchy, self.indicator_pool, strat_df, self.portfolio_returns)
+                            #print("smm")
         return hierarchy
 
     def _update_pos_with_backtest_ret(self, step_dt, active_positions):
@@ -233,175 +239,192 @@ class Portfolio(BaseClass, BaseManager):
 
     # ── Data Handling ───────────────────────────────────────────────
 
-    def _get_wide_pnl_df(self, keys, i, idx_start=0):
-        dfs = []
-        for k in keys:
-            df = self._populate_sim_data(k, i, idx_start=idx_start, data_type="aggr")
-            if df is not None:
-                dfs.append(df)
-        
-        if not dfs: return None
-        
-        # Faz o merge horizontal de todos os modelos/estratégias
-        wide_df = dfs[0]
-        for next_df in dfs[1:]:
-            wide_df = wide_df.join(next_df, on="datetime", how="left")
-        
-        return wide_df
-
     # Used to pull real data from parquet from selected source
-    def _populate_sim_data(self, key, i, idx_start=None, data_type="pnl"):
-        ref = self.sim_data.get(key)
-        if not ref and isinstance(key, (tuple, list)):
-            ref = self.sim_data.get(key[-1])
-
-        if not ref: 
-            print(f"DEBUG: Chave não encontrada no sim_data: {key} (Tipo: {type(key)})")
-            return None
+    def _populate_sim_data(self, key, i, start_idx=0, side=None, data_type="aggr", ps_id=None):
+        """
+        Recupera dados de PnL ou resultados brutos (parsets).
         
-        entity_name = key[-1] if isinstance(key, (tuple, list)) else key
+        Args:
+            key (tuple): Chave da hierarquia (op,), (op, m), (op, m, s) ou (op, m, s, a).
+            i (int): Índice final da timeline.
+            start_idx (int): Índice inicial da busca (default 0).
+            side (str): "BOTH", "LONG", "SHORT".
+            data_type (str): "aggr" (memória) ou "parset" (disco/parquet).
+            ps_id (str/int): ID específico da posição para filtragem.
+        """
+        
+        # --- CASO 1: DADOS AGREGADOS (Rápido, em Memória) ---
+        if data_type == "aggr":
+            node = self.sim_data.get(key)
+            if not node: return None
 
-        s_idx = 0 if idx_start is None else idx_start
-        length = (i + 1) - s_idx
-        current_timeline = self.datetime_timeline[s_idx : i + 1]
- 
-        # DINÂMICO: Usa o nome real do modelo/estratégia/parset como nome da coluna
-        # Se key é ("Portfolio", "MA Trend Following"), entity_name será "MA Trend Following"
-        entity_name = key[-1] if isinstance(key, (tuple, list)) else key
-
-        # Se for Nível Agregado (Strat/Model/Portfolio)
-        if ref["type"] == "aggr":
-            return pl.DataFrame({
-                "datetime": current_timeline, 
-                str(entity_name): ref["pnl"].slice(s_idx, length)
-            })
-
-        # Se for Nível Asset (Disk)
-        if ref["type"] == "disk":
-            if data_type == "aggr":
-                return pl.DataFrame({
-                    "datetime": current_timeline,
-                    entity_name: ref["aggr_pnl"].slice(s_idx, length)
-                })
+            directions = ["BOTH", "LONG", "SHORT"]
             
-            if data_type == "pnl":
-                if "pnl_cache" not in ref:
-                    full_df = pl.read_parquet(ref["pnl_path"])
-                    # Garante que a coluna de valor no cache também tenha o nome da entidade
-                    if "pnl" in full_df.columns:
-                        full_df = full_df.rename({"pnl": entity_name})
-                    else:
-                        # Fallback caso o parquet use outro nome
-                        val_col = [c for c in full_df.columns if c != "datetime"][0]
-                        full_df = full_df.rename({val_col: entity_name})
-                    ref["pnl_cache"] = full_df
+            def slice_data(block):
+                # Retorna o slice do start_idx até o i atual (inclusive)
+                # zipando com as colunas para manter o formato de dicionário
+                data_slice = block["data"][start_idx : i + 1]
+                cols = block["cols"]
+                return {col: data_slice[:, idx].tolist() for idx, col in enumerate(cols)}
 
-                return ref["pnl_cache"].slice(s_idx, length)
-        return None
+            if side is not None:
+                side_upper = side.upper()
+                data_block = node.get(side_upper)
+                return slice_data(data_block) if data_block else None
+
+            # Retorno multi-direcional
+            full_payload = {}
+            for d in directions:
+                data_block = node.get(d)
+                if data_block:
+                    full_payload[d.lower()] = slice_data(data_block)
+            return full_payload if full_payload else None
+
+        # --- CASO 2: DADOS DE PARSET (Leitura de Disco/Storage) ---
+        elif data_type == "parset":
+            # Assume-se que key para parset precisa ser completa: (op, m, s, a)
+            # ou adaptada para o path do seu storage.
+            try:
+                # O storage.load deve retornar um Polars DataFrame ou similar
+                raw_df = self.storage.load(key, type="results") 
+                
+                if raw_df is None or raw_df.is_empty():
+                    return None
+
+                # Filtragem por PS_ID se fornecido
+                if ps_id is not None:
+                    raw_df = raw_df.filter(pl.col("ps_id") == ps_id)
+
+                # Filtragem por Janela Temporal (usando os índices da timeline)
+                # Precisamos traduzir o índice 'i' e 'start_idx' para as datas reais
+                start_dt = self.datetime_timeline[start_idx]
+                end_dt = self.datetime_timeline[i]
+                
+                # Assume-se que o parset tem uma coluna 'datetime' ou 'exit_time'
+                raw_df = raw_df.filter(
+                    (pl.col("datetime") >= start_dt) & 
+                    (pl.col("datetime") <= end_dt)
+                )
+
+                return raw_df.to_dicts() # Retorna lista de dicionários (cada trade é um dict)
+            
+            except Exception as e:
+                print(f"Erro ao carregar parset para {key}: {e}")
+                return None
 
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
         storage = Storage(base_path=self.data_storage_base_path)
         self.sim_data = {}
 
-        strat_acc = {} # (op, mod, strat):  [series, series] 
-        model_acc = {} # (op, mod):         [series, series]
-        portf_acc = {} # (op)               [series, series]
+        # # Specific Aggr
+        # asset_aggr = [dt, ps_id1, ps_id2, ps_id3] # (op_name, m_name, s_name, a_name)
+        # strat_aggr = [dt, asset1, asset2, asset3] # (op_name, m_name, s_name)
+        # model_aggr = [dt, strat1, strat2, strat3] # (op_name, m_name)
+        # opera_aggr = [dt, model1, model2, model3] # (op_name)
+        # # Global Aggr
+        # portf_aggr = [dt, model1, model2, model3, model4, ...] # (self.name) # Joins all opera_aggr into one
+
+        # Acumuladores hierárquicos: { key: { direction: { child_name: series } } }
+        temp_asset_cache, strat_acc, model_acc, opera_acc, portf_acc = {}, {}, {}, {}, {} # { (op, m, s, a): { "BOTH": df, "LONG": df... } }
         unique_dts = set()
 
-        def _register_sim_data(key, base_path, aggr_pnl, wf_memory_map):
-            self.sim_data[key] = {
-                "type":          "disk",
-                "trades_path":   str(base_path / "trades" / "trades.parquet"),
-                "matrix_path":   str(base_path / "matrix" / "trades_matrix.parquet"),
-                "wf_path":       str(base_path / "wfm"    / "wf.parquet"),
-                "aggr_pnl":      aggr_pnl
-            }
-            if wf_memory_map:
-                self.sim_data[key]["wf_memory_map"] = wf_memory_map
+        # --- 1. COLETA DE DADOS E TIMELINE ---
+        for op_n, _, m_n, _, s_n, _, a_n, _ in self._iter_portfolio_data():
+            config = self.portfolio_data[op_n][m_n][s_n][a_n]
+            side_pref = config.get("side", "BOTH").lower() if isinstance(config, dict) else str(config).lower()
+            separate_ls = config.get("analise_long_short_separate", False) if isinstance(config, dict) else False
 
-        # --- 1. LOADING E GERAÇÃO DAS VIAS (SIDES) ---
-        for op_name, _, m_name, _, s_name, _, a_name, _ in self._iter_portfolio_data():
-            
-            # Parsing flexível do portfolio_data
-            # Suporta {"side": "BOTH", "analise_long_short_separate": True} ou apenas "LONG"
-            config = self.portfolio_data[op_name][m_name][s_name][a_name]
-            if isinstance(config, dict):
-                side_pref = config.get("side", "BOTH").lower()
-                separate_ls = config.get("analise_long_short_separate", False)
-            else:
-                side_pref = str(config).lower()
-                separate_ls = False
-
-            asset_data = storage.load(op_name, m_name, s_name, a_name)
+            asset_data = storage.load(op_n, m_n, s_n, a_n)
             timeline_df = asset_data.get("timeline")
-            wf_df = asset_data.get("wf")
-
-            if timeline_df is None or timeline_df.is_empty():
-                print(f"    < [Portfolio._load_selected_saved_returns_data] No timeline for {a_name}, skipping")
-                continue
+            if timeline_df is None or timeline_df.is_empty(): continue
 
             unique_dts.update(timeline_df['datetime'].to_list())
-            base_path = storage._asset_path(op_name, m_name, s_name, a_name)
-
-            wf_memory_map = None
-            if wf_df is not None and not wf_df.is_empty(): 
-                wf_memory_map = self._build_wf_memory_map(wf_df, timeline_df)
-
-            # A. Calcula o PnL Principal (O que rola pro Portfólio)
-            # Se o usuário escolheu "LONG", a via "both" do sistema será alimentada apenas por trades de compra.
-            main_pnl_df = self.get_aggr_pnl_by_side(timeline_df, side_pref, a_name)
-            a_key_both = (op_name, m_name, s_name, a_name, "both")
-            #self.sim_data[a_key_both]["aggr_pnl_df"] = main_pnl_df
-            _register_sim_data(a_key_both, base_path, main_pnl_df, wf_memory_map)
-            strat_acc.setdefault((op_name, m_name, s_name, "both"), []).append(main_pnl_df)
-
-            # B. Calcula as Vias Separadas (Apenas se requisitado para análises finas do Manager)
+            
+            # Prepara as vias deste ativo
+            vias = {"BOTH": side_pref}
             if separate_ls:
-                long_pnl = self.get_aggr_pnl_by_side(timeline_df, "long", a_name)
-                a_key_long = (op_name, m_name, s_name, a_name, "long")
-                _register_sim_data(a_key_long, base_path, long_pnl, wf_memory_map)
-                strat_acc.setdefault((op_name, m_name, s_name, "long"), []).append(long_pnl)
+                vias.update({"LONG": "long", "SHORT": "short"})
 
-                short_pnl = self.get_aggr_pnl_by_side(timeline_df, "short", a_name)
-                a_key_short = (op_name, m_name, s_name, a_name, "short")
-                _register_sim_data(a_key_short, base_path, short_pnl, wf_memory_map)
-                strat_acc.setdefault((op_name, m_name, s_name, "short"), []).append(short_pnl)
+            asset_entry = {}
+            for dir_name, side_val in vias.items():
+                asset_entry[dir_name] = self.get_aggr_pnl_by_side(timeline_df, side_val, a_n)
+            
+            temp_asset_cache[(op_n, m_n, s_n, a_n)] = asset_entry
+            
+            # Registro de Metadados de Disco (apenas uma vez por ativo, independente da via)
+            base_path = storage._asset_path(op_n, m_n, s_n, a_n)
+            wf_df = asset_data.get("wf")
+            self.sim_data[(op_n, m_n, s_n, a_n)] = {
+                "type": "disk",
+                "trades_path": str(base_path / "trades" / "trades.parquet"),
+                "wf_memory_map": self._build_wf_memory_map(wf_df, timeline_df) if wf_df is not None else None
+            }
 
-
-        # --- 2. ALINHAMENTO GLOBAL E CONSOLIDAÇÃO DA HIERARQUIA ---
+        # --- 2. ALINHAMENTO E AGREGAÇÃO (WIDE) ---
         self.datetime_timeline = sorted(unique_dts)
         timeline_global = pl.DataFrame({"datetime": self.datetime_timeline})
 
-        # Alinha e Agrega Nível Estratégia
-        for s_key, asset_list in strat_acc.items():
-            a_name_col = s_key[2]  # nome da strat como coluna
-            merged = timeline_global
-            for asset_df in asset_list:
-                col_name = [c for c in asset_df.columns if c != "datetime"][0]
-                merged = merged.join(asset_df, on="datetime", how="left").fill_null(0.0)
+        # A. Ativos -> Estratégias
+        for a_key, vias_dict in temp_asset_cache.items():
+            op_n, m_n, s_n, a_n = a_key
+            s_key = (op_n, m_n, s_n)
             
-            # Média horizontal de todas as colunas de asset
-            asset_cols = [c for c in merged.columns if c != "datetime"]
-            strat_mean = merged.select(pl.mean_horizontal(asset_cols)).to_series().alias(s_key[2])
-            self.sim_data[s_key] = {"pnl": strat_mean, "type": "aggr"}
-            model_acc.setdefault((s_key[0], s_key[1], s_key[-1]), []).append(strat_mean)
+            for d_name, pnl_df in vias_dict.items():
+                aligned = timeline_global.join(pnl_df, on="datetime", how="left").fill_null(0.0)
+                pnl_series = aligned.get_column(a_n)
+                
+                # Salva no sim_data do Ativo
+                self.sim_data[a_key].setdefault(d_name, {})
+                self.sim_data[a_key][d_name] = {"data": pnl_series.to_numpy().reshape(-1, 1), "cols": [a_n]}
+                
+                # Alimenta acumulador da Estratégia
+                strat_acc.setdefault(s_key, {}).setdefault(d_name, {})[a_n] = pnl_series
 
-        # Alinha e Agrega Nível Modelo
-        for m_key, strat_list in model_acc.items():
-            model_mean = pl.DataFrame(strat_list).select(pl.mean_horizontal(pl.all())).to_series().alias(m_key[1])
-            self.sim_data[m_key] = {"pnl": model_mean, "type": "aggr"}
-            
-            p_key = (m_key[0], m_key[-1])
-            portf_acc.setdefault(p_key, []).append(model_mean)
+        del temp_asset_cache
 
-        # Alinha e Agrega Nível Portfólio
-        for p_key, model_list in portf_acc.items():
-            port_mean = pl.DataFrame(model_list).select(pl.mean_horizontal(pl.all())).to_series().alias(p_key[0])
-            self.sim_data[p_key] = {"pnl": port_mean, "type": "aggr"}
+        # B. Estratégias -> Modelos
+        for s_key, directions in strat_acc.items():
+            self.sim_data[s_key] = {"type": "aggr"}
+            for d_name, assets in directions.items():
+                wide_df = pl.DataFrame(assets)
+                self.sim_data[s_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
+                
+                # Média para o nível Modelo
+                m_series = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias(s_key[2])
+                model_acc.setdefault((s_key[0], s_key[1]), {}).setdefault(d_name, {})[s_key[2]] = m_series
 
-        if self.datetime_timeline:
-            print(f"    > Timeline: {self.datetime_timeline[0]} → {self.datetime_timeline[-1]} ({len(self.datetime_timeline)} pts)")
+        # C. Modelos -> Portfólio
+        for m_key, directions in model_acc.items():
+            self.sim_data[m_key] = {"type": "aggr"}
+            op_n = m_key[0]
+            m_n = m_key[1]
+
+            for d_name, strats in directions.items():
+                wide_df = pl.DataFrame(strats)
+                self.sim_data[m_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
+
+                # PnL serie of this model
+                m_series = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias(m_n)
+                
+                opera_acc.setdefault((op_n,), {}).setdefault(d_name, {})[m_n] = m_series
+
+                global_col = f"{op_n}_{m_n}"
+                portf_acc.setdefault((self.name,), {}).setdefault(d_name, {})[global_col] = m_series
+
+        # D. Operation
+        for o_key, directions in opera_acc.items():
+            self.sim_data[o_key] = {"type": "aggr"}
+            for d_name, models in directions.items():
+                wide_df = pl.DataFrame(models)
+                self.sim_data[o_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
+
+        # E. Portfólio
+        for p_key, directions in portf_acc.items():
+            self.sim_data[p_key] = {"type": "aggr"}
+            for d_name, all_models in directions.items():
+                wide_df = pl.DataFrame(all_models)
+                self.sim_data[p_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
 
         return True
     
@@ -444,99 +467,72 @@ class Portfolio(BaseClass, BaseManager):
         
         timeline = self.datetime_timeline
         sd = self.sim_data
-        p_name = self.name
 
-        # 1. Agregação e Separação (Long/Short)
-        # Extraímos as Series já calculadas no load
-        aggr_models_ret = {k: v["pnl"] for k, v in sd.items() if len(k) == 2 and v.get("type") == "aggr"}
-        aggr_strats_ret = {k: v["pnl"] for k, v in sd.items() if len(k) == 3 and v.get("type") == "aggr"}
-        aggr_assets_ret = {k: v["aggr_pnl"] for k, v in sd.items() if len(k) == 4 and "aggr_pnl" in v}
-
-        # --- PORTFOLIO LEVEL ---
+        # 1. Portfolio Level (PSM / PMM)
+        p_n = self.name
+        p_key = (p_n,)
         p_magrs = sm_mm_map.get("managers", {})
+        p_node = {p_key: sd.get(p_key)}
 
-        # Models of this one specific operation (for key purposes only)
-        p_models_filter = {k: v for k, v in aggr_models_ret.items() if k[0] == p_name}
-        
-        # System Manager (PSM)
-        psm = p_magrs.get("psm") or PortfolioSystemManager(PortfolioSystemManagerParams())
-        self.indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, p_models_filter, self.indicator_pool)
-        psm_sch[p_name] = psm.get_schedule(timeline)
-        p_magrs["psm"] = psm
+        # Aqui usamos o nome da operação raiz conforme definido no sm_mm_map
+        if p_node[p_key]:
+            # PSM
+            psm = p_magrs.get("psm") or PortfolioSystemManager(PortfolioSystemManagerParams())
+            self.indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, p_node, self.indicator_pool)
+            psm_sch[p_n] = psm.get_schedule(timeline) # Key: str (op_name)
+            p_magrs["psm"] = psm
             
-        # Money Manager (PMM)
-        pmm = p_magrs.get("pmm") or PortfolioMoneyManager(PortfolioMoneyManagerParams())
-        self.indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, p_models_filter, self.indicator_pool)
-        pmm_sch[p_name] = pmm.get_schedule(timeline)
-        p_magrs["pmm"] = pmm
+            # PMM
+            pmm = p_magrs.get("pmm") or PortfolioMoneyManager(PortfolioMoneyManagerParams())
+            self.indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, p_node, self.indicator_pool)
+            pmm_sch[p_n] = pmm.get_schedule(timeline) # Key: str (op_name)
+            p_magrs["pmm"] = pmm
 
-        # --- MODELS LEVEL ---
-        for m_name, m_info in sm_mm_map.get("models", {}).items():
-            m_key = (p_name, m_name)
-            m_magrs = m_info.get("managers", {})
+            # 2. Nível Modelos
+            for op_name, op_models in self.portfolio_data.items():
+                for m_name, m_strats in op_models.items():
+                    m_key = (op_name, m_name)
+                    # Busca o manager no mapa usando o nome do modelo
+                    m_info = sm_mm_map.get("models", {}).get(m_name, {})
+                    m_magrs = m_info.get("managers", {})
+                    m_node = {m_key: sd.get(m_key)}
 
-            # Filters all strats that belong to this model (k[:2] ignores side)
-            m_strats_filter = {k: v for k, v in aggr_strats_ret.items() if k[:2] == m_key}
+                    if m_node[m_key]:
+                        # MSM
+                        msm = m_magrs.get("msm") or ModelSystemManager(ModelSystemManagerParams())
+                        self.indicator_pool, sd, params_pool = msm.pre_compute(global_assets, timeline, sd, m_node, self.indicator_pool)
+                        msm_sch[m_key] = msm.get_schedule(timeline)
+                        m_magrs["msm"] = msm
 
-            # Model System Manager (MSM)
-            msm = m_magrs.get("msm") or ModelSystemManager(ModelSystemManagerParams())
-            self.indicator_pool, sd, params_pool = msm.pre_compute(global_assets, timeline, sd, m_strats_filter, self.indicator_pool)
-            msm_sch[m_key] = msm.get_schedule(timeline) # Indexado por Tupla
-            m_magrs["msm"] = msm
+                        # MMM
+                        mmm = m_magrs.get("mmm") or ModelMoneyManager(ModelMoneyManagerParams())
+                        self.indicator_pool, sd, params_pool = mmm.pre_compute(global_assets, timeline, sd, m_node, self.indicator_pool)
+                        mmm_sch[m_key] = mmm.get_schedule(timeline)
+                        m_magrs["mmm"] = mmm
 
-            # Model Money Manager (MMM)
-            mmm = m_magrs.get("mmm") or ModelMoneyManager(ModelMoneyManagerParams())
-            self.indicator_pool, sd, params_pool = mmm.pre_compute(global_assets, timeline, sd, m_strats_filter, self.indicator_pool)
-            mmm_sch[m_key] = mmm.get_schedule(timeline) # Indexado por Tupla
-            m_magrs["mmm"] = mmm
+                    # --- 3. NÍVEL ESTRATÉGIAS ---
+                    for s_name in m_strats.keys():
+                        s_key = (op_name, m_name, s_name)
+                        s_info = m_info.get("strats", {}).get(s_name, {})
+                        s_magrs = s_info.get("managers", {})
+                        s_node = {s_key: sd.get(s_key)}
 
-            # --- STRATS LEVEL ---
-            for s_name, s_info in m_info.get("strats", {}).items():
-                s_magrs = s_info.get("managers", {})
-                s_key = (self.name, m_name, s_name)
+                        if s_node[s_key]:
+                            # SSM
+                            ssm = s_magrs.get("ssm") or StratSystemManager(StratSystemManagerParams())
+                            self.indicator_pool, sd, params_pool = ssm.pre_compute(global_assets, timeline, sd, s_node, self.indicator_pool)
+                            ssm_sch[s_key] = ssm.get_schedule(timeline)
+                            s_magrs["ssm"] = ssm
 
-                # Filters all asset tht belong to this strat
-                s_assets_filter = {k: v for k, v in aggr_assets_ret.items() if k[:3] == s_key}
-
-                # Strat System Manager (SSM)
-                ssm = s_magrs.get("ssm") or StratSystemManager(StratSystemManagerParams())
-                self.indicator_pool, sd, params_pool = ssm.pre_compute(global_assets, timeline, sd, s_assets_filter, self.indicator_pool)
-                ssm_sch[s_key] = ssm.get_schedule(timeline) # Indexado por Tupla
-                s_magrs["ssm"] = ssm
-
-                # Strat Money Manager (SMM)
-                smm = s_magrs.get("smm") or StratMoneyManager(StratMoneyManagerParams())
-                self.indicator_pool, sd, params_pool = smm.pre_compute(global_assets, timeline, sd, s_assets_filter, self.indicator_pool)
-                smm_sch[s_key] = smm.get_schedule(timeline) # Indexado por Tupla
-                s_magrs["smm"] = smm
+                            # SMM
+                            smm = s_magrs.get("smm") or StratMoneyManager(StratMoneyManagerParams())
+                            self.indicator_pool, sd, params_pool = smm.pre_compute(global_assets, timeline, sd, s_node, self.indicator_pool)
+                            smm_sch[s_key] = smm.get_schedule(timeline)
+                            s_magrs["smm"] = smm
 
         return params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
     
     # ── Datetime timeline mapping ───────────────────────────────────────────────
-    
-    def _get_all_op_asset_datetimes(self, data_source="local"):
-        assets = Asset.load_all() # NOTE Deletar futuramente
-        storage = Storage(base_path=self.data_storage_base_path)
-        unique_assets_dts = set()
-
-        for op_name, _, m_name, _, _, _, a_name, _ in self._iter_portfolio_data():
-            meta = storage.load_operation_meta(op_name)
-            model_meta = meta.get("models", {}).get(m_name, {})
-
-            tf = model_meta.get("execution_timeframe", meta.get("operation_timeframe", None))
-            if tf is None:
-                print(f"< [Error] No timeframe found for Operation: {op_name}, Model: {m_name}. Skipping Asset: {a_name}")
-                continue
-            date_start = model_meta.get("date_start")
-            date_end = model_meta.get("date_end")
-
-            asset_obj = assets.get(a_name)
-            asset_df = asset_obj.load(tf, data_source, date_start, date_end)
-
-            #Adds to unique
-            unique_assets_dts.update(asset_df["datetime"])
-
-        return unique_assets_dts
 
     # PEGAR NOS INDICADORES PORQUE SM_ASSETS SÓ SERVE PRA INDICADORES E TEM TF DEFINIDO JÁ TMB
     def _get_all_sm_ind_datetimes(self, data_source="local"):
@@ -887,6 +883,31 @@ if __name__ == "__main__":
 
 
 '''
+    def _get_all_op_asset_datetimes(self, data_source="local"):
+        assets = Asset.load_all() # NOTE Deletar futuramente
+        storage = Storage(base_path=self.data_storage_base_path)
+        unique_assets_dts = set()
+
+        for op_name, _, m_name, _, _, _, a_name, _ in self._iter_portfolio_data():
+            meta = storage.load_operation_meta(op_name)
+            model_meta = meta.get("models", {}).get(m_name, {})
+
+            tf = model_meta.get("execution_timeframe", meta.get("operation_timeframe", None))
+            if tf is None:
+                print(f"< [Error] No timeframe found for Operation: {op_name}, Model: {m_name}. Skipping Asset: {a_name}")
+                continue
+            date_start = model_meta.get("date_start")
+            date_end = model_meta.get("date_end")
+
+            asset_obj = assets.get(a_name)
+            asset_df = asset_obj.load(tf, data_source, date_start, date_end)
+
+            #Adds to unique
+            self.datetime_timeline.update(asset_df["datetime"])
+
+        return unique_assets_dts
+
+        
     def _map_all_unique_datetimes(self, external_dts=None):
         unique_dts = set()
         
