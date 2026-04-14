@@ -41,7 +41,6 @@ class Portfolio(BaseClass, BaseManager):
 
         self.date_start = portfolio_params.date_start
         self.date_end = portfolio_params.date_end
-        #self.data_storage_base_path = portfolio_params.data_storage_base_path
         self.use_portfolio_asset_data = portfolio_params.use_portfolio_asset_data
         self.global_datetime_prefix = portfolio_params.global_datetime_prefix
 
@@ -129,6 +128,7 @@ class Portfolio(BaseClass, BaseManager):
                 
                 m_key = (op_n, m_n)
                 s_key = (op_n, m_n, s_n)
+                a_key = (op_n, m_n, s_n, a_n)
 
                 # --- TESTE 1: Slice de Memória (Aggr) ---
                 # Pegando os últimos 10 períodos para calcular uma média móvel ou volatilidade
@@ -148,7 +148,6 @@ class Portfolio(BaseClass, BaseManager):
                 # --- TESTE 3: Parset (Disco/Parquet) ---
                 # Aqui simulamos a busca por trades específicos de um ativo
                 print("\n[TESTE 3] Parset (Leitura de Disco):")
-                a_key = (op_n, m_n, s_n, a_n)
                 # Vamos tentar pegar todos os trades desse ativo na janela de 150 candles
                 trades = self._populate_sim_data(a_key, i, start_idx=0, data_type="parset")
                 if trades:
@@ -363,7 +362,7 @@ class Portfolio(BaseClass, BaseManager):
 
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
-        storage = self.storage#Storage(base_path=self.data_storage_base_path)
+        storage = self.storage #Storage(base_path=self.data_storage_base_path)
         self.sim_data = {}
 
         # # Specific Aggr

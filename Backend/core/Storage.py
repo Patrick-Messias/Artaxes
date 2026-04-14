@@ -2,10 +2,13 @@ import polars as pl, json
 from pathlib import Path
 from typing import Optional, Dict, Any
 from datetime import datetime
+from collections import OrderedDict
 
 class Storage:
-    def __init__(self, base_path: str = "Backend/results"):
+    def __init__(self, base_path: str = "Backend/results", cache_size=50):
         self.base_path = Path(base_path)
+        self.cache_size = cache_size
+        self._cache = OrderedDict()
 
     # ─────────────────────────────────────────────────────────────────────────
     # Save
@@ -123,17 +126,32 @@ class Storage:
         return [f.stem for f in sorted(path.glob("*.parquet"))]
 
     # Reads trades and trades_matrix, generates a unified vertical structure with all parsets mixed in
-    def load(self, *args, **kwargs) -> Dict[str, Any]:
-        # (key_tuple) or (op, model, strat, asset)
-
-        # Case of tuple
+    def load(self, *args) -> dict:
+        # 1. Resolver a tupla (conforme sugerido anteriormente)
         if len(args) == 1 and isinstance(args[0], (tuple, list)):
-            op, model, strat, asset = args[0]
+            key = args[0]
         elif len(args) == 4:
-            op, model, strat, asset = args
+            key = args
         else:
-            raise ValueError("Storage.load espera uma tupla (op, m, s, a) ou 4 strings.")
+            raise ValueError("Storage.load espera (op, m, s, a) ou 4 strings.")
 
+        # 2. Verificar se está no cache
+        if key in self._cache:
+            # Move para o final para marcar como "recentemente usado"
+            self._cache.move_to_end(key)
+            return self._cache[key]
+
+        # 3. Se não estiver, carregar do disco (Sua lógica original)
+        asset_data = self._execute_load(*key)
+
+        # 4. Adicionar ao cache e controlar tamanho
+        self._cache[key] = asset_data
+        if len(self._cache) > self.cache_size:
+            self._cache.popitem(last=False) # Remove o mais antigo (primeiro)
+
+        return asset_data
+    
+    def _execute_load(self, op, model, strat, asset):
         asset_path = self._asset_path(op, model, strat, asset)
         asset_data = {}
 
@@ -154,6 +172,9 @@ class Storage:
         wf_file = asset_path / "wfm" / "wf.parquet"
         if wf_file.exists():
             asset_data["wf"] = pl.read_parquet(wf_file)
+
+        if not asset_data:
+            print(f"⚠️ Aviso: Nenhum dado carregado para {op}/{model}/{strat}/{asset}")
 
         return asset_data
 
