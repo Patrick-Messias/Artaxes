@@ -1,0 +1,131 @@
+{
+    "market": "b3",
+    "asset_type": "futures",
+    "assets": {
+        "WIN$": {
+            "asset_params": {
+                "tick": 1,
+                "tick_fin_val": 0.2,
+                "lot_value": 20000.0,
+                "min_lot": 1,
+                "lot_step": 1,
+                "lot_max": 10000,
+                "leverage": 20,
+                "margin_rate": 0.05,
+                "commissions": 0.5,
+                "slippage": 0.25,
+                "spread": 0.25,
+                "swap_long": 0.0,
+                "swap_short": 0.0,
+                "datetime_candle_references": "open"
+            },
+            "timeframes": {
+                "H1": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:45",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H2": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:45",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "H4": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:45",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M10": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:45",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M12": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:45",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M15": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:45",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M1": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:46",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M20": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:46",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M2": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:46",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M30": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:46",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "M5": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:08:46",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "D1": {
+                    "date_start": "2021-04-14 00:00:00",
+                    "date_end": "2026-01-09 00:00:00",
+                    "rows": 1184,
+                    "last_updated": "2026-04-14T22:11:52",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "UNKNOWN": {
+                    "date_start": "2021-04-11 00:00:00",
+                    "date_end": "2026-01-04 00:00:00",
+                    "rows": 248,
+                    "last_updated": "2026-04-14T22:13:49",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "MN": {
+                    "date_start": "2021-04-01 00:00:00",
+                    "date_end": "2026-01-01 00:00:00",
+                    "rows": 58,
+                    "last_updated": "2026-04-14T22:16:58",
+                    "last_update_reason": "initial import from MT5"
+                },
+                "W1": {
+                    "date_start": "2021-04-11 00:00:00",
+                    "date_end": "2026-01-04 00:00:00",
+                    "rows": 248,
+                    "last_updated": "2026-04-14T22:16:58",
+                    "last_update_reason": "initial import from MT5"
+                }
+            }
+        }
+    }
+}

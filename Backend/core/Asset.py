@@ -545,7 +545,7 @@ class Asset:
 
         # Infere timeframe do nome do arquivo se não passado
         if not timeframe:
-            m = re.search(r"_([A-Z][0-9]+)", source.stem, re.IGNORECASE)
+            m = re.search(r"_([A-Z]{1,2}[0-9]*)", source.stem, re.IGNORECASE) #m = re.search(r"_([A-Z][0-9]+)", source.stem, re.IGNORECASE)
             timeframe = m.group(1).upper() if m else "UNKNOWN"
 
         # Usa FileSource para carregar + normalizar
@@ -649,7 +649,42 @@ def convert_folder(
     # Mostra registry final do market
     AssetRegistry(market=market, asset_type=asset_type).summary()
 
+def mt5_convert_folder(
+    source_folder: str,
+    asset_type:    str,
+    market:        str,
+    update_reason: str = "initial import from MT5",
+):    
+    folder = Path(source_folder)
+    files = sorted(f for f in folder.iterdir() if f.suffix.lower() == ".csv")
 
+    if not folder.is_dir():
+        print(f"⚠️ Folder not found: {folder.resolve()}") # Adicionei .resolve() para você ver onde ele está procurando
+        return
+
+    files = sorted(f for f in folder.iterdir() if f.suffix.lower() in (".csv", ".xlsx", ".xls"))
+    if not files:
+        print(f"⚠️ No CSV/XLSX files in {folder.resolve()}")
+        return
+
+    print(f"\n>>> Converting {len(files)} file(s) from '{folder}'\n")
+
+    for file in files:
+        # Pega a primeira parte antes do primeiro underline. 
+        # Ex: "WIN$_M2_2021..." vira "WIN$"
+        asset_name = file.stem.split('_')[0].upper()
+        print(f"  → {file.name}  (asset: {asset_name})")
+
+        asset = Asset(name=asset_name, type=asset_type, market=market)
+        asset.convert(
+            source_path=str(file),
+            delimiter="\t",
+            datetime_col="<date>", 
+            update_reason=update_reason,
+        )
+
+    # Mostra registry final do market
+    AssetRegistry(market=market, asset_type=asset_type).summary()
 
 
 
