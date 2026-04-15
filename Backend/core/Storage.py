@@ -248,47 +248,58 @@ class Storage:
     
     
     def load_walkforward(self, key, wf_id: str, start_dt, end_dt) -> list:
-        # Reconstructs out walkforward curve by searching timeline
-        asset_data = self.load(key)
+        # Generates unique cache key for this specific walkforward
+        cache_key = (*key, "wf_oos", str(wf_id))
 
-        wf_df = asset_data.get("wf")
-        timeline_df = asset_data.get("timeline")
+        if cache_key in self._cache: # Cache hit, recovers complete curve and updates order (LRU)
+            self._cache.move_to_end(cache_key)
+            oos_full_df = self._cache[cache_key]
+        else: # Cache miss, realizes heavy process only unce
+            # Reconstructs out walkforward curve by searching timeline
+            asset_data = self.load(key)
+            wf_df = asset_data.get("wf")
+            timeline_df = asset_data.get("timeline")
 
-        if wf_df is None or wf_df.is_empty():
-            print(f"    < [Storage.load_walkforward] No wf.parquet files found for {key}")
-            return None
-        
-        if timeline_df is None or timeline_df.is_empty():
-            print(f"    < [Storage.load_walkforward] No timeline_df found for {key}")
-            return None
+            if wf_df is None or wf_df.is_empty():
+                print(f"    < [Storage.load_walkforward] No wf.parquet files found for {key}")
+                return None
+            
+            if timeline_df is None or timeline_df.is_empty():
+                print(f"    < [Storage.load_walkforward] No timeline_df found for {key}")
+                return None
 
-        # Isolates Walkforward
-        wf_filtered = wf_df.filter(pl.col("wf_id") == wf_id)
+            # Isolates Walkforward and normalizes join columns
+            wf_filtered = wf_df.filter(pl.col("wf_id") == str(wf_id))
+            wf_filtered = wf_filtered.with_columns(pl.col("best_param").str.to_lowercase())
 
-        # Applies time window (start_idx : i)
-        if start_dt and end_dt:
-            wf_filtered = wf_filtered.filter(
-                (pl.col("datetime") >= start_dt)
-                & (pl.col("datetime") <= end_dt)
-            ) 
+            # Creates a temp copy with normalized timeline for joining
+            temp_timeline = timeline_df.with_columns(pl.col("ps_id").str.to_lowercase())
 
-        # Normalizes key to garantee match on join
-        wf_filtered = wf_filtered.with_columns(pl.col("best_param").str.to_lowercase())
-        timeline_df = timeline_df.with_columns(pl.col("ps_id").str.to_lowercase())
-
-        # Crosses wf with real datetime
-        oos_df = (
-            wf_filtered.join(
-                timeline_df,
-                left_on=["datetime", "best_param"],
-                right_on=["datetime", "ps_id"],
-                how="left"
+            # Crosses wf with real datetime
+            oos_full_df = (
+                wf_filtered.join(
+                    temp_timeline,
+                    left_on=["datetime", "best_param"],
+                    right_on=["datetime", "ps_id"],
+                    how="left"
+                )
+                .fill_null(0.0)
+                .sort("datetime")
             )
-            .fill_null(0.0)
-            .sort("datetime")
-        )
 
-        return oos_df.to_dicts()
+            # Saves complete data to cache
+            self._cache[cache_key] = oos_full_df
+            if len(self._cache) > self.cache_size:
+                self._cache.popitem(last=False)
+
+        # With complete curve, applies start end filter requested
+        if start_dt and end_dt:
+            result_df = oos_full_df.filter(
+                (pl.col("datetime") >= start_dt) & (pl.col("datetime") <= end_dt)
+            )
+        else: result_df = oos_full_df
+
+        return result_df.to_dicts()
 
 
     def load_wf_prep(self, timeline_df: pl.DataFrame) -> pl.DataFrame:
