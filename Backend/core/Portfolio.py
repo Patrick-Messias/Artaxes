@@ -116,60 +116,57 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
 
             # Dentro do seu loop principal, após o i atingir 150
-            if i == 30000:
-                print(f"\n{'='*20} TESTANDO WALKFORWARD OOS (i={i}) {'='*20}")
-                
-                # 1. Definição das chaves (Ajuste para um ativo que possua wf.parquet)
-                op_n = list(self.portfolio_data.keys())[0]
-                m_n = list(self.portfolio_data[op_n].keys())[0]
-                s_n = list(self.portfolio_data[op_n][m_n].keys())[0]
-                a_n = list(self.portfolio_data[op_n][m_n][s_n].keys())[0]
-                a_key = (op_n, m_n, s_n, a_n)
+            import matplotlib.pyplot as plt
 
-                # ID do Walkforward que você deseja testar (ex: configurado no seu WFM)
-                target_wf_id = "12_1_1" 
-
-                print(f"\n[TESTE WF] Reconstruindo Curva OOS para ID: {target_wf_id}")
+            if i == 12000:
+                print(f"\n{'-'*20} INICIANDO PLOTAGEM DE WF_MATRIX {'-'*20}")
                 
-                # 2. Chamada do novo data_type="wf"
-                # start_idx=0 para pegar todo o histórico até o candle atual 'i'
-                wf_oos_data = self._populate_sim_data(
-                    a_key, i, 
-                    start_idx=0, 
-                    data_type="wf", 
-                    psid_or_wfid=target_wf_id
+                test_key = ('operation_test', 'MA Trend Following', 'AT15', 'EURUSD')
+                wf_ids_to_plot = ["12_12_12", "4_4_4", "48_12_12"]
+                
+                # Vamos buscar uma janela maior para a curva ficar bonita (ex: 500 períodos)
+                data_dicts = self._populate_sim_data(
+                    test_key, i, 
+                    start_idx=int(i-1000), 
+                    data_type="wf_matrix", 
+                    psid_or_wfid=wf_ids_to_plot
                 )
 
-                if wf_oos_data and len(wf_oos_data) > 0:
-                    import matplotlib.pyplot as plt
-                    import pandas as pd
-
-                    # 3. Processamento dos dados para Plot
-                    df_plot = pd.DataFrame(wf_oos_data)
-                    df_plot['datetime'] = pd.to_datetime(df_plot['datetime'])
+                if data_dicts:
+                    # 1. Converter de volta para DataFrame para facilitar o plot
+                    df_plot = pl.DataFrame(data_dicts)
                     
-                    # O PnL aqui vem da timeline real, baseada no parâmetro que o WF escolheu
-                    df_plot['cum_pnl'] = df_plot['pnl'].cumsum()
-
-                    print(f" -> Sucesso! {len(df_plot)} pontos de dados OOS encontrados.")
-                    print(f" -> Parâmetros únicos utilizados no período: {df_plot['best_param'].nunique()}")
-                    print(f" -> PnL Final Acumulado: {df_plot['cum_pnl'].iloc[-1]:.2f}")
-
-                    # 4. Plotagem da Curva
+                    # 2. Garantir que a coluna datetime seja tratada corretamente
+                    # (Opcional: converter para datetime se for string)
+                    
+                    # 3. Plotagem
                     plt.figure(figsize=(12, 6))
-                    plt.plot(df_plot['datetime'], df_plot['cum_pnl'], label=f"OOS Curve - WF {target_wf_id}", color='#2ecc71')
-                    plt.title(f"Walkforward OOS Performance: {a_n} ({target_wf_id})")
-                    plt.xlabel("Timeline")
-                    plt.ylabel("Cumulative PnL")
-                    plt.grid(True, alpha=0.3)
-                    plt.legend()
                     
-                    # Salva ou mostra (dependendo do seu ambiente)
+                    for wf_id in wf_ids_to_plot:
+                        if wf_id in df_plot.columns:
+                            # Calculamos o PnL Acumulado para ver a curva de capital
+                            # fill_null(0) garante que a linha não quebre se houver gaps
+                            equity_curve = df_plot.get_column(wf_id).fill_null(0).cum_sum()
+                            
+                            plt.plot(df_plot['datetime'], equity_curve, label=f"WF: {wf_id}")
+                        else:
+                            print(f"⚠️ Aviso: ID {wf_id} não encontrado nos dados para plotagem.")
+
+                    plt.title(f"Curvas de Equity Walkforward - {test_key[-1]}")
+                    plt.xlabel("Datetime")
+                    plt.ylabel("PnL Acumulado")
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+                    plt.xticks(rotation=45)
+                    plt.tight_layout()
+                    
+                    print(" -> Gráfico gerado com sucesso.")
                     plt.show()
                 else:
-                    print(f" -> [Erro] Nenhum dado OOS retornado para {a_key}. Verifique se o ID '{target_wf_id}' existe no wf.parquet.")
+                    print("❌ Falha: Não foi possível obter dados para os IDs solicitados na janela temporal.")
 
-                print(f"\n{'='*60}\n")
+
+
 
             
             if i < 3 or i > len(self.datetime_timeline)-3: 
@@ -183,7 +180,9 @@ class Portfolio(BaseClass, BaseManager):
 
 
     # XXX 1. Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
-    # 2. Desenvolver SM/MM  
+    # XXX 2. Modificar _sim_data para poder puxar 1+ walkforward
+    # 3. Calculates Aggr with Literal["all", "wf", "parset"] of the selected data points in portfolio_data
+    # 4. Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
 
 
 
@@ -401,9 +400,32 @@ class Portfolio(BaseClass, BaseManager):
             except Exception as e:
                 print(f"    < [Portfolio._populate_sim_data] error constructing Walkforward {psid_or_wfid} for {key}: {e}")
 
+        elif data_type == "wf_matrix":
+            # Repassamos ps_id (que pode ser a lista ou None)
+            wfm_df = self.storage.load_walkforward_matrix(key, wf_ids=psid_or_wfid)
+            if wfm_df is None: return None
+
+            # Filtro de tempo (Crucial para não olhar o futuro na simulação)
+            end_dt = self.datetime_timeline[i]
+
+            if start_idx is None or start_idx == 0:
+                filtered = wfm_df.filter(pl.col("datetime") <= end_dt).tail(1)
+            else:
+                start_dt = self.datetime_timeline[start_idx]
+                filtered = wfm_df.filter(
+                    (pl.col("datetime") >= start_dt) & (pl.col("datetime") <= end_dt) 
+                )
+            return filtered.to_dict()
+
         print(f"    < [Portfolio._populate_sim_data] data_type unknown")
         return None
 
+    
+
+
+
+    # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
+    
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
         storage = self.storage #Storage(base_path=self.data_storage_base_path)
@@ -426,6 +448,7 @@ class Portfolio(BaseClass, BaseManager):
             config = self.portfolio_data[op_n][m_n][s_n][a_n]
             side_pref = config.get("side", "BOTH").lower() if isinstance(config, dict) else str(config).lower()
             separate_ls = config.get("analise_long_short_separate", False) if isinstance(config, dict) else False
+            calculate_on_data = config.get("calculate_on_data", "all") if isinstance(config, dict) else "all"
 
             asset_data = storage.load(op_n, m_n, s_n, a_n)
             timeline_df = asset_data.get("timeline")
@@ -796,7 +819,8 @@ if __name__ == "__main__":
                 "AT15": {
                     "EURUSD": {
                         "side": "BOTH",
-                        "analise_long_short_separate": True
+                        "analise_long_short_separate": True,
+                        "calculate_on_data": "wf",
                     }
                 }
             }

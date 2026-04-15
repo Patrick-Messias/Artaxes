@@ -301,6 +301,63 @@ class Storage:
 
         return result_df.to_dicts()
 
+    def load_walkforward_matrix(self, key, wf_ids: Optional[list] = None) -> Optional[pl.DataFrame]:        
+        # Lê o wf.parquet do subdiretório /wfm/ e transforma em matriz wide.
+        # Se wf_ids for uma lista, filtra apenas os IDs solicitados.
+        
+        op, model, strat, asset = key
+        
+        # Define o caminho esperado: .../asset/wfm/wf.parquet
+        wf_path = self._asset_path(op, model, strat, asset) / "wfm" / "wf.parquet"
+        
+        # Fallback caso o arquivo esteja na raiz do ativo e não em /wfm/
+        if not wf_path.exists():
+            wf_path = self._asset_path(op, model, strat, asset) / "wf.parquet"
+            if not wf_path.exists(): return None
+
+        try:
+            # 1. Leitura do arquivo original (formato Long/Vertical)
+            wf_df = pl.read_parquet(wf_path)
+            
+            if wf_df.is_empty(): return None
+
+            # 2. Normalização: Garante que o ID seja string
+            wf_df = wf_df.with_columns(
+                pl.col("wf_id").cast(pl.Utf8).str.strip_chars().alias("wf_id")
+            )
+
+            # 3. Lógica de Filtragem (Proposta por você)
+            # Se for uma lista, filtramos as linhas ANTES do pivot (mais rápido)
+            if isinstance(wf_ids, list) and len(wf_ids) > 0:
+                # Normaliza a lista de busca também
+                search_ids = [str(i).strip() for i in wf_ids]
+                wf_df_filtered = wf_df.filter(pl.col("wf_id").is_in(search_ids))
+                
+                if wf_df_filtered.is_empty():
+                    # DEBUG: Se não achou, vamos ver o que existe no arquivo
+                    available = wf_df.select("wf_id").unique().to_series().to_list()
+                    print(f"    < [Storage] IDs solicitados {search_ids} não encontrados.")
+                    print(f"    < [Storage] IDs disponíveis no arquivo: {available[:5]}... (total {len(available)})")
+                    return None
+                
+                wf_df = wf_df_filtered
+
+            # Pivot para formato Wide
+            return wf_df.pivot(
+                index="datetime",
+                on="wf_id",
+                values="pnl"
+            ).sort("datetime")
+
+        except Exception as e:
+            print(f"    < [Storage] Erro: {e}")
+            return None
+
+
+
+
+
+
 
     def load_wf_prep(self, timeline_df: pl.DataFrame) -> pl.DataFrame:
         if timeline_df is None or timeline_df.is_empty():
