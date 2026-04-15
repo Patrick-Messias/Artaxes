@@ -246,6 +246,50 @@ class Storage:
 
         return timeline_df
     
+    
+    def load_walkforward(self, key, wf_id: str, start_dt, end_dt) -> list:
+        # Reconstructs out walkforward curve by searching timeline
+        asset_data = self.load(key)
+
+        wf_df = asset_data.get("wf")
+        timeline_df = asset_data.get("timeline")
+
+        if wf_df is None or wf_df.is_empty():
+            print(f"    < [Storage.load_walkforward] No wf.parquet files found for {key}")
+            return None
+        
+        if timeline_df is None or timeline_df.is_empty():
+            print(f"    < [Storage.load_walkforward] No timeline_df found for {key}")
+            return None
+
+        # Isolates Walkforward
+        wf_filtered = wf_df.filter(pl.col("wf_id") == wf_id)
+
+        # Applies time window (start_idx : i)
+        if start_dt and end_dt:
+            wf_filtered = wf_filtered.filter(
+                (pl.col("datetime") >= start_dt)
+                & (pl.col("datetime") <= end_dt)
+            ) 
+
+        # Normalizes key to garantee match on join
+        wf_filtered = wf_filtered.with_columns(pl.col("best_param").str.to_lowercase())
+        timeline_df = timeline_df.with_columns(pl.col("ps_id").str.to_lowercase())
+
+        # Crosses wf with real datetime
+        oos_df = (
+            wf_filtered.join(
+                timeline_df,
+                left_on=["datetime", "best_param"],
+                right_on=["datetime", "ps_id"],
+                how="left"
+            )
+            .fill_null(0.0)
+            .sort("datetime")
+        )
+
+        return oos_df.to_dicts()
+
 
     def load_wf_prep(self, timeline_df: pl.DataFrame) -> pl.DataFrame:
         if timeline_df is None or timeline_df.is_empty():

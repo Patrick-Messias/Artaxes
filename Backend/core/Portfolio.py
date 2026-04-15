@@ -116,54 +116,62 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
 
             # Dentro do seu loop principal, após o i atingir 150
-            if i == 5000:
-                print(f"\n{'='*20} TESTANDO POPULATE_SIM_DATA (i=150) {'='*20}")
+            if i == 30000:
+                print(f"\n{'='*20} TESTANDO WALKFORWARD OOS (i={i}) {'='*20}")
                 
-                # Exemplo de chaves para os testes
-                # (Ajuste os nomes conforme sua estrutura de portfolio_data)
+                # 1. Definição das chaves (Ajuste para um ativo que possua wf.parquet)
                 op_n = list(self.portfolio_data.keys())[0]
                 m_n = list(self.portfolio_data[op_n].keys())[0]
                 s_n = list(self.portfolio_data[op_n][m_n].keys())[0]
                 a_n = list(self.portfolio_data[op_n][m_n][s_n].keys())[0]
-                
-                m_key = (op_n, m_n)
-                s_key = (op_n, m_n, s_n)
                 a_key = (op_n, m_n, s_n, a_n)
 
-                # --- TESTE 1: Slice de Memória (Aggr) ---
-                # Pegando os últimos 10 períodos para calcular uma média móvel ou volatilidade
-                print("\n[TESTE 1] Aggr Slice (Últimos 10 candles):")
-                hist_data = self._populate_sim_data(m_key, i, start_idx=i-10, side="BOTH")
-                if hist_data:
-                    for strat, values in hist_data.items():
-                        print(f" -> Strat: {strat} | Registros: {len(values)} | Último PnL: {values[-1]:.4f}")
+                # ID do Walkforward que você deseja testar (ex: configurado no seu WFM)
+                target_wf_id = "12_1_1" 
 
-                # --- TESTE 2: Direções Separadas (Long/Short) ---
-                print("\n[TESTE 2] Filtro por Lado (LONG):")
-                long_only = self._populate_sim_data(s_key, i, side="LONG")
-                if long_only:
-                    print(f" -> Ativos Long em {s_key}: {list(long_only.keys())}")
-                    # Como não passamos start_idx, ele deve retornar o formato do dicionário original de i
+                print(f"\n[TESTE WF] Reconstruindo Curva OOS para ID: {target_wf_id}")
+                
+                # 2. Chamada do novo data_type="wf"
+                # start_idx=0 para pegar todo o histórico até o candle atual 'i'
+                wf_oos_data = self._populate_sim_data(
+                    a_key, i, 
+                    start_idx=0, 
+                    data_type="wf", 
+                    psid_or_wfid=target_wf_id
+                )
 
-                # --- TESTE 3: Parset (Disco/Parquet) ---
-                # Aqui simulamos a busca por trades específicos de um ativo
-                print("\n[TESTE 3] Parset (Leitura de Disco):")
-                # Vamos tentar pegar todos os trades desse ativo na janela de 150 candles
-                trades = self._populate_sim_data(a_key, i, start_idx=0, data_type="parset")
-                if trades:
-                    print(f" -> Sucesso! Encontrados {len(trades)} trades no parset de {a_n}")
+                if wf_oos_data and len(wf_oos_data) > 0:
+                    import matplotlib.pyplot as plt
+                    import pandas as pd
+
+                    # 3. Processamento dos dados para Plot
+                    df_plot = pd.DataFrame(wf_oos_data)
+                    df_plot['datetime'] = pd.to_datetime(df_plot['datetime'])
+                    
+                    # O PnL aqui vem da timeline real, baseada no parâmetro que o WF escolheu
+                    df_plot['cum_pnl'] = df_plot['pnl'].cumsum()
+
+                    print(f" -> Sucesso! {len(df_plot)} pontos de dados OOS encontrados.")
+                    print(f" -> Parâmetros únicos utilizados no período: {df_plot['best_param'].nunique()}")
+                    print(f" -> PnL Final Acumulado: {df_plot['cum_pnl'].iloc[-1]:.2f}")
+
+                    # 4. Plotagem da Curva
+                    plt.figure(figsize=(12, 6))
+                    plt.plot(df_plot['datetime'], df_plot['cum_pnl'], label=f"OOS Curve - WF {target_wf_id}", color='#2ecc71')
+                    plt.title(f"Walkforward OOS Performance: {a_n} ({target_wf_id})")
+                    plt.xlabel("Timeline")
+                    plt.ylabel("Cumulative PnL")
+                    plt.grid(True, alpha=0.3)
+                    plt.legend()
+                    
+                    # Salva ou mostra (dependendo do seu ambiente)
+                    plt.show()
                 else:
-                    print(f" -> Parset não encontrado ou vazio para {a_key} (Verifique storage.load)")
-
-                # --- TESTE 4: Filtragem por PS_ID (Trade Específico) ---
-                print("\n[TESTE 4] Parset com Filtro PS_ID:")
-                # Substitua 'TRADE_001' por um ID que você saiba que existe no seu parquet
-                specific_trade = self._populate_sim_data(a_key, i, data_type="parset", ps_id="param_set-3-3-2-2-2-21-8-sma-M15-21-1-0.03-False-False-0")
-                if specific_trade:
-                    print(f" -> Trade específico encontrado: {specific_trade[0]}")
+                    print(f" -> [Erro] Nenhum dado OOS retornado para {a_key}. Verifique se o ID '{target_wf_id}' existe no wf.parquet.")
 
                 print(f"\n{'='*60}\n")
 
+            
             if i < 3 or i > len(self.datetime_timeline)-3: 
                 print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
             
@@ -174,8 +182,8 @@ class Portfolio(BaseClass, BaseManager):
 
 
 
-    #1. Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
-    #2. Desenvolver SM/MM  
+    # 1. Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
+    # 2. Desenvolver SM/MM  
 
 
 
@@ -300,7 +308,7 @@ class Portfolio(BaseClass, BaseManager):
     # ── Data Handling ───────────────────────────────────────────────
 
     # Used to pull real data from parquet from selected source
-    def _populate_sim_data(self, key, i, start_idx=0, side=None, data_type="aggr", ps_id=None):
+    def _populate_sim_data(self, key, i, start_idx=0, side=None, data_type="aggr", psid_or_wfid=None):
         """
         Recupera dados de PnL ou resultados brutos (parsets).
         
@@ -353,8 +361,8 @@ class Portfolio(BaseClass, BaseManager):
                     return None
 
                 # Filtragem por PS_ID (Seu ID longo)
-                if ps_id is not None:
-                    raw_df = raw_df.filter(pl.col("ps_id") == ps_id)
+                if psid_or_wfid is not None:
+                    raw_df = raw_df.filter(pl.col("ps_id") == psid_or_wfid)
 
                 # Filtragem Temporal baseada na sua timeline do backtest
                 end_dt = self.datetime_timeline[i]
@@ -374,6 +382,27 @@ class Portfolio(BaseClass, BaseManager):
             except Exception as e:
                 print(f"Erro ao carregar parset para {key}: {e}")
                 return None
+            
+        elif data_type=="wf":
+            try: 
+                if psid_or_wfid is None:
+                    print(f"    < [Portfolio._populate_sim_data] no ps_id")
+
+                end_dt = self.datetime_timeline[i]
+                start_dt = self.datetime_timeline[start_idx] if start_idx is not None else 0
+
+                return self.storage.load_walkforward(
+                    key=key,
+                    wf_id=str(psid_or_wfid),
+                    start_dt=start_dt,
+                    end_dt=end_dt
+                )
+
+            except Exception as e:
+                print(f"    < [Portfolio._populate_sim_data] error constructing Walkforward {psid_or_wfid} for {key}: {e}")
+
+        print(f"    < [Portfolio._populate_sim_data] data_type unknown")
+        return None
 
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
@@ -417,11 +446,9 @@ class Portfolio(BaseClass, BaseManager):
             
             # Registro de Metadados de Disco (apenas uma vez por ativo, independente da via)
             base_path = storage._asset_path(op_n, m_n, s_n, a_n)
-            wf_df = asset_data.get("wf")
             self.sim_data[(op_n, m_n, s_n, a_n)] = {
                 "type": "disk",
                 "trades_path": str(base_path / "trades" / "trades.parquet"),
-                "wf_memory_map": self._build_wf_memory_map(wf_df, timeline_df) if wf_df is not None else None
             }
 
         # --- 2. ALINHAMENTO E AGREGAÇÃO (WIDE) ---
@@ -491,39 +518,6 @@ class Portfolio(BaseClass, BaseManager):
 
         return True
     
-    def _build_wf_memory_map(self, wf_df: pl.DataFrame, trades_df: pl.DataFrame) -> dict:
-        # Constructs O(1) access map for WF data during a simulation
-        # # wf_df: wf.parquet - datetime | pnl | best_param | wf_id
-        # trades_df: trade data with - datetime | ps_id | pnl | lot_size 
-        # returns {datetime: {wf_id: (pnl, lot_size)}}
-
-        if wf_df is None or wf_df.is_empty():
-            return {}
-        
-        # Normalizes names to lowercase to garantee match
-        wf_df = wf_df.with_columns(pl.col("best_param").str.to_lowercase())
-        trades_df = trades_df.with_columns(pl.col("ps_id").str.to_lowercase())
-
-        # Join: for each WF line, takes pnl and lot_size from exits_df in same datetime and ps_id
-        joined = (
-            wf_df
-            .join(
-                trades_df.select(["datetime", "ps_id", "pnl", "lot_size"])
-                        .rename({"ps_id": "best_param", "pnl": "val_pnl", "lot_size": "val_lot"}),
-                on=["datetime", "best_param"],
-                how="left"
-            )
-            .fill_null(0.0)
-        )
-
-        memory_map = {}
-        for row in joined.iter_rows(named=True):
-            dt  = row["datetime"]
-            wid = str(row["wf_id"])
-            memory_map.setdefault(dt, {})[wid] = (row["val_pnl"], row["val_lot"])
-
-        return memory_map
-
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
         psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
         params_pool = {}
