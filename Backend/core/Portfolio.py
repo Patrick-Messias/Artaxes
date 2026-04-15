@@ -168,6 +168,21 @@ class Portfolio(BaseClass, BaseManager):
                 print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
             
         return True
+    
+
+
+
+
+
+    #1. Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
+    #2. Desenvolver SM/MM  
+
+
+
+
+
+
+
 
     # ── Portfolio Defs ───────────────────────────────────────────────
 

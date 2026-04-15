@@ -18,19 +18,19 @@ class ModelMoneyManager(MoneyManager): # Manages Model's risk and money manageme
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
     def _default_allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict):
-        return hierarchy
+        return hierarchy, indicator_pool, op_data, port_returns
 
     def _default_size(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict):
-        return hierarchy
+        return hierarchy, indicator_pool, op_data, port_returns
 
     def _default_risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict):
-        return hierarchy
+        return hierarchy, indicator_pool, op_data, port_returns
 
     def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
 
-        hierarchy = self.allocate(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy = self.size(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy = self.risk_guard(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy, indicator_pool, op_data, port_returns = self.allocate(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy, indicator_pool, op_data, port_returns = self.size(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy, indicator_pool, op_data, port_returns = self.risk_guard(step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
         return hierarchy
 

@@ -55,7 +55,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         entities_to_rank = hierarchy.get(children_key, [])
 
         if not entities_to_rank or op_data is None:
-            return hierarchy
+            return hierarchy, indicator_pool, op_data, port_returns
 
         # 1. Extraímos o estado atual (última linha)
         last_values = op_data.tail(1).to_dict(as_series=False)
@@ -71,14 +71,14 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         )
 
         hierarchy[children_key] = ranked
-        return hierarchy
+        return hierarchy, indicator_pool, op_data, port_returns
 
     def _default_filter(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> dict:
         """
         Filtra entidades. Por padrão, mantém todas. 
         Pode ser expandido para remover modelos com drawdown excessivo usando o op_data.
         """
-        return hierarchy 
+        return hierarchy, indicator_pool, op_data, port_returns 
 
     def _default_rebalance(self, step_dt, hierarchy, indicator_pool, op_data, port_returns) -> dict:
         """
@@ -88,20 +88,20 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         entities = hierarchy.get(children_key, [])
 
         if not entities:
-            return hierarchy
+            return hierarchy, indicator_pool, op_data, port_returns
 
         # O ranking já foi feito no _default_rank (chamado pelo main antes do rebalance)
         # Aqui apenas aplicamos o corte de quantidade (Slicing)
         if self.max_active_models is not None:
             hierarchy[children_key] = entities[:self.max_active_models]
 
-        return hierarchy
+        return hierarchy, indicator_pool, op_data, port_returns
 
     def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
      
-        hierarchy = self.rank(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy = self.filter(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy = self.rebalance(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy, indicator_pool, op_data, port_returns  = self.rank(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy, indicator_pool, op_data, port_returns  = self.filter(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        hierarchy, indicator_pool, op_data, port_returns  = self.rebalance(step_dt, hierarchy, indicator_pool, op_data, port_returns)
 
         return hierarchy
    
