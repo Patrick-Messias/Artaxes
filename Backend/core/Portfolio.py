@@ -114,11 +114,18 @@ class Portfolio(BaseClass, BaseManager):
             hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
                                                     
             #||=====================================================================================||#
-
-            # Dentro do seu loop principal, após o i atingir 150
+            if i == int(len(self.datetime_timeline)-1):
+                data_dicts = self._populate_sim_data(
+                        key=('operation_test', 'MA Trend Following', 'AT15', 'EURUSD'), 
+                        i=i,
+                        start_idx=int(i-(int(len(self.datetime_timeline)-2))),
+                        data_type="wf", 
+                        psid_or_wfid=["12_12_12"]
+                    )
+                print(data_dicts)
+            
             import matplotlib.pyplot as plt
-
-            if i == 12000:
+            if i == int(len(self.datetime_timeline)-1):
                 print(f"\n{'-'*20} INICIANDO PLOTAGEM DE WF_MATRIX {'-'*20}")
                 
                 test_key = ('operation_test', 'MA Trend Following', 'AT15', 'EURUSD')
@@ -127,11 +134,11 @@ class Portfolio(BaseClass, BaseManager):
                 # Vamos buscar uma janela maior para a curva ficar bonita (ex: 500 períodos)
                 data_dicts = self._populate_sim_data(
                     test_key, i, 
-                    start_idx=int(i-1000), 
-                    data_type="wf_matrix", 
+                    start_idx=int(i-(int(len(self.datetime_timeline)-2))),
+                    data_type="wf", 
                     psid_or_wfid=wf_ids_to_plot
                 )
-
+                
                 if data_dicts:
                     # 1. Converter de volta para DataFrame para facilitar o plot
                     df_plot = pl.DataFrame(data_dicts)
@@ -180,8 +187,8 @@ class Portfolio(BaseClass, BaseManager):
 
 
     # XXX 1. Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
-    # XXX 2. Modificar _sim_data para poder puxar 1+ walkforward
-    # 3. Calculates Aggr with Literal["all", "wf", "parset"] of the selected data points in portfolio_data
+    # 2. Modificar _sim_data para poder puxar wf, wf.parquet tem que ter apenas [dt, ps_id, wf_id]
+    # 3. Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
     # 4. Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
 
 
@@ -382,50 +389,32 @@ class Portfolio(BaseClass, BaseManager):
                 print(f"Erro ao carregar parset para {key}: {e}")
                 return None
             
-        elif data_type=="wf":
-            try: 
-                if psid_or_wfid is None:
-                    print(f"    < [Portfolio._populate_sim_data] no ps_id")
+        elif data_type == "wf": # wf_ids can be str, list[str] or None (all ps_id)
+            try:
+                wfm_df = self.storage.load_walkforward_matrix(key, wf_ids=psid_or_wfid)
+                
+                if wfm_df is None or wfm_df.is_empty():
+                    return None
 
+                # Filtro de tempo (Janela Móvel ou Candle Único)
                 end_dt = self.datetime_timeline[i]
-                start_dt = self.datetime_timeline[start_idx] if start_idx is not None else 0
-
-                return self.storage.load_walkforward(
-                    key=key,
-                    wf_id=str(psid_or_wfid),
-                    start_dt=start_dt,
-                    end_dt=end_dt
-                )
-
+                
+                if start_idx is None or start_idx == 0: # Returns idx candle or last
+                    filtered = wfm_df.filter(pl.col("datetime") <= end_dt).tail(1)
+                else:
+                    start_dt = self.datetime_timeline[start_idx]
+                    filtered = wfm_df.filter(
+                        (pl.col("datetime") >= start_dt) & (pl.col("datetime") <= end_dt) 
+                    )
+                
+                # Format: to_dicts() returns [{col1: val, col2: val}, ...] best to itearate line by line
+                return filtered.to_dicts()
             except Exception as e:
-                print(f"    < [Portfolio._populate_sim_data] error constructing Walkforward {psid_or_wfid} for {key}: {e}")
-
-        elif data_type == "wf_matrix":
-            # Repassamos ps_id (que pode ser a lista ou None)
-            wfm_df = self.storage.load_walkforward_matrix(key, wf_ids=psid_or_wfid)
-            if wfm_df is None: return None
-
-            # Filtro de tempo (Crucial para não olhar o futuro na simulação)
-            end_dt = self.datetime_timeline[i]
-
-            if start_idx is None or start_idx == 0:
-                filtered = wfm_df.filter(pl.col("datetime") <= end_dt).tail(1)
-            else:
-                start_dt = self.datetime_timeline[start_idx]
-                filtered = wfm_df.filter(
-                    (pl.col("datetime") >= start_dt) & (pl.col("datetime") <= end_dt) 
-                )
-            return filtered.to_dict()
+                print(f"    < [Portfolio._populate_sim_data] error constructing Walkforward Matrix {psid_or_wfid} for {key}: {e}")
 
         print(f"    < [Portfolio._populate_sim_data] data_type unknown")
         return None
 
-    
-
-
-
-    # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
-    
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
         storage = self.storage #Storage(base_path=self.data_storage_base_path)
@@ -446,55 +435,99 @@ class Portfolio(BaseClass, BaseManager):
         # --- 1. COLETA DE DADOS E TIMELINE ---
         for op_n, _, m_n, _, s_n, _, a_n, _ in self._iter_portfolio_data():
             config = self.portfolio_data[op_n][m_n][s_n][a_n]
-            side_pref = config.get("side", "BOTH").lower() if isinstance(config, dict) else str(config).lower()
-            separate_ls = config.get("analise_long_short_separate", False) if isinstance(config, dict) else False
-            calculate_on_data = config.get("calculate_on_data", "all") if isinstance(config, dict) else "all"
+            a_key = (op_n, m_n, s_n, a_n)
 
-            asset_data = storage.load(op_n, m_n, s_n, a_n)
+            # Extracts configs
+            side_pref = config.get("side", "BOTH").upper() if isinstance(config, dict) else "BOTH"
+            separate_ls = config.get("analise_long_short_separate", False) if isinstance(config, dict) else False
+            calculate_on_data = config.get("calculate_on_data", "all")
+
+            # Loads brute data (Parset)
+            asset_data = storage.load(a_key)
             timeline_df = asset_data.get("timeline")
             if timeline_df is None or timeline_df.is_empty(): continue
-
-            unique_dts.update(timeline_df['datetime'].to_list())
             
-            # Prepara as vias deste ativo
+            unique_dts.update(timeline_df['datetime'].to_list())
+
+            # Preparates direction
             vias = {"BOTH": side_pref}
             if separate_ls:
-                vias.update({"LONG": "long", "SHORT": "short"})
-
+                vias.update({"LONG": "LONG", "SHORT": "SHORT"})
             asset_entry = {}
-            for dir_name, side_val in vias.items():
-                asset_entry[dir_name] = self.get_aggr_pnl_by_side(timeline_df, side_val, a_n)
             
-            temp_asset_cache[(op_n, m_n, s_n, a_n)] = asset_entry
+
+            for dir_label, side_val in vias.items():
+                sources = []
+
+                # Source A: Parsets
+                if calculate_on_data in ["all", "parset"] and timeline_df is not None and not timeline_df.is_empty():
+                    p_aggr = self.get_aggr_pnl_by_side(timeline_df, side_val, a_n)
+                    if p_aggr is not None:
+                        sources.append(p_aggr.rename({a_n: "parset_pnl"}))
+
+                # Source B: Walkforward
+                if calculate_on_data in ["all", "wf"]:
+                    wfm_wide = storage.load_walkforward_matrix(a_key, side_val=side_val)
+                    if wfm_wide is not None and not wfm_wide.is_empty():
+                        wf_cols = [c for c in wfm_wide.columns if c != "datetime"]
+                        wf_aggr = wfm_wide.select([
+                            pl.col("datetime"),
+                            pl.mean_horizontal(wf_cols).alias("wf_pnl")
+                        ])
+                        sources.append(wf_aggr)
+
+                # Combines all sources to generate aggr for the asset
+                if not sources: continue
+                if len(sources) == 1: combined = sources[0].rename({sources[0].columns[1]: a_n})
+                else: # If "all", takes avg between parsets and wf
+                    combined = (
+                        sources[0]
+                        .join(sources[1], on="datetime", how="full", coalesce=True)
+                        .fill_null(0.0)
+                        .select([
+                            pl.col("datetime"),
+                            pl.mean_horizontal(["parset_pnl", "wf_pnl"]).alias(a_n)
+                        ])
+                    )
+                
+                asset_entry[dir_label] = combined
+
+                # Updates unique datetime
+                unique_dts.update(combined['datetime'].to_list())
             
             # Registro de Metadados de Disco (apenas uma vez por ativo, independente da via)
-            base_path = storage._asset_path(op_n, m_n, s_n, a_n)
-            self.sim_data[(op_n, m_n, s_n, a_n)] = {
-                "type": "disk",
-                "trades_path": str(base_path / "trades" / "trades.parquet"),
-            }
+            if asset_entry:
+                temp_asset_cache[a_key] = asset_entry
+                base_path = storage._asset_path(*a_key)
+                self.sim_data[a_key] = {
+                    "type": "disk",
+                    "trades_path": str(base_path / "trades" / "trades.parquet"),
+                }
 
-        # --- 2. ALINHAMENTO E AGREGAÇÃO (WIDE) ---
+        # --- 2. ALINHAMENTO TEMPORAL E AGREGAÇÃO SUBORDINADA ---
+        if not unique_dts:
+            print(" < [Portfolio._load_selected_saved_returns_data] Error: No data available to load.")
+            return False
+
         self.datetime_timeline = sorted(unique_dts)
         timeline_global = pl.DataFrame({"datetime": self.datetime_timeline})
 
         # A. Ativos -> Estratégias
-        for a_key, vias_dict in temp_asset_cache.items():
+        for a_key, directions in temp_asset_cache.items():
             op_n, m_n, s_n, a_n = a_key
             s_key = (op_n, m_n, s_n)
             
-            for d_name, pnl_df in vias_dict.items():
+            for d_name, pnl_df in directions.items():
+                # Alinha o PnL do ativo com a timeline global do portfólio
                 aligned = timeline_global.join(pnl_df, on="datetime", how="left").fill_null(0.0)
                 pnl_series = aligned.get_column(a_n)
                 
-                # Salva no sim_data do Ativo
                 self.sim_data[a_key].setdefault(d_name, {})
-                self.sim_data[a_key][d_name] = {"data": pnl_series.to_numpy().reshape(-1, 1), "cols": [a_n]}
-                
-                # Alimenta acumulador da Estratégia
+                self.sim_data[a_key][d_name] = {
+                    "data": pnl_series.to_numpy().reshape(-1, 1), 
+                    "cols": [a_n]
+                }
                 strat_acc.setdefault(s_key, {}).setdefault(d_name, {})[a_n] = pnl_series
-
-        del temp_asset_cache
 
         # B. Estratégias -> Modelos
         for s_key, directions in strat_acc.items():
@@ -503,27 +536,22 @@ class Portfolio(BaseClass, BaseManager):
                 wide_df = pl.DataFrame(assets)
                 self.sim_data[s_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
                 
-                # Média para o nível Modelo
                 m_series = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias(s_key[2])
                 model_acc.setdefault((s_key[0], s_key[1]), {}).setdefault(d_name, {})[s_key[2]] = m_series
 
         # C. Modelos -> Portfólio
         for m_key, directions in model_acc.items():
             self.sim_data[m_key] = {"type": "aggr"}
-            op_n = m_key[0]
-            m_n = m_key[1]
-
             for d_name, strats in directions.items():
                 wide_df = pl.DataFrame(strats)
                 self.sim_data[m_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
 
-                # PnL serie of this model
-                m_series = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias(m_n)
+                o_series = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias(m_key[1])
+                opera_acc.setdefault((m_key[0],), {}).setdefault(d_name, {})[m_key[1]] = o_series
                 
-                opera_acc.setdefault((op_n,), {}).setdefault(d_name, {})[m_n] = m_series
-
-                global_col = f"{op_n}_{m_n}"
-                portf_acc.setdefault((self.name,), {}).setdefault(d_name, {})[global_col] = m_series
+                # Acumula para o Portfólio Global
+                port_col = f"{m_key[0]}_{m_key[1]}"
+                portf_acc.setdefault((self.name,), {}).setdefault(d_name, {})[port_col] = o_series
 
         # D. Operation
         for o_key, directions in opera_acc.items():
@@ -535,8 +563,8 @@ class Portfolio(BaseClass, BaseManager):
         # E. Portfólio
         for p_key, directions in portf_acc.items():
             self.sim_data[p_key] = {"type": "aggr"}
-            for d_name, all_models in directions.items():
-                wide_df = pl.DataFrame(all_models)
+            for d_name, components in directions.items():
+                wide_df = pl.DataFrame(components)
                 self.sim_data[p_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
 
         return True

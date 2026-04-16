@@ -1,6 +1,6 @@
 import polars as pl, json
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Union
 from datetime import datetime
 from collections import OrderedDict
 
@@ -65,6 +65,9 @@ class Storage:
             if "os_curve" in run and isinstance(run["os_curve"], pl.DataFrame):
                 df = run["os_curve"].clone()
 
+                # Drops PnL to save, use best_param and get data from trades by wf_id
+                df = df.drop("pnl")
+
                 if "ts" in df.columns:
                     df = df.rename({"ts": "datetime"})
 
@@ -72,7 +75,6 @@ class Storage:
                     pl.lit(run.get("best_param", "")).alias("best_param"),
                     pl.lit(wf_id).alias("wf_id")   # 🔥 chave
                 ])
-
                 frames.append(df)
 
         if not frames:
@@ -86,7 +88,6 @@ class Storage:
         if file_path.exists():
             old = pl.read_parquet(file_path)
             new_df = pl.concat([old, new_df])
-
         new_df.sort("datetime").write_parquet(file_path)
 
     def save_operation_meta(self, op_name: str, meta_dict: dict):
@@ -125,7 +126,7 @@ class Storage:
             return []
         return [f.stem for f in sorted(path.glob("*.parquet"))]
 
-    # Reads trades and trades_matrix, generates a unified vertical structure with all parsets mixed in
+    # Reads trades and trades_matrix, generates a unified vertical structure with all parsets mixed in ["timeline"]
     def load(self, *args) -> dict:
         # 1. Resolver a tupla (conforme sugerido anteriormente)
         if len(args) == 1 and isinstance(args[0], (tuple, list)):
@@ -177,6 +178,59 @@ class Storage:
             print(f"    < [Storage._execute_load] ⚠️ Warning: No data found for {op}/{model}/{strat}/{asset}")
 
         return asset_data
+
+
+    def load_walkforward_matrix(self, key, side_val: str="BOTH", wf_ids: Optional[Union[str, list]] = None) -> Optional[pl.DataFrame]:              
+        
+        # Loads timeline DF (trades+trades_matrix) and wf map from disk 
+        asset_data = self.load(key)
+        trades_ret_matrix = asset_data.get("timeline")
+        wf_map = asset_data.get("wf")
+
+        if trades_ret_matrix is None or trades_ret_matrix.is_empty(): return None
+        if wf_map is None or wf_map.is_empty(): return None
+
+        try:
+            if "best_param" in wf_map.columns:
+                wf_map = wf_map.rename({"best_param": "ps_id"})
+
+            # Join by binding IDs map with real PnL and Lot
+            combined = wf_map.join(trades_ret_matrix, on=["datetime", "ps_id"], how="inner")
+
+            # Dinamic side logic (lot > 0: Long)
+            combined = combined.with_columns([
+                pl.when(pl.col("lot_size") > 0).then(pl.lit("long"))
+                .when(pl.col("lot_size") < 0).then(pl.lit("short"))
+                .otherwise(pl.lit("none")).alias("side")
+            ])
+            if combined.is_empty(): return None
+
+            # Filters by Portfolio's requested side
+            side_val = side_val.lower()
+            if side_val in ["long", "short"]:
+                combined = combined.filter(pl.col("side") == side_val)
+            if combined.is_empty(): return None
+
+            # Walkforward ID list filter
+            if wf_ids is not None:
+                search_ids = [str(wf_ids)] if isinstance(wf_ids, str) else [str(i) for i in wf_ids]
+                combined = combined.filter(pl.col("wf_id").cast(pl.Utf8).is_in(search_ids))
+
+            # Final Pivot that aggregates PnL by wf_id
+            return combined.pivot(
+                index="datetime",
+                on="wf_id",
+                values="pnl",
+                aggregate_function="sum"
+            ).sort("datetime")
+
+        except Exception as e:
+            print(f"    < [Storage] Error: {e}")
+            return None
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Internos
+    # ─────────────────────────────────────────────────────────────────────────
 
     def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame) -> pl.DataFrame:
         if trades_df is None or trades_df.is_empty():
@@ -246,141 +300,6 @@ class Storage:
 
         return timeline_df
     
-    
-    def load_walkforward(self, key, wf_id: str, start_dt, end_dt) -> list:
-        # Generates unique cache key for this specific walkforward
-        cache_key = (*key, "wf_oos", str(wf_id))
-
-        if cache_key in self._cache: # Cache hit, recovers complete curve and updates order (LRU)
-            self._cache.move_to_end(cache_key)
-            oos_full_df = self._cache[cache_key]
-        else: # Cache miss, realizes heavy process only unce
-            # Reconstructs out walkforward curve by searching timeline
-            asset_data = self.load(key)
-            wf_df = asset_data.get("wf")
-            timeline_df = asset_data.get("timeline")
-
-            if wf_df is None or wf_df.is_empty():
-                print(f"    < [Storage.load_walkforward] No wf.parquet files found for {key}")
-                return None
-            
-            if timeline_df is None or timeline_df.is_empty():
-                print(f"    < [Storage.load_walkforward] No timeline_df found for {key}")
-                return None
-
-            # Isolates Walkforward and normalizes join columns
-            wf_filtered = wf_df.filter(pl.col("wf_id") == str(wf_id))
-            wf_filtered = wf_filtered.with_columns(pl.col("best_param").str.to_lowercase())
-
-            # Creates a temp copy with normalized timeline for joining
-            temp_timeline = timeline_df.with_columns(pl.col("ps_id").str.to_lowercase())
-
-            # Crosses wf with real datetime
-            oos_full_df = (
-                wf_filtered.join(
-                    temp_timeline,
-                    left_on=["datetime", "best_param"],
-                    right_on=["datetime", "ps_id"],
-                    how="left"
-                )
-                .fill_null(0.0)
-                .sort("datetime")
-            )
-
-            # Saves complete data to cache
-            self._cache[cache_key] = oos_full_df
-            if len(self._cache) > self.cache_size:
-                self._cache.popitem(last=False)
-
-        # With complete curve, applies start end filter requested
-        if start_dt and end_dt:
-            result_df = oos_full_df.filter(
-                (pl.col("datetime") >= start_dt) & (pl.col("datetime") <= end_dt)
-            )
-        else: result_df = oos_full_df
-
-        return result_df.to_dicts()
-
-    def load_walkforward_matrix(self, key, wf_ids: Optional[list] = None) -> Optional[pl.DataFrame]:        
-        # Lê o wf.parquet do subdiretório /wfm/ e transforma em matriz wide.
-        # Se wf_ids for uma lista, filtra apenas os IDs solicitados.
-        
-        op, model, strat, asset = key
-        
-        # Define o caminho esperado: .../asset/wfm/wf.parquet
-        wf_path = self._asset_path(op, model, strat, asset) / "wfm" / "wf.parquet"
-        
-        # Fallback caso o arquivo esteja na raiz do ativo e não em /wfm/
-        if not wf_path.exists():
-            wf_path = self._asset_path(op, model, strat, asset) / "wf.parquet"
-            if not wf_path.exists(): return None
-
-        try:
-            # 1. Leitura do arquivo original (formato Long/Vertical)
-            wf_df = pl.read_parquet(wf_path)
-            
-            if wf_df.is_empty(): return None
-
-            # 2. Normalização: Garante que o ID seja string
-            wf_df = wf_df.with_columns(
-                pl.col("wf_id").cast(pl.Utf8).str.strip_chars().alias("wf_id")
-            )
-
-            # 3. Lógica de Filtragem (Proposta por você)
-            # Se for uma lista, filtramos as linhas ANTES do pivot (mais rápido)
-            if isinstance(wf_ids, list) and len(wf_ids) > 0:
-                # Normaliza a lista de busca também
-                search_ids = [str(i).strip() for i in wf_ids]
-                wf_df_filtered = wf_df.filter(pl.col("wf_id").is_in(search_ids))
-                
-                if wf_df_filtered.is_empty():
-                    # DEBUG: Se não achou, vamos ver o que existe no arquivo
-                    available = wf_df.select("wf_id").unique().to_series().to_list()
-                    print(f"    < [Storage] IDs solicitados {search_ids} não encontrados.")
-                    print(f"    < [Storage] IDs disponíveis no arquivo: {available[:5]}... (total {len(available)})")
-                    return None
-                
-                wf_df = wf_df_filtered
-
-            # Pivot para formato Wide
-            return wf_df.pivot(
-                index="datetime",
-                on="wf_id",
-                values="pnl"
-            ).sort("datetime")
-
-        except Exception as e:
-            print(f"    < [Storage] Erro: {e}")
-            return None
-
-
-
-
-
-
-
-    def load_wf_prep(self, timeline_df: pl.DataFrame) -> pl.DataFrame:
-        if timeline_df is None or timeline_df.is_empty():
-            print(f"   < [Storage.load_wf_prep] timeline_df is None or empty")
-            return None
-
-        # Certifique-se que a coluna de tempo é temporal antes de qualquer operação
-        target = "update" if (timeline_df["event"] == "update").any() else "exit"
-
-        return (
-            timeline_df
-            .filter(pl.col("event") == target)
-            .group_by(["datetime", "ps_id"])
-            .agg(pl.col("pnl").sum())
-            .pivot(values="pnl", index="datetime", columns="ps_id")
-            .rename({"datetime": "ts"}) 
-            .fill_null(0.0)
-            .sort("ts")
-        )
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Internos
-    # ─────────────────────────────────────────────────────────────────────────
 
     def _save_meta(self, op_path: Path, operation_name: str, meta: dict):
         meta_path = op_path / "meta"
