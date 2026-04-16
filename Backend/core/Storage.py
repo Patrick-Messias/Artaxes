@@ -180,7 +180,96 @@ class Storage:
         return asset_data
 
 
+
+    # NOTE Percebi um problema, o wf.parquet salva os updates semanais dos dados, 
+    # o que em si não é um problema, já que eu vou usar aquele ps_id até o próximo update
     def load_walkforward_matrix(self, key, side_val: str="BOTH", wf_ids: Optional[Union[str, list]] = None) -> Optional[pl.DataFrame]:              
+        # Implemented asynchronous parallel processing via pl.collect_all on a list of Lazy execution plans, 
+        # allowing the engine to compute multiple walkforward curves simultaneously across all CPU cores 
+        # while minimizing memory copies.
+        
+        op, model, strat, asset = key
+        
+        asset_data = self.load(key)
+        trades_df = asset_data.get("timeline")
+        wf_map = asset_data.get("wf")
+
+        if trades_df is None or wf_map is None: return None
+
+        try:
+            # 1. Normalização Inicial (Eager)
+            if "best_param" in wf_map.columns:
+                wf_map = wf_map.rename({"best_param": "ps_id"})
+            
+            if wf_ids is not None:
+                search_ids = [str(wf_ids)] if isinstance(wf_ids, str) else [str(i) for i in wf_ids]
+                wf_map = wf_map.filter(pl.col("wf_id").cast(pl.Utf8).is_in(search_ids))
+
+            # Reduzimos as colunas ao mínimo absoluto antes de entrar no motor Lazy
+            trades_lazy = trades_df.select(["datetime", "ps_id", "pnl", "lot_size"]).lazy().sort("datetime")
+            
+            # Filtro de Side (Vetorizado e Antecipado)
+            if side_val.upper() != "BOTH":
+                s_filter = side_val.lower()
+                if s_filter == "long":
+                    trades_lazy = trades_lazy.filter(pl.col("lot_size") > 0)
+                elif s_filter == "short":
+                    trades_lazy = trades_lazy.filter(pl.col("lot_size") < 0)
+            
+            trades_lazy = trades_lazy.select(["datetime", "ps_id", "pnl"])
+            unique_wfs = wf_map.get_column("wf_id").unique().to_list()
+            
+            # 2. Criamos uma lista de tarefas (Execution Plans)
+            # Não estamos processando nada aqui, apenas montando o "mapa" do que fazer
+            tasks = []
+            for wid in unique_wfs:
+                # Mapa específico desta curva
+                w_map_lazy = wf_map.filter(pl.col("wf_id") == wid).select([
+                    pl.col("datetime").alias("map_dt"),
+                    pl.col("ps_id").alias("active_ps")
+                ]).lazy().sort("map_dt")
+
+                # Define o grafo de computação para esta curva
+                plan = trades_lazy.join_asof(
+                    w_map_lazy,
+                    left_on="datetime",
+                    right_on="map_dt",
+                    strategy="backward"
+                ).filter(
+                    pl.col("ps_id") == pl.col("active_ps")
+                ).select([
+                    "datetime",
+                    "pnl",
+                    pl.lit(str(wid)).alias("wf_id")
+                ])
+                
+                tasks.append(plan)
+
+            if not tasks: return None
+
+            # 3. MÁGICA: Execução Paralela Nativa
+            # O Polars executa todas as tasks simultaneamente em Rust, 
+            # distribuindo os joins_asof entre os cores do seu CPU.
+            results = pl.collect_all(tasks)
+
+            if not results: return None
+
+            # 4. Concat e Pivot Final
+            # Concatena os resultados "Long" e faz o pivot
+            return pl.concat(results).pivot(
+                index="datetime",
+                on="wf_id",
+                values="pnl",
+                aggregate_function="sum"
+            ).fill_null(0.0).sort("datetime")
+
+        except Exception as e:
+            print(f"    < [Storage] Erro na Matrix Ultra: {e}")
+            return None
+        
+
+        
+    def PASSAR DE CIMA PARA BAIXO(self, key, side_val: str="BOTH", wf_ids: Optional[Union[str, list]] = None) -> Optional[pl.DataFrame]:              
         
         # Loads timeline DF (trades+trades_matrix) and wf map from disk 
         asset_data = self.load(key)
@@ -194,27 +283,42 @@ class Storage:
             if "best_param" in wf_map.columns:
                 wf_map = wf_map.rename({"best_param": "ps_id"})
 
-            # Join by binding IDs map with real PnL and Lot
-            combined = wf_map.join(trades_ret_matrix, on=["datetime", "ps_id"], how="inner")
+            # Renames wf_map datetime to start_df to avoid collsion with trades
+            wf_map = wf_map.rename({"datetime": "start_dt"})
 
-            # Dinamic side logic (lot > 0: Long)
-            combined = combined.with_columns([
-                pl.when(pl.col("lot_size") > 0).then(pl.lit("long"))
-                .when(pl.col("lot_size") < 0).then(pl.lit("short"))
-                .otherwise(pl.lit("none")).alias("side")
-            ])
-            if combined.is_empty(): return None
-
-            # Filters by Portfolio's requested side
-            side_val = side_val.lower()
-            if side_val in ["long", "short"]:
-                combined = combined.filter(pl.col("side") == side_val)
-            if combined.is_empty(): return None
-
-            # Walkforward ID list filter
+            # Filters pre-join of wf_ids (saves memory)
             if wf_ids is not None:
                 search_ids = [str(wf_ids)] if isinstance(wf_ids, str) else [str(i) for i in wf_ids]
-                combined = combined.filter(pl.col("wf_id").cast(pl.Utf8).is_in(search_ids))
+                wf_map = wf_map.filter(pl.col("wf_id").cast(pl.Utf8).is_in(search_ids))
+            if wf_map.is_empty(): return None
+
+            # Validation windows creation (intervals of wf)
+            wf_map = wf_map.sort(["wf_id", "start_dt"])
+            wf_map = wf_map.with_columns([ # end_dt is start_dt of next line with same wf_id
+                pl.col("start_dt").shift(-1).over("wf_id").alias("end_dt")
+            ])
+
+            # Brute join by ps_id, combines all trades that ps_id has ever made in history
+            combined = wf_map.join(trades_ret_matrix, on="ps_id", how="inner")
+
+            # Interval join, keeps only trades that datetime exists enside the validation window of the ps_id
+            combined = combined.filter(
+                (pl.col("datetime") >= pl.col("start_dt")) &
+                (pl.col("end_dt").is_null() | (pl.col("datetime") < pl.col("end_dt")))
+            )
+            if combined.is_empty(): return None
+
+            # Side logic
+            if "lot_size" in combined.columns:
+                combined = combined.with_columns([
+                    pl.when(pl.col("lot_size") > 0).then(pl.lit("long"))
+                    .when(pl.col("lot_size") < 0).then(pl.lit("short"))
+                    .otherwise(pl.lit("none")).alias("side")
+                ])
+                side_val = side_val.lower()
+                if side_val in ["long", "short"]:
+                    combined = combined.filter(pl.col("side") == side_val)
+            if combined.is_empty(): return None
 
             # Final Pivot that aggregates PnL by wf_id
             return combined.pivot(

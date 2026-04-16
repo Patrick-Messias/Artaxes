@@ -186,10 +186,13 @@ class Portfolio(BaseClass, BaseManager):
 
 
 
-    # XXX 1. Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
-    # 2. Modificar _sim_data para poder puxar wf, wf.parquet tem que ter apenas [dt, ps_id, wf_id]
-    # 3. Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
-    # 4. Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
+    # XXX - Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
+    # XXX - Modificar _sim_data para poder puxar wf, wf.parquet tem que ter apenas [dt, ps_id, wf_id]
+    # XXX - Walkforward tem os updates em matrix_resolution='weekly', deve se adaptar para cada um, puxando dados 
+    # - Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
+    # - Adicionar filtro de start_idx e end_idx para walkforward, senão vai estourar memória em SM/MM
+    # - Eliminar os dados especificos model_df, etc. Solicitar dentro do SM/MM com o _populate_sim_data
+    # - Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
 
 
 
@@ -447,7 +450,7 @@ class Portfolio(BaseClass, BaseManager):
             timeline_df = asset_data.get("timeline")
             if timeline_df is None or timeline_df.is_empty(): continue
             
-            unique_dts.update(timeline_df['datetime'].to_list())
+            #unique_dts.update(timeline_df['datetime'].to_list())
 
             # Preparates direction
             vias = {"BOTH": side_pref}
