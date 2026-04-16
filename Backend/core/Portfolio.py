@@ -124,54 +124,59 @@ class Portfolio(BaseClass, BaseManager):
             #         )
                 
             import matplotlib.pyplot as plt
-            if i == int(len(self.datetime_timeline)-1):
-                print(f"\n{'-'*20} INICIANDO PLOTAGEM DE WF_MATRIX {'-'*20}")
-                
-                test_key = ('operation_test', 'MA Trend Following', 'AT15', 'EURUSD')
-                wf_ids_to_plot = ["12_12_12", "4_4_4", "48_12_12"]
-                
-                # Vamos buscar uma janela maior para a curva ficar bonita (ex: 500 períodos)
-                data_dicts = self._populate_sim_data(
-                    key=test_key, i=i, start_idx=0,
-                    side="BOTH", data_type="wf", psid_or_wfid=wf_ids_to_plot
-                )
-                
-                if data_dicts:
-                    # 1. Converter de volta para DataFrame para facilitar o plot
-                    df_plot = pl.DataFrame(data_dicts)
-                    
-                    # 2. Garantir que a coluna datetime seja tratada corretamente
-                    # (Opcional: converter para datetime se for string)
-                    
-                    # 3. Plotagem
-                    plt.figure(figsize=(12, 6))
-                    
-                    for wf_id in wf_ids_to_plot:
-                        if wf_id in df_plot.columns:
-                            # Calculamos o PnL Acumulado para ver a curva de capital
-                            # fill_null(0) garante que a linha não quebre se houver gaps
-                            equity_curve = df_plot.get_column(wf_id).fill_null(0).cum_sum()
-                            
-                            plt.plot(df_plot['datetime'], equity_curve, label=f"WF: {wf_id}")
-                        else:
-                            print(f"⚠️ Aviso: ID {wf_id} não encontrado nos dados para plotagem.")
+            import numpy as np
 
-                    plt.title(f"Curvas de Equity Walkforward - {test_key[-1]}")
-                    plt.xlabel("Datetime")
+            if i == int(len(self.datetime_timeline)-1):
+                print(f"\n{'-'*20} PLOTANDO EQUITY CURVES SOBREPOSTAS {'-'*20}")
+                
+                port_key = (self.name,) 
+                side_to_plot = "BOTH"
+
+                if port_key in self.sim_data and side_to_plot in self.sim_data[port_key]:
+                    aggr_info = self.sim_data[port_key][side_to_plot]
+                    matrix = aggr_info["data"]
+                    cols = aggr_info["cols"]
+                    
+                    # Reconstrução rápida em Polars para aproveitar o cum_sum()
+                    df_plot = pl.DataFrame(matrix, schema=cols).with_columns(
+                        pl.Series("datetime", self.datetime_timeline)
+                    )
+
+                    plt.figure(figsize=(15, 8))
+                    
+                    # 1. Plotar cada modelo individualmente com transparência
+                    for model_name in cols:
+                        equity_curve = df_plot.get_column(model_name).cum_sum()
+                        plt.plot(df_plot['datetime'], equity_curve, label=model_name, alpha=0.6, lw=1.2)
+
+                    # 2. Plotar a curva Mestra (Soma de todos os modelos) em destaque
+                    # Somamos o PnL de todas as colunas antes de calcular o acumulado
+                    portfolio_total_equity = df_plot.select(pl.sum_horizontal(cols)).to_series().cum_sum()
+                    
+                    plt.plot(df_plot['datetime'], portfolio_total_equity, 
+                             label="TOTAL PORTFOLIO", color='black', lw=3, linestyle='-')
+
+                    # 3. Estilização Profissional
+                    plt.title(f"Comparativo de Equity: {self.name} | Modelos vs. Total", fontsize=14, fontweight='bold')
+                    plt.xlabel("Timeline")
                     plt.ylabel("PnL Acumulado")
-                    plt.legend()
-                    plt.grid(True, alpha=0.3)
-                    plt.xticks(rotation=45)
+                    
+                    # Coloca a legenda de um jeito que não cubra as curvas se houver muitos modelos
+                    plt.legend(loc='upper left', bbox_to_anchor=(1.01, 1), borderaxespad=0.)
+                    
+                    plt.grid(True, which='both', linestyle='--', alpha=0.4)
+                    plt.axhline(0, color='red', linestyle='-', alpha=0.3) # Linha de Break-even
+                    
+                    plt.xticks(rotation=30)
                     plt.tight_layout()
                     
-                    print(" -> Gráfico gerado com sucesso.")
+                    print(f" -> Gráfico unificado gerado com {len(cols)} modelos + curva mestre.")
+                    plt.style.use('dark_background')
                     plt.show()
                 else:
-                    print("❌ Falha: Não foi possível obter dados para os IDs solicitados na janela temporal.")
-
-
-
-
+                    print(f"⚠️ Aviso: Dados do portfólio {port_key} não encontrados.")
+            
+           
             
             if i < 3 or i > len(self.datetime_timeline)-3: 
                 print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
@@ -186,8 +191,8 @@ class Portfolio(BaseClass, BaseManager):
     # XXX - Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
     # XXX - Modificar _sim_data para poder puxar wf, wf.parquet tem que ter apenas [dt, ps_id, wf_id]
     # XXX - Walkforward tem os updates em matrix_resolution='weekly', deve se adaptar para cada um, puxando dados 
-    # - Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
-    # - Adicionar filtro de start_idx e end_idx para walkforward, senão vai estourar memória em SM/MM
+    # XXX - Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
+    # XXX - Adicionar filtro de start_idx e end_idx para walkforward, senão vai estourar memória em SM/MM
     # - Eliminar os dados especificos model_df, etc. Solicitar dentro do SM/MM com o _populate_sim_data
     # - Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
 
@@ -448,7 +453,7 @@ class Portfolio(BaseClass, BaseManager):
             # Extracts configs
             side_pref = config.get("side", "BOTH").upper() if isinstance(config, dict) else "BOTH"
             separate_ls = config.get("analise_long_short_separate", False) if isinstance(config, dict) else False
-            calculate_on_data = config.get("calculate_on_data", "all")
+            calculate_on_data = config.get("calculate_on_data", "all") if isinstance(config, dict) else "all"
 
             # Loads brute data (Parset)
             asset_data = storage.load(a_key)
@@ -470,23 +475,29 @@ class Portfolio(BaseClass, BaseManager):
                 # Source A: Parsets
                 if calculate_on_data in ["all", "parset"] and timeline_df is not None and not timeline_df.is_empty():
                     p_aggr = self.get_aggr_pnl_by_side(timeline_df, side_val, a_n)
-                    if p_aggr is not None:
-                        sources.append(p_aggr.rename({a_n: "parset_pnl"}))
+                    if p_aggr is not None and not p_aggr.is_empty():
+                        val_col = [c for c in p_aggr.columns if c != "datetime"][0]
+                        sources.append(p_aggr.rename({val_col: "parset_pnl"}))
 
                 # Source B: Walkforward
                 if calculate_on_data in ["all", "wf"]:
                     wfm_wide = storage.load_walkforward_matrix(a_key, side_val=side_val)
                     if wfm_wide is not None and not wfm_wide.is_empty():
                         wf_cols = [c for c in wfm_wide.columns if c != "datetime"]
-                        wf_aggr = wfm_wide.select([
-                            pl.col("datetime"),
-                            pl.mean_horizontal(wf_cols).alias("wf_pnl")
-                        ])
-                        sources.append(wf_aggr)
+                        
+                        if wf_cols:
+                            wf_aggr = wfm_wide.select([
+                                pl.col("datetime"),
+                                pl.mean_horizontal(wf_cols).alias("wf_pnl")
+                            ])
+                            sources.append(wf_aggr)
 
                 # Combines all sources to generate aggr for the asset
                 if not sources: continue
-                if len(sources) == 1: combined = sources[0].rename({sources[0].columns[1]: a_n})
+
+                if len(sources) == 1: 
+                    val_col = [c for c in sources[0].columns if c != "datetime"][0]
+                    combined = sources[0].rename({val_col: a_n})
                 else: # If "all", takes avg between parsets and wf
                     combined = (
                         sources[0]
@@ -859,6 +870,15 @@ if __name__ == "__main__":
                         "calculate_on_data": "wf",
                     }
                 }
+            },
+            "RS Mean Reversion": {
+                "AT16": {
+                    "EURUSD": {
+                        "side": "BOTH",
+                        "analise_long_short_separate": True,
+                        "calculate_on_data": "wf",
+                    }
+                }
             }
         }
     }
@@ -871,6 +891,12 @@ if __name__ == "__main__":
                 "managers": {"msm": msm, "mmm": mmm},
                 "strats": {
                     "AT15": {"managers": {"ssm": ssm, "smm": smm}}
+                }
+            },
+            "MR Mean Reversion": {
+                "managers": {"msm": msm, "mmm": mmm},
+                "strats": {
+                    "AT16": {"managers": {"ssm": ssm, "smm": smm}}
                 }
             }
         }
