@@ -153,27 +153,24 @@ class StratMoneyManager(MoneyManager):
         # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
         return indicator_pool, sim_data
           
-    def _default_allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict):
-        return hierarchy, indicator_pool, op_data, port_returns 
+    def _default_allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict):
+        return hierarchy, indicator_pool, sim_data, port_returns 
 
-    def _default_size(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict):
-        return hierarchy, indicator_pool, op_data, port_returns 
+    def _default_size(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict):
+        return hierarchy, indicator_pool, sim_data, port_returns 
 
-    def _default_risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict):
-        return hierarchy, indicator_pool, op_data, port_returns 
+    def _default_risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict):
+        return hierarchy, indicator_pool, sim_data, port_returns 
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
-        # Called every datetime for each model and asset
-        # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, indicator_pool, op_data, port_returns)
-    
-    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
+    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key: str) -> bool:
 
-        hierarchy, indicator_pool, op_data, port_returns  = self.allocate(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy, indicator_pool, op_data, port_returns  = self.size(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy, indicator_pool, op_data, port_returns  = self.risk_guard(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="BOTH")
+
+        hierarchy, indicator_pool, sim_data, port_returns  = self.allocate(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.size(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.risk_guard(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
 
         return hierarchy
 

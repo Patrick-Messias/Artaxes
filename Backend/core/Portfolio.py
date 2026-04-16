@@ -60,6 +60,7 @@ class Portfolio(BaseClass, BaseManager):
         hierarchy = {}
         self.portfolio_returns = {}
         self.indicator_pool = {}
+        self.current_idx = 0
 
         # Checks if is going to simulate portfolio with strat backtest results or asset positions
         has_pnl = any("pnls" in str(key).lower() for key in self.sim_data.keys())
@@ -73,6 +74,7 @@ class Portfolio(BaseClass, BaseManager):
 
         # 2 - Run Timeline
         for i, step_dt in enumerate(self.datetime_timeline):
+            self.current_idx = i
 
             # Init step data
             self.portfolio_returns[step_dt] = {"assets": {}}
@@ -212,19 +214,14 @@ class Portfolio(BaseClass, BaseManager):
 
         # If any of the two need to run, populate data
         if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
-            op_data = self._populate_sim_data(p_key, i)
-
-            if op_data is not None:
-                op_df = op_data.get("both", op_data) 
-                
-                psm = m_map.get("managers", {}).get("psm")
-                if psm and dt in psm_sch.get(p_name, set()):
-                    hierarchy = psm.main(dt, hierarchy, self.indicator_pool, op_df, self.portfolio_returns)
-                    #print("PSM")
-                pmm = m_map.get("managers", {}).get("pmm")
-                if pmm and dt in pmm_sch.get(p_name, set()):
-                    hierarchy = pmm.main(dt, hierarchy, self.indicator_pool, op_df, self.portfolio_returns)
-                    #print("PMM")
+            psm = m_map.get("managers", {}).get("psm")
+            if psm and dt in psm_sch.get(p_name, set()):
+                hierarchy = psm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
+                #print("PSM")
+            pmm = m_map.get("managers", {}).get("pmm")
+            if pmm and dt in pmm_sch.get(p_name, set()):
+                hierarchy = pmm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
+                #print("PMM")
 
         # Model and Strat Levels
         seen_models = set()
@@ -239,38 +236,30 @@ class Portfolio(BaseClass, BaseManager):
                 seen_models.add(m_key)
                 
                 if (dt in msm_sch.get(m_key, set())) or (dt in mmm_sch.get(m_key, set())):
-                    model_data = self._populate_sim_data(m_key, i)
-                    
-                    if model_data is not None:
-                        model_df = model_data.get("both", model_data)
-                        msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
-                        mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
+                    msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
+                    mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
-                        if msm and dt in msm_sch.get(m_key, set()): 
-                            hierarchy = msm.main(dt, hierarchy, self.indicator_pool, model_df, self.portfolio_returns)
-                            #print("msM")
-                        if mmm and dt in mmm_sch.get(m_key, set()):
-                            hierarchy = mmm.main(dt, hierarchy, self.indicator_pool, model_df, self.portfolio_returns)
-                            #print("mmM")
+                    if msm and dt in msm_sch.get(m_key, set()): 
+                        hierarchy = msm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
+                        #print("msM")
+                    if mmm and dt in mmm_sch.get(m_key, set()):
+                        hierarchy = mmm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
+                        #print("mmM")
 
             # Strat level — executa apenas 1x por strat
             if s_key not in seen_strats:
                 seen_strats.add(s_key)
                 
                 if (dt in ssm_sch.get(s_key, set())) or (dt in smm_sch.get(s_key, set())):
-                    strat_data = self._populate_sim_data(s_key, i)
-                    
-                    if strat_data is not None:
-                        strat_df = strat_data.get("both", strat_data)
-                        ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
-                        smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
+                    ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
+                    smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
-                        if ssm and dt in ssm_sch.get(s_key, set()):
-                            hierarchy = ssm.main(dt, hierarchy, self.indicator_pool, strat_df, self.portfolio_returns)
-                            #print("ssm")
-                        if smm and dt in smm_sch.get(s_key, set()):
-                            hierarchy = smm.main(dt, hierarchy, self.indicator_pool, strat_df, self.portfolio_returns)
-                            #print("smm")
+                    if ssm and dt in ssm_sch.get(s_key, set()):
+                        hierarchy = ssm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
+                        #print("ssm")
+                    if smm and dt in smm_sch.get(s_key, set()):
+                        hierarchy = smm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
+                        #print("smm")
         return hierarchy
 
     def _update_pos_with_backtest_ret(self, step_dt, active_positions):
@@ -605,12 +594,14 @@ class Portfolio(BaseClass, BaseManager):
         if p_node[p_key]:
             # PSM
             psm = p_magrs.get("psm") or PortfolioSystemManager(PortfolioSystemManagerParams())
+            psm.set_portfolio(self)
             self.indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, p_node, self.indicator_pool)
             psm_sch[p_n] = psm.get_schedule(timeline) # Key: str (op_name)
             p_magrs["psm"] = psm
             
             # PMM
             pmm = p_magrs.get("pmm") or PortfolioMoneyManager(PortfolioMoneyManagerParams())
+            pmm.set_portfolio(self)
             self.indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, p_node, self.indicator_pool)
             pmm_sch[p_n] = pmm.get_schedule(timeline) # Key: str (op_name)
             p_magrs["pmm"] = pmm
@@ -627,12 +618,14 @@ class Portfolio(BaseClass, BaseManager):
                     if m_node[m_key]:
                         # MSM
                         msm = m_magrs.get("msm") or ModelSystemManager(ModelSystemManagerParams())
+                        msm.set_portfolio(self)
                         self.indicator_pool, sd, params_pool = msm.pre_compute(global_assets, timeline, sd, m_node, self.indicator_pool)
                         msm_sch[m_key] = msm.get_schedule(timeline)
                         m_magrs["msm"] = msm
 
                         # MMM
                         mmm = m_magrs.get("mmm") or ModelMoneyManager(ModelMoneyManagerParams())
+                        mmm.set_portfolio(self)
                         self.indicator_pool, sd, params_pool = mmm.pre_compute(global_assets, timeline, sd, m_node, self.indicator_pool)
                         mmm_sch[m_key] = mmm.get_schedule(timeline)
                         m_magrs["mmm"] = mmm
@@ -647,12 +640,14 @@ class Portfolio(BaseClass, BaseManager):
                         if s_node[s_key]:
                             # SSM
                             ssm = s_magrs.get("ssm") or StratSystemManager(StratSystemManagerParams())
+                            ssm.set_portfolio(self)
                             self.indicator_pool, sd, params_pool = ssm.pre_compute(global_assets, timeline, sd, s_node, self.indicator_pool)
                             ssm_sch[s_key] = ssm.get_schedule(timeline)
                             s_magrs["ssm"] = ssm
 
                             # SMM
                             smm = s_magrs.get("smm") or StratMoneyManager(StratMoneyManagerParams())
+                            smm.set_portfolio(self)
                             self.indicator_pool, sd, params_pool = smm.pre_compute(global_assets, timeline, sd, s_node, self.indicator_pool)
                             smm_sch[s_key] = smm.get_schedule(timeline)
                             s_magrs["smm"] = smm

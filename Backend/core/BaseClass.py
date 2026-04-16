@@ -80,6 +80,9 @@ class BaseManager():
         # Calls custom_fn if exists, else default
         return custom_fn(*args, **kwargs) if custom_fn else default_fn(*args, **kwargs)
     
+    def set_portfolio(self, portfolio_instance):
+        self.portfolio = portfolio_instance
+
     # ── Pre-Simulation ───────────────────────────────────────────────────────
 
     def pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool):
@@ -118,26 +121,6 @@ class BaseManager():
     
     # ── Indicators ───────────────────────────────────────────────────────
 
-    def get_ind(self, ind_key, target, i, ps_name=None): # if ps_name=None returns all parsets
-        # O(1) search, with parset ensemble support 
-        
-        try: # Direct O(1) access to global dict tuple (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
-            ps_dict = self.indicator_pool[ind_key][target]
-
-            # Specific parset request case
-            if ps_name is not None:
-                return ps_dict[ps_name][i]
-            
-            # Doesn't have a request but only 1 parset (ex: rsi_score = sum(1 for val in rsi.values() if val > 70))
-            if len(ps_dict) == 1:
-                return next(iter(ps_dict.values()))[i]
-            
-            # Case multiple parset and none specifically requested
-            return {ps: arr[i] for ps, arr in ps_dict.items()}
-        
-        except (KeyError, IndexError):
-            return None
-        
     def _resolve_data_source(self, address, ind_obj, aggr_ret, global_assets, timeline_df, time_col='datetime'):
         # Transforma qualquer string/tupla em um DataFrame [datetime, main]
 
@@ -279,6 +262,43 @@ class BaseManager():
         ).agg(aggs.get(method, pl.col("valor").last()))
 
     # ── Global Func ───────────────────────────────────────────────────────
+
+    def get_ind(self, ind_key, target, i, ps_name=None): # if ps_name=None returns all parsets
+        # O(1) search, with parset ensemble support 
+        
+        try: # Direct O(1) access to global dict tuple (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
+            ps_dict = self.indicator_pool[ind_key][target]
+
+            # Specific parset request case
+            if ps_name is not None:
+                return ps_dict[ps_name][i]
+            
+            # Doesn't have a request but only 1 parset (ex: rsi_score = sum(1 for val in rsi.values() if val > 70))
+            if len(ps_dict) == 1:
+                return next(iter(ps_dict.values()))[i]
+            
+            # Case multiple parset and none specifically requested
+            return {ps: arr[i] for ps, arr in ps_dict.items()}
+        
+        except (KeyError, IndexError):
+            return None
+        
+    def get_data(self, key=None, lookback=1, data_type="aggr", side="BOTH"):
+        # Aux method for managers to search data
+        if key is None: key = (self.portfolio,)
+
+        if lookback is None or lookback == 0:
+            start_idx = 0
+        else:
+            start_idx = max(0, self.portfolio.current_idx - lookback+1)
+
+        return self.portfolio._populate_sim_data(
+            key=key,
+            i=self.portfolio.current_idx,
+            start_idx=start_idx,
+            data_type=data_type,
+            side=side
+        )
 
     def get_schedule(self, timeline: list) -> set:
         freq = self.reb_frequency 

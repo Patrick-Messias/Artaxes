@@ -22,27 +22,24 @@ class ModelSystemManager(SystemManager): # Manages portfolio's model hierarchy
         # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
         return indicator_pool, sim_data
                        
-    def _default_rank(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> Dict[str, float]:
-        return hierarchy, indicator_pool, op_data, port_returns
+    def _default_rank(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict) -> Dict[str, float]:
+        return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_filter(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
-        return hierarchy, indicator_pool, op_data, port_returns # By default doesn't filter out any model
+    def _default_filter(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict) -> List[str]:
+        return hierarchy, indicator_pool, sim_data, port_returns # By default doesn't filter out any model
 
-    def _default_rebalance(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> List[str]:
-        return hierarchy, indicator_pool, op_data, port_returns
+    def _default_rebalance(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict) -> List[str]:
+        return hierarchy, indicator_pool, sim_data, port_returns
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
-
-    def main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
-        # Called every datetime for each model and asset
-        # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, step_dt, hierarchy, indicator_pool, op_data, port_returns)
     
-    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, op_data: dict, port_returns: dict) -> bool:
+    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key: str) -> bool:
 
-        hierarchy, indicator_pool, op_data, port_returns = self.rank(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy, indicator_pool, op_data, port_returns = self.filter(step_dt, hierarchy, indicator_pool, op_data, port_returns)
-        hierarchy, indicator_pool, op_data, port_returns = self.rebalance(step_dt, hierarchy, indicator_pool, op_data, port_returns)
+        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="BOTH")
+
+        hierarchy, indicator_pool, sim_data, port_returns = self.rank(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
+        hierarchy, indicator_pool, sim_data, port_returns = self.filter(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
+        hierarchy, indicator_pool, sim_data, port_returns = self.rebalance(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
 
         return hierarchy
 
