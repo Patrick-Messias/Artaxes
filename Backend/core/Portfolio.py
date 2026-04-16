@@ -114,16 +114,15 @@ class Portfolio(BaseClass, BaseManager):
             hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
                                                     
             #||=====================================================================================||#
-            if i == int(len(self.datetime_timeline)-1):
-                data_dicts = self._populate_sim_data(
-                        key=('operation_test', 'MA Trend Following', 'AT15', 'EURUSD'), 
-                        i=i,
-                        start_idx=int(i-(int(len(self.datetime_timeline)-2))),
-                        data_type="wf", 
-                        psid_or_wfid=["12_12_12"]
-                    )
-                print(data_dicts)
-            
+            # if i == int(len(self.datetime_timeline)-1):
+            #     data_dicts = self._populate_sim_data(
+            #             key=('operation_test', 'MA Trend Following', 'AT15', 'EURUSD'), 
+            #             i=i,
+            #             start_idx=int(i-(int(len(self.datetime_timeline)-2))),
+            #             data_type="wf", 
+            #             psid_or_wfid=["12_12_12"]
+            #         )
+                
             import matplotlib.pyplot as plt
             if i == int(len(self.datetime_timeline)-1):
                 print(f"\n{'-'*20} INICIANDO PLOTAGEM DE WF_MATRIX {'-'*20}")
@@ -133,10 +132,8 @@ class Portfolio(BaseClass, BaseManager):
                 
                 # Vamos buscar uma janela maior para a curva ficar bonita (ex: 500 períodos)
                 data_dicts = self._populate_sim_data(
-                    test_key, i, 
-                    start_idx=int(i-(int(len(self.datetime_timeline)-2))),
-                    data_type="wf", 
-                    psid_or_wfid=wf_ids_to_plot
+                    key=test_key, i=i, start_idx=0,
+                    side="BOTH", data_type="wf", psid_or_wfid=wf_ids_to_plot
                 )
                 
                 if data_dicts:
@@ -394,24 +391,32 @@ class Portfolio(BaseClass, BaseManager):
             
         elif data_type == "wf": # wf_ids can be str, list[str] or None (all ps_id)
             try:
-                wfm_df = self.storage.load_walkforward_matrix(key, wf_ids=psid_or_wfid)
+                if start_idx is None:
+                    start_dt_val = None
+                elif isinstance(start_idx, str):
+                    start_dt_val = start_idx
+                else:
+                    start_dt_val = self.datetime_timeline[start_idx]
+                    
+                if i is None:
+                    end_dt_val = None
+                elif isinstance(i, str):
+                    end_dt_val = i
+                else:
+                    end_dt_val = self.datetime_timeline[i]
+
+                wfm_df = self.storage.load_walkforward_matrix(
+                    key=key, side_val=side, wf_ids=psid_or_wfid, 
+                    start_dt=start_dt_val, end_dt=end_dt_val
+                )
                 
                 if wfm_df is None or wfm_df.is_empty():
+                    print(f"    < [Portfolio._populate_sim_data] wfm_df empty for Walkforward Matrix {psid_or_wfid} for {key}: {e}")
                     return None
-
-                # Filtro de tempo (Janela Móvel ou Candle Único)
-                end_dt = self.datetime_timeline[i]
-                
-                if start_idx is None or start_idx == 0: # Returns idx candle or last
-                    filtered = wfm_df.filter(pl.col("datetime") <= end_dt).tail(1)
-                else:
-                    start_dt = self.datetime_timeline[start_idx]
-                    filtered = wfm_df.filter(
-                        (pl.col("datetime") >= start_dt) & (pl.col("datetime") <= end_dt) 
-                    )
                 
                 # Format: to_dicts() returns [{col1: val, col2: val}, ...] best to itearate line by line
-                return filtered.to_dicts()
+                return wfm_df.to_dicts()
+            
             except Exception as e:
                 print(f"    < [Portfolio._populate_sim_data] error constructing Walkforward Matrix {psid_or_wfid} for {key}: {e}")
 
