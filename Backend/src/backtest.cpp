@@ -37,6 +37,7 @@ static std::string check_instant_exit(bool is_long, double,
     if (!hit_sl && !hit_tp) return "";
     if ( hit_sl && !hit_tp) return "SL";
     if ( hit_tp && !hit_sl) return "TP";
+    // If sl and tp hit then checks candle direction and trade side to determine which will count
     return bullish ? (is_long ? "SL" : "TP") : (is_long ? "TP" : "SL");
 }
 
@@ -133,15 +134,16 @@ SimulationOutput Backtest::run_simulation(
         // "close-close"        -> pct_change: PnL = price[i] * direction (direct return)
         // "open-open"          -> pct_change: PnL = price[i] * direction (direct return)
         // "close"              -> absolute price: fill=price, check_high=check_low=price
-        // "close"              -> absolute price: fill=price, check_high=check_low=price
+        // "open"               -> absolute price: fill=price, check_high=check_low=price
         // "avg_price"          -> absolute price: fill=price, check_high=check_low=price
         std::string backtest_mode = exec_settings.value("backtest_mode", "ohlc");
 
         // pct_change mode, PnL sum bar by bar, SL/TP in % 
-        bool is_pct_mode = (backtest_mode == "close-close") || backtest_mode == "open-open";
+        bool is_pct_mode = (backtest_mode == "close-close" || backtest_mode == "open-open");
 
         // price only mode, absolute price, SL/TP in price, without intrabar validation
-        bool is_price_only = (backtest_mode != "ohlc");
+        //bool is_price_only = (backtest_mode != "ohlc");
+        bool is_price_only = (backtest_mode == "avg_price" || backtest_mode == "close" || backtest_mode == "open");
 
         const uint8_t* sig_entry_long  = get_signal_ptr("entry_long");
         const uint8_t* sig_entry_short = get_signal_ptr("entry_short");

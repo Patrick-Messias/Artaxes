@@ -195,6 +195,8 @@ class Portfolio(BaseClass, BaseManager):
     # XXX - Walkforward tem os updates em matrix_resolution='weekly', deve se adaptar para cada um, puxando dados 
     # XXX - Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
     # XXX - Adicionar filtro de start_idx e end_idx para walkforward, senão vai estourar memória em SM/MM
+    
+    # - Criar novos strats e models
     # - Eliminar os dados especificos model_df, etc. Solicitar dentro do SM/MM com o _populate_sim_data
     # - Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
 
