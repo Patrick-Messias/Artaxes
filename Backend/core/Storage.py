@@ -278,6 +278,27 @@ class Storage:
             print(f"    < [Storage.] Error: {e}")
             return None
 
+
+    # For Operation.py use
+    def load_wf_prep(self, timeline_df: pl.DataFrame) -> pl.DataFrame:
+        if timeline_df is None or timeline_df.is_empty():
+            print(f"   < [Storage.load_wf_prep] timeline_df is None or empty")
+            return None
+
+        # Certifique-se que a coluna de tempo é temporal antes de qualquer operação
+        target = "update" if (timeline_df["event"] == "update").any() else "exit"
+
+        return (
+            timeline_df
+            .filter(pl.col("event") == target)
+            .group_by(["datetime", "ps_id"])
+            .agg(pl.col("pnl").sum())
+            .pivot(values="pnl", index="datetime", columns="ps_id")
+            .rename({"datetime": "ts"}) 
+            .fill_null(0.0)
+            .sort("ts")
+        )
+
     # ─────────────────────────────────────────────────────────────────────────
     # Internos
     # ─────────────────────────────────────────────────────────────────────────

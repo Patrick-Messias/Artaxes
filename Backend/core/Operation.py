@@ -1442,6 +1442,7 @@ if __name__ == "__main__":
     eurusd = assets.get("EURUSD")
     gbpusd = assets.get("GBPUSD")
     usdjpy = assets.get("USDJPY")
+    winfut = assets.get("WINFUT")
     
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
