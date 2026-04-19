@@ -85,16 +85,16 @@ class BaseManager():
 
     # ── Pre-Simulation ───────────────────────────────────────────────────────
 
-    def pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool):
+    def pre_compute(self, global_assets, timeline, aggr_ret, indicator_pool):
         # Defines parsets from params
         param_sets = self._calculate_param_combinations(self.params)
 
         # Calculates Indicators 
         if self.indicators: indicator_pool = self._calculate_and_map_indicators(global_assets, timeline, aggr_ret, indicator_pool, param_sets)
 
-        indicator_pool, sim_data = self._call(self._fn_pre_compute, self._default_pre_compute, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets)
+        indicator_pool = self._call(self._fn_pre_compute, self._default_pre_compute, global_assets, timeline, aggr_ret, indicator_pool, param_sets)
 
-        return indicator_pool, sim_data, param_sets
+        return indicator_pool, param_sets
 
     def get_aggr_pnl_by_side(self, df: pl.DataFrame, side: str, alias: str) -> pl.DataFrame:
         # Retorna DataFrame [datetime, pnl] — preserva o datetime para alinhamento posterior.
@@ -180,7 +180,10 @@ class BaseManager():
     
     def _calculate_indicator(self, data: pl.DataFrame, ind_obj: Indicator, eff_params: dict):
         # Find time column
-        time_col = next(c for c in data.columns if c.lower() in ['ts', 'datetime', 'time', 'date']) 
+        time_cols = [c for c in data.columns if c.lower() in ['ts', 'datetime', 'time', 'date']]
+        if not time_cols:
+            raise ValueError(f"Dataframe for indicator {ind_obj.name} has no valid time column. Columns: {data.columns}")
+        time_col = time_cols[0]
 
         # Case ind uses price_col and == 'close' but only has 'main' uses the latter
         if 'price_col' in eff_params:

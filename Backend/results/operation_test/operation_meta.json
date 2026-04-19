@@ -10,7 +10,9 @@
             "strats": {
                 "AT15": {
                     "assets": [
-                        "EURUSD"
+                        "EURUSD",
+                        "GBPUSD",
+                        "USDJPY"
                     ]
                 }
             }

@@ -11,9 +11,9 @@ class ModelMoneyManager(MoneyManager): # Manages Model's risk and money manageme
 
 #||=========================================================================================||
 
-    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
+    def _default_pre_compute(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets) -> dict:
         # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
-        return indicator_pool, sim_data
+        return indicator_pool
           
     # ── Every Datetime [i] ───────────────────────────────────────────────
 

@@ -20,9 +20,9 @@ class StratSystemManager(SystemManager):
 
 #||=========================================================================================||
 
-    def _default_pre_compute(self, global_assets, timeline, sim_data, aggr_ret, indicator_pool, param_sets) -> dict:
+    def _default_pre_compute(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets) -> dict:
         # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
-        return indicator_pool, sim_data
+        return indicator_pool
                        
     def _default_rank(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict) -> Dict[str, float]:
         return hierarchy, indicator_pool, sim_data, port_returns

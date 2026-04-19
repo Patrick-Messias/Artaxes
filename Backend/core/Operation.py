@@ -1448,7 +1448,7 @@ if __name__ == "__main__":
 
     # =======================================================================================================|| Global Above
 
-    model_assets=['EURUSD'] # Only keys #, 'GBPUSD'
+    model_assets=['EURUSD', "GBPUSD", "USDJPY"] # Only keys #, 'GBPUSD'
     model_execution_tf = 'M15'
 
     strat_param_sets = {

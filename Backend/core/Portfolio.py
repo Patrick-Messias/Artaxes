@@ -51,7 +51,7 @@ class Portfolio(BaseClass, BaseManager):
         self.global_assets = Asset.load_all()
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
     
-
+        
     def _simulation(self):
         # 1 - Init, populating sim_data
         sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
@@ -195,8 +195,9 @@ class Portfolio(BaseClass, BaseManager):
     # XXX - Walkforward tem os updates em matrix_resolution='weekly', deve se adaptar para cada um, puxando dados 
     # XXX - Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
     # XXX - Adicionar filtro de start_idx e end_idx para walkforward, senão vai estourar memória em SM/MM
-    
-    # - Criar novos strats e models
+    # XXX - Criar novos strats e models
+
+    # - Criar self.op_key, m_key, s_key, a_key ?
     # - Eliminar os dados especificos model_df, etc. Solicitar dentro do SM/MM com o _populate_sim_data
     # - Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
 
@@ -582,79 +583,90 @@ class Portfolio(BaseClass, BaseManager):
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
         psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
         params_pool = {}
+
+        DEFAULT_MGR_CONFIG = {
+            "psm": (PortfolioSystemManager, PortfolioSystemManagerParams),
+            "pmm": (PortfolioMoneyManager, PortfolioMoneyManagerParams),
+            "msm": (ModelSystemManager, ModelSystemManagerParams),
+            "mmm": (ModelMoneyManager, ModelMoneyManagerParams),
+            "ssm": (StratSystemManager, StratSystemManagerParams),
+            "smm": (StratMoneyManager, StratMoneyManagerParams),
+        }
         
         timeline = self.datetime_timeline
-        sd = self.sim_data
+        last_idx = len(timeline) - 1
 
         # 1. Portfolio Level (PSM / PMM)
-        p_n = self.name
-        p_key = (p_n,)
+        p_name = self.name
+        p_key = (p_name,)
         p_magrs = sm_mm_map.get("managers", {})
-        p_node = {p_key: sd.get(p_key)}
 
-        # Aqui usamos o nome da operação raiz conforme definido no sm_mm_map
-        if p_node[p_key]:
-            # PSM
-            psm = p_magrs.get("psm") or PortfolioSystemManager(PortfolioSystemManagerParams())
-            psm.set_portfolio(self)
-            self.indicator_pool, sd, params_pool = psm.pre_compute(global_assets, timeline, sd, p_node, self.indicator_pool)
-            psm_sch[p_n] = psm.get_schedule(timeline) # Key: str (op_name)
-            p_magrs["psm"] = psm
-            
-            # PMM
-            pmm = p_magrs.get("pmm") or PortfolioMoneyManager(PortfolioMoneyManagerParams())
-            pmm.set_portfolio(self)
-            self.indicator_pool, sd, params_pool = pmm.pre_compute(global_assets, timeline, sd, p_node, self.indicator_pool)
-            pmm_sch[p_n] = pmm.get_schedule(timeline) # Key: str (op_name)
-            p_magrs["pmm"] = pmm
+        # Searches data via _populate_sim_data
+        p_data = self._populate_sim_data(key=p_key, i=last_idx, start_idx=0, data_type="aggr")
 
-            # 2. Nível Modelos
-            for op_name, op_models in self.portfolio_data.items():
-                for m_name, m_strats in op_models.items():
-                    m_key = (op_name, m_name)
-                    # Busca o manager no mapa usando o nome do modelo
-                    m_info = sm_mm_map.get("models", {}).get(m_name, {})
-                    m_magrs = m_info.get("managers", {})
-                    m_node = {m_key: sd.get(m_key)}
+        if p_data:
+            p_node = {p_key: p_data}
 
-                    if m_node[m_key]:
-                        # MSM
-                        msm = m_magrs.get("msm") or ModelSystemManager(ModelSystemManagerParams())
-                        msm.set_portfolio(self)
-                        self.indicator_pool, sd, params_pool = msm.pre_compute(global_assets, timeline, sd, m_node, self.indicator_pool)
-                        msm_sch[m_key] = msm.get_schedule(timeline)
-                        m_magrs["msm"] = msm
+            # PSM and PMM
+            for mgr_key, mgr_class, sch_dict in [
+                ("psm", DEFAULT_MGR_CONFIG["psm"], psm_sch),
+                ("pmm", DEFAULT_MGR_CONFIG["pmm"], pmm_sch)
+            ]: 
+                mgr = p_magrs.get(mgr_key) or mgr_class() 
+                mgr.set_portfolio(self)
+                self.indicator_pool, _ = mgr.pre_compute(
+                    global_assets, timeline, p_node, self.indicator_pool)
+                sch_dict[p_name] = mgr.get_schedule(timeline)
+                p_magrs[mgr_key] = mgr
 
-                        # MMM
-                        mmm = m_magrs.get("mmm") or ModelMoneyManager(ModelMoneyManagerParams())
-                        mmm.set_portfolio(self)
-                        self.indicator_pool, sd, params_pool = mmm.pre_compute(global_assets, timeline, sd, m_node, self.indicator_pool)
-                        mmm_sch[m_key] = mmm.get_schedule(timeline)
-                        m_magrs["mmm"] = mmm
+        # Models
+        for op_name, op_models in self.portfolio_data.items():
+            for m_name, m_strats in op_models.items():
+                m_key = (op_name, m_name)
+                m_info = sm_mm_map.get("models", {}).get(m_name, {})
+                m_magrs = m_info.get("managers", {})
 
-                    # --- 3. NÍVEL ESTRATÉGIAS ---
-                    for s_name in m_strats.keys():
-                        s_key = (op_name, m_name, s_name)
-                        s_info = m_info.get("strats", {}).get(s_name, {})
-                        s_magrs = s_info.get("managers", {})
-                        s_node = {s_key: sd.get(s_key)}
+                # Seaches model data
+                m_data = self._populate_sim_data(key=m_key, i=last_idx, start_idx=0, data_type="aggr")
 
-                        if s_node[s_key]:
-                            # SSM
-                            ssm = s_magrs.get("ssm") or StratSystemManager(StratSystemManagerParams())
-                            ssm.set_portfolio(self)
-                            self.indicator_pool, sd, params_pool = ssm.pre_compute(global_assets, timeline, sd, s_node, self.indicator_pool)
-                            ssm_sch[s_key] = ssm.get_schedule(timeline)
-                            s_magrs["ssm"] = ssm
+                if m_data:
+                    m_node = {m_key: m_data}
+                    for mgr_key, (mgr_class, params_class), sch_dict in [
+                        ("msm", DEFAULT_MGR_CONFIG["msm"], msm_sch),
+                        ("mmm", DEFAULT_MGR_CONFIG["mmm"], mmm_sch)
+                    ]:
+                        mgr = m_magrs.get(mgr_key) or mgr_class()
+                        mgr.set_portfolio(self)
+                        self.indicator_pool, _ = mgr.pre_compute(
+                            global_assets, timeline, m_node, self.indicator_pool)
+                        sch_dict[m_key] = mgr.get_schedule(timeline)
+                        m_magrs[mgr_key] = mgr
 
-                            # SMM
-                            smm = s_magrs.get("smm") or StratMoneyManager(StratMoneyManagerParams())
-                            smm.set_portfolio(self)
-                            self.indicator_pool, sd, params_pool = smm.pre_compute(global_assets, timeline, sd, s_node, self.indicator_pool)
-                            smm_sch[s_key] = smm.get_schedule(timeline)
-                            s_magrs["smm"] = smm
+                # Strats
+                for s_name in m_strats.keys():
+                    s_key = (op_name, m_name, s_name)
+                    s_info = m_info.get("strats", {}).get(s_name, {})
+                    s_magrs = s_info.get("managers", {})
+
+                    # Searches Strat data
+                    s_data = self._populate_sim_data(key=s_key, i=last_idx, start_idx=0, data_type="aggr")
+
+                    if s_data:
+                        s_node = {s_key: s_data}
+                        for mgr_key, mgr_class, sch_dict in [
+                            ("ssm", DEFAULT_MGR_CONFIG["ssm"], ssm_sch),
+                            ("smm", DEFAULT_MGR_CONFIG["smm"], smm_sch)
+                        ]: 
+                            mgr = s_magrs.get(mgr_key) or mgr_class()
+                            mgr.set_portfolio(self)
+                            self.indicator_pool, _ = mgr.pre_compute(
+                                global_assets, timeline, s_node, self.indicator_pool)
+                            sch_dict[s_key] = mgr.get_schedule(timeline)
+                            s_magrs[mgr_key] = mgr
 
         return params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
+
+
     
     # ── Datetime timeline mapping ───────────────────────────────────────────────
 
@@ -791,6 +803,7 @@ if __name__ == "__main__":
     from MA import MA # type: ignore
     from VAR import VAR # type: ignore
     from ATR_SL import ATR_SL # type: ignore
+    from Volatility import Volatility # type: ignore
 
     # ── Portfolio level ───────────────────────────────────────────────────────
     assets = Asset.load_all()
@@ -806,15 +819,14 @@ if __name__ == "__main__":
         reb_method="fixed",
         max_active_models=None,
         params={
-            "param1": range(2, 4+1, 1),
-            "param2": range(20, 50+1, 30),
+            "param1": range(21, 21+1, 1),
         },
         indicators={
-            'atr': VAR(asset=None, timeframe="M15", window='param2'),
-            'var': VAR(asset="all_aggr", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
-            'var_all': VAR(asset="each_aggr", timeframe="tick", window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+            "vol": Volatility(asset="@each_both", timeframe="tick", 
+                              window="param1", aggr_days=True, 
+                              price_col="pnl", min_periods="param1")
         },
-        assets={'EURUSD'},
+        #assets={'EURUSD'},
     ))
 
     pmm = PortfolioMoneyManager(PortfolioMoneyManagerParams(
@@ -835,6 +847,14 @@ if __name__ == "__main__":
     # ── Model level ───────────────────────────────────────────────────────────
     msm = ModelSystemManager(ModelSystemManagerParams(
         reb_frequency="weekly",
+        params={
+            "param1": range(21, 21+1, 1),
+        },
+        indicators={
+            "vol": Volatility(asset="@each_both", timeframe="tick", 
+                              window="param1", aggr_days=True, 
+                              price_col="pnl", min_periods="param1")
+        },
     ))
 
     mmm = ModelMoneyManager(ModelMoneyManagerParams(
@@ -844,7 +864,14 @@ if __name__ == "__main__":
 
     # ── Strat level ───────────────────────────────────────────────────────────
     ssm = StratSystemManager(StratSystemManagerParams(
-        reb_frequency="weekly",
+        params={
+            "param1": range(21, 21+1, 1),
+        },
+        indicators={
+            "vol": Volatility(asset="@each_both", timeframe="tick", 
+                              window="param1", aggr_days=True, 
+                              price_col="pnl", min_periods="param1")
+        },
     ))
 
     smm = StratMoneyManager(StratMoneyManagerParams(
@@ -865,12 +892,17 @@ if __name__ == "__main__":
                         "side": "BOTH",
                         "analise_long_short_separate": True,
                         "calculate_on_data": "wf",
-                    }
+                    },
+                    # "GBPUSD": {
+                    #     "side": "BOTH",
+                    #     "analise_long_short_separate": True,
+                    #     "calculate_on_data": "wf",
+                    # }
                 }
             },
             "RS Mean Reversion": {
                 "AT16": {
-                    "EURUSD": {
+                    "USDJPY": {
                         "side": "BOTH",
                         "analise_long_short_separate": True,
                         "calculate_on_data": "wf",
@@ -890,7 +922,7 @@ if __name__ == "__main__":
                     "AT15": {"managers": {"ssm": ssm, "smm": smm}}
                 }
             },
-            "MR Mean Reversion": {
+            "RS Mean Reversion": {
                 "managers": {"msm": msm, "mmm": mmm},
                 "strats": {
                     "AT16": {"managers": {"ssm": ssm, "smm": smm}}
