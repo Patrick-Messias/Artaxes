@@ -37,9 +37,9 @@ class ModelSystemManager(SystemManager): # Manages portfolio's model hierarchy
 
         sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both")
 
-        hierarchy, indicator_pool, sim_data, port_returns = self.rank(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
-        hierarchy, indicator_pool, sim_data, port_returns = self.filter(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
-        hierarchy, indicator_pool, sim_data, port_returns = self.rebalance(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
+        hierarchy, indicator_pool, sim_data, port_returns = self.rank(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns = self.filter(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns = self.rebalance(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
         return hierarchy
 

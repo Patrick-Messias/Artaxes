@@ -168,9 +168,9 @@ class StratMoneyManager(MoneyManager):
 
         sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both")
 
-        hierarchy, indicator_pool, sim_data, port_returns  = self.allocate(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.size(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.risk_guard(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.allocate(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.size(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.risk_guard(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
         return hierarchy
 

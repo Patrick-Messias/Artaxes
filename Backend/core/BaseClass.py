@@ -132,6 +132,7 @@ class BaseManager():
             for _, node_data in aggr_ret.items():
                 if isinstance(node_data, dict) and side in node_data:
                     side_data = node_data[side]
+                    aggr_price_col = ind_obj.params.get("price_col", "close") if ind_obj.params else "close"
                     
                     # A - @each_{} takes only column reference address (ex: 'AT15')
                     if ind_asset.startswith("@each"):
@@ -139,7 +140,7 @@ class BaseManager():
                             target_array = side_data[address]
                             return pl.DataFrame({
                                 time_col: timeline_df[time_col],
-                                "close": target_array
+                                aggr_price_col: target_array
                             })
                         
                     # B - @total_{} sums all matrix columns horizontally
@@ -154,7 +155,7 @@ class BaseManager():
 
                         return pl.DataFrame({
                             time_col: timeline_df[time_col],
-                            "close": total_array
+                            aggr_price_col: total_array
                         })
 
         # Ativos Globais (OHLC bruto)
@@ -187,7 +188,7 @@ class BaseManager():
                         if isinstance(valor, dict) and side_pref in valor:
                             side_data = valor[side_pref]
                             
-                            if isinstance(side_data, dict):
+                            if isinstance(side_data, dict): # NOTE porque "cols"? não preicsa
                                 # Se houver a chave 'cols', usamos ela (garante compatibilidade)
                                 if "cols" in side_data:
                                     resolved_addresses.extend(side_data["cols"])
@@ -210,7 +211,7 @@ class BaseManager():
              
                     if ps_name not in indicator_pool[ind_key][addr]:
                         data_df = self._resolve_data_source(addr, ind_obj, aggr_ret, global_assets, timeline_df)
-                        
+                       
                         if data_df is not None:
                             res_df = self._calculate_indicator(data_df, ind_obj, eff_params)
                             aligned_series = self._align_IND_to_TIMELINE(timeline_df, res_df, time_col)
@@ -230,7 +231,7 @@ class BaseManager():
             if eff_params['price_col'] not in data.columns and 'main' in data.columns:
                 eff_params = eff_params.copy()
                 eff_params['price_col'] = 'main'
-        else: print('price_col not in ind')
+        #else: print('price_col not in ind')
 
         # Gets indicator expression
         exprs = ind_obj.get_expression(eff_params)
