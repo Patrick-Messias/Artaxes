@@ -146,12 +146,19 @@ class BaseManager():
                     # B - @total_{} sums all matrix columns horizontally
                     elif ind_asset.startswith("@total"):
                         total_array = None
+                        side_data_size = 0
+
                         for key, val in side_data.items():
-                            if key in ["datetime"]: continue
+                            if key in ["datetime", "data", "cols", "weights", "time", "ts"]: continue
                             
                             # Sums all data horizontally
                             arr = pl.Series(val)
-                            total_array = arr if total_array is None else total_array + arr 
+                            total_array = arr if total_array is None else total_array + arr
+                            side_data_size += 1
+
+                        # Applies avg to create portfolio curve
+                        if total_array is not None and side_data_size > 0:
+                            total_array = total_array / side_data_size
 
                         return pl.DataFrame({
                             time_col: timeline_df[time_col],
@@ -310,8 +317,8 @@ class BaseManager():
         # O(1) search, with parset ensemble support 
         
         try: # Direct O(1) access to global dict tuple (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
-            ps_dict = self.indicator_pool[ind_key][target]
-
+            ps_dict = self.portfolio.indicator_pool[ind_key][target]
+            print(ps_dict)
             # Specific parset request case
             if ps_name is not None:
                 return ps_dict[ps_name][i]

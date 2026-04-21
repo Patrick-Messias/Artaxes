@@ -116,14 +116,6 @@ class Portfolio(BaseClass, BaseManager):
             hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
                                                     
             #||=====================================================================================||#
-            # if i == int(len(self.datetime_timeline)-1):
-            #     data_dicts = self._populate_sim_data(
-            #             key=('operation_test', 'MA Trend Following', 'AT15', 'EURUSD'), 
-            #             i=i,
-            #             start_idx=int(i-(int(len(self.datetime_timeline)-2))),
-            #             data_type="wf", 
-            #             psid_or_wfid=["12_12_12"]
-            #         )
                 
             import matplotlib.pyplot as plt
             import numpy as np
@@ -131,6 +123,22 @@ class Portfolio(BaseClass, BaseManager):
             import matplotlib as mpl # Import para colormaps novos
 
             if i == int(len(self.datetime_timeline)-1):
+
+                print(f"\n{'#'*20} ANALYTICS: INDICATOR POOL {'#'*20}")
+                print(f"Manager calling: {self.name}")
+                print(f"Total indicators types in pool: {len(self.indicator_pool)}")
+
+                for ind_key, addresses in self.indicator_pool.items():
+                    print(f"\n[Indicator: {ind_key}]")
+                    print(f"  └─ Unique addresses found: {list(addresses.keys())}")
+                    
+                    for addr, psets in addresses.items():
+                        print(f"    ├─ Target: {addr}")
+                        for ps_name, data in psets.items():
+                            print(f"    │  └─ PS: {ps_name} | Len: {len(data)}")
+                            
+                print(f"\n{'#'*60}\n")
+
                 print(f"\n{'='*30} DEBUG FINAL: INDICADORES & PERFORMANCE {'='*30}")
                 
                 port_key = (self.name,) 
@@ -865,7 +873,7 @@ if __name__ == "__main__":
             "param1": range(21, 21+1, 1),
         },
         indicators={
-            "vol": Volatility(asset="@each_both", timeframe="tick", 
+            "vol": Volatility(asset="@total_both", timeframe="tick", 
                               window="param1", aggr_days=True, 
                               price_col="pnl", min_periods="param1")
         },
@@ -893,11 +901,14 @@ if __name__ == "__main__":
         params={
             "param1": range(21, 21+1, 1),
         },
-        # indicators={
-        #     "vol": Volatility(asset="@each_both", timeframe="tick", 
-        #                       window="param1", aggr_days=True, 
-        #                       price_col="pnl", min_periods="param1")
-        # },
+        indicators={
+            "vol": Volatility(asset="@each_both", timeframe="tick", 
+                              window="param1", aggr_days=True, 
+                              price_col="pnl", min_periods="param1"),
+            # "ma": MA(asset="@each_both", timeframe="tick", 
+            #          window="param1", aggr_days=True, 
+            #          price_col="pnl", min_periods="param1"),
+        },
     ))
 
     mmm = ModelMoneyManager(ModelMoneyManagerParams(
@@ -910,11 +921,13 @@ if __name__ == "__main__":
         params={
             "param1": range(21, 21+1, 1),
         },
-        # indicators={
-        #     "vol": Volatility(asset="@each_both", timeframe="tick", 
-        #                       window="param1", aggr_days=True, 
-        #                       price_col="pnl", min_periods="param1")
-        # },
+        indicators={
+            "vol": Volatility(asset="@each_both", timeframe="tick", 
+                              window="param1", aggr_days=True, 
+                              price_col="pnl", min_periods="param1"),
+            # "ema": MA(asset="EURUSD", timeframe="M15", 
+            #           window="param1", ma_type="ema", price_col="close"),
+        },
     ))
 
     smm = StratMoneyManager(StratMoneyManagerParams(
@@ -936,6 +949,11 @@ if __name__ == "__main__":
                         "analise_long_short_separate": True,
                         "calculate_on_data": "wf",
                     },
+                    # "GBPUSD": {
+                    #     "side": "both",
+                    #     "analise_long_short_separate": True,
+                    #     "calculate_on_data": "wf",
+                    # },
                 }
             },
             "RS Mean Reversion": {

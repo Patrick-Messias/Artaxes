@@ -50,11 +50,15 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         # No nível de Portfólio, os 'filhos' são modelos.
         # Tentamos buscar 'models', se não existir, buscamos 'strats' (para reuso da lógica)
         entities = hierarchy.get("models", [])
-        if not entities or sim_data is None:
-            return hierarchy, indicator_pool, sim_data, port_returns
+        # if not entities or sim_data is None:
+        #     print("     < [PortofolioSystemManager._default_rank] No entities to rank or sim_data is None. Skipping ranking.")
+        #     return hierarchy, indicator_pool, sim_data, port_returns
 
-        # Data
-        vol = self.get_ind(ind_key=key, target="vol", ps_name=None) 
+        #ARRUMAR get_ind DEVE AJUSTAR A KEY AUTOMATICAMENTE E PUXAR POR NOME
+
+        # Data 
+        vol = self.get_ind(ind_key=key, target="vol", i=step_dt, ps_name=None) 
+        print(vol)
         # NOTE Modificar para ter acesso ao ind com e sem opção de tuple key
         #e/ou salvar com identificador de tuple (op, m, s, a)
 
