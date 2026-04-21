@@ -146,7 +146,7 @@ class Portfolio(BaseClass, BaseManager):
 
                     plt.style.use('dark_background')
                     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), sharex=True, 
-                                                   gridspec_kw={'height_ratios': [2, 1]})
+                                                    gridspec_kw={'height_ratios': [2, 1]})
 
                     # --- PLOT EQUITY ---
                     for model_name in cols:
@@ -155,28 +155,43 @@ class Portfolio(BaseClass, BaseManager):
 
                     portfolio_total_equity = df_plot.select(pl.sum_horizontal(cols)).to_series().cum_sum()
                     ax1.plot(df_plot['datetime'], portfolio_total_equity, label="TOTAL", color='white', lw=2, ls='--')
-                    ax1.legend(loc='upper left', bbox_to_anchor=(1, 1))
+                    
+                    # Legenda do Equity mais compacta
+                    ax1.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize='xx-small', handlelength=1)
 
-                    # --- PLOT INDICADORES (CORRIGIDO) ---
-                    # Uso da API nova de colormaps (Matplotlib 3.7+)
+                    # --- PLOT INDICADORES ---
                     cmap = mpl.colormaps['tab20']
                     colors = cmap(np.linspace(0, 1, 20))
                     c_idx = 0
                     has_indicators = False
+                    plotted_keys = set() 
 
                     for ind_name, addresses in self.indicator_pool.items():
                         for addr, psets in addresses.items():
                             for ps_name, data in psets.items():
-                                has_indicators = True
-                                label = f"{ind_name} | {addr}"
-                                ax2.plot(self.datetime_timeline, data, label=label, color=colors[c_idx % 20])
-                                c_idx += 1
+                                unique_key = f"{ind_name}_{addr}_{ps_name}"
+                                
+                                if unique_key not in plotted_keys:
+                                    # IMPORTANTE: Marcar que encontramos indicadores para o título do gráfico
+                                    has_indicators = True 
+                                    
+                                    label = f"{ind_name} | {addr}"
+                                    
+                                    # Se o dado for 2D (ex: [time, value]), extraímos apenas a coluna de valor
+                                    plot_data = data[:, 1] if data.ndim > 1 else data
+                                    
+                                    ax2.plot(self.datetime_timeline, plot_data, label=label, color=colors[c_idx % 20])
+                                    
+                                    plotted_keys.add(unique_key)
+                                    c_idx += 1
 
                     if has_indicators:
-                        ax2.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize='x-small')
-                        ax2.set_title("Indicadores Calculados", color='cyan')
+                        # Legenda ultra compacta para os indicadores
+                        ax2.legend(loc='upper left', bbox_to_anchor=(1, 1), 
+                                fontsize='xx-small', handlelength=0.8, borderaxespad=0.5)
+                        ax2.set_title("Indicadores Calculados", color='cyan', fontsize=10)
                     else:
-                        ax2.set_title("Nenhum indicador encontrado no Pool", color='red')
+                        ax2.set_title("Nenhum indicador encontrado no Pool", color='red', fontsize=10)
 
                     plt.tight_layout()
                     plt.show()
@@ -200,7 +215,6 @@ class Portfolio(BaseClass, BaseManager):
     # XXX - Adicionar filtro de start_idx e end_idx para walkforward, senão vai estourar memória em SM/MM
     # XXX - Criar novos strats e models
 
-    # - Criar self.op_key, m_key, s_key, a_key ?
     # - Eliminar os dados especificos model_df, etc. Solicitar dentro do SM/MM com o _populate_sim_data
     # - Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
 
@@ -879,11 +893,11 @@ if __name__ == "__main__":
         params={
             "param1": range(21, 21+1, 1),
         },
-        indicators={
-            "vol": Volatility(asset="@each_both", timeframe="tick", 
-                              window="param1", aggr_days=True, 
-                              price_col="pnl", min_periods="param1")
-        },
+        # indicators={
+        #     "vol": Volatility(asset="@each_both", timeframe="tick", 
+        #                       window="param1", aggr_days=True, 
+        #                       price_col="pnl", min_periods="param1")
+        # },
     ))
 
     mmm = ModelMoneyManager(ModelMoneyManagerParams(
@@ -896,11 +910,11 @@ if __name__ == "__main__":
         params={
             "param1": range(21, 21+1, 1),
         },
-        indicators={
-            "vol": Volatility(asset="@each_both", timeframe="tick", 
-                              window="param1", aggr_days=True, 
-                              price_col="pnl", min_periods="param1")
-        },
+        # indicators={
+        #     "vol": Volatility(asset="@each_both", timeframe="tick", 
+        #                       window="param1", aggr_days=True, 
+        #                       price_col="pnl", min_periods="param1")
+        # },
     ))
 
     smm = StratMoneyManager(StratMoneyManagerParams(

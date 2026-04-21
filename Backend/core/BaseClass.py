@@ -208,10 +208,9 @@ class BaseManager():
                 # 2. Calculation
                 for addr in resolved_addresses:
                     indicator_pool.setdefault(ind_key, {}).setdefault(addr, {})
-             
+                    
                     if ps_name not in indicator_pool[ind_key][addr]:
                         data_df = self._resolve_data_source(addr, ind_obj, aggr_ret, global_assets, timeline_df)
-                       
                         if data_df is not None:
                             res_df = self._calculate_indicator(data_df, ind_obj, eff_params)
                             aligned_series = self._align_IND_to_TIMELINE(timeline_df, res_df, time_col)
