@@ -127,56 +127,59 @@ class Portfolio(BaseClass, BaseManager):
                 
             import matplotlib.pyplot as plt
             import numpy as np
+            import polars as pl
+            import matplotlib as mpl # Import para colormaps novos
 
             if i == int(len(self.datetime_timeline)-1):
-                print(f"\n{'-'*20} PLOTANDO EQUITY CURVES SOBREPOSTAS {'-'*20}")
+                print(f"\n{'='*30} DEBUG FINAL: INDICADORES & PERFORMANCE {'='*30}")
                 
                 port_key = (self.name,) 
-                side_to_plot = "BOTH"
-
+                side_to_plot = "both"
+                
                 if port_key in self.sim_data and side_to_plot in self.sim_data[port_key]:
                     aggr_info = self.sim_data[port_key][side_to_plot]
                     matrix = aggr_info["data"]
                     cols = aggr_info["cols"]
-                    
-                    # Reconstrução rápida em Polars para aproveitar o cum_sum()
                     df_plot = pl.DataFrame(matrix, schema=cols).with_columns(
                         pl.Series("datetime", self.datetime_timeline)
                     )
 
-                    plt.figure(figsize=(15, 8))
-                    
-                    # 1. Plotar cada modelo individualmente com transparência
+                    plt.style.use('dark_background')
+                    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), sharex=True, 
+                                                   gridspec_kw={'height_ratios': [2, 1]})
+
+                    # --- PLOT EQUITY ---
                     for model_name in cols:
                         equity_curve = df_plot.get_column(model_name).cum_sum()
-                        plt.plot(df_plot['datetime'], equity_curve, label=model_name, alpha=0.6, lw=1.2)
+                        ax1.plot(df_plot['datetime'], equity_curve, label=f"Model: {model_name}", alpha=0.7)
 
-                    # 2. Plotar a curva Mestra (Soma de todos os modelos) em destaque
-                    # Somamos o PnL de todas as colunas antes de calcular o acumulado
                     portfolio_total_equity = df_plot.select(pl.sum_horizontal(cols)).to_series().cum_sum()
-                    
-                    plt.plot(df_plot['datetime'], portfolio_total_equity, 
-                             label="TOTAL PORTFOLIO", color='black', lw=3, linestyle='-')
+                    ax1.plot(df_plot['datetime'], portfolio_total_equity, label="TOTAL", color='white', lw=2, ls='--')
+                    ax1.legend(loc='upper left', bbox_to_anchor=(1, 1))
 
-                    # 3. Estilização Profissional
-                    plt.title(f"Comparativo de Equity: {self.name} | Modelos vs. Total", fontsize=14, fontweight='bold')
-                    plt.xlabel("Timeline")
-                    plt.ylabel("PnL Acumulado")
-                    
-                    # Coloca a legenda de um jeito que não cubra as curvas se houver muitos modelos
-                    plt.legend(loc='upper left', bbox_to_anchor=(1.01, 1), borderaxespad=0.)
-                    
-                    plt.grid(True, which='both', linestyle='--', alpha=0.4)
-                    plt.axhline(0, color='red', linestyle='-', alpha=0.3) # Linha de Break-even
-                    
-                    plt.xticks(rotation=30)
+                    # --- PLOT INDICADORES (CORRIGIDO) ---
+                    # Uso da API nova de colormaps (Matplotlib 3.7+)
+                    cmap = mpl.colormaps['tab20']
+                    colors = cmap(np.linspace(0, 1, 20))
+                    c_idx = 0
+                    has_indicators = False
+
+                    for ind_name, addresses in self.indicator_pool.items():
+                        for addr, psets in addresses.items():
+                            for ps_name, data in psets.items():
+                                has_indicators = True
+                                label = f"{ind_name} | {addr}"
+                                ax2.plot(self.datetime_timeline, data, label=label, color=colors[c_idx % 20])
+                                c_idx += 1
+
+                    if has_indicators:
+                        ax2.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize='x-small')
+                        ax2.set_title("Indicadores Calculados", color='cyan')
+                    else:
+                        ax2.set_title("Nenhum indicador encontrado no Pool", color='red')
+
                     plt.tight_layout()
-                    
-                    print(f" -> Gráfico unificado gerado com {len(cols)} modelos + curva mestre.")
-                    plt.style.use('dark_background')
                     plt.show()
-                else:
-                    print(f"⚠️ Aviso: Dados do portfólio {port_key} não encontrados.")
             
            
             
@@ -319,7 +322,7 @@ class Portfolio(BaseClass, BaseManager):
             key (tuple): Chave da hierarquia (op,), (op, m), (op, m, s) ou (op, m, s, a).
             i (int): Índice final da timeline.
             start_idx (int): Índice inicial da busca (default 0).
-            side (str): "BOTH", "LONG", "SHORT".
+            side (str): "both", "long", "long".
             data_type (str): "aggr" (memória) ou "parset" (disco/parquet).
             ps_id (str/int): ID específico da posição para filtragem.
         """
@@ -329,7 +332,7 @@ class Portfolio(BaseClass, BaseManager):
             node = self.sim_data.get(key)
             if not node: return None
 
-            directions = ["BOTH", "LONG", "SHORT"]
+            directions = ["both", "long", "short"]
             
             def slice_data(block):
                 # Retorna o slice do start_idx até o i atual (inclusive)
@@ -339,7 +342,7 @@ class Portfolio(BaseClass, BaseManager):
                 return {col: data_slice[:, idx].tolist() for idx, col in enumerate(cols)}
 
             if side is not None:
-                side_upper = side.upper()
+                side_upper = side.lower()
                 data_block = node.get(side_upper)
                 return slice_data(data_block) if data_block else None
 
@@ -434,7 +437,7 @@ class Portfolio(BaseClass, BaseManager):
         # portf_aggr = [dt, model1, model2, model3, model4, ...] # (self.name) # Joins all opera_aggr into one
 
         # Acumuladores hierárquicos: { key: { direction: { child_name: series } } }
-        temp_asset_cache, strat_acc, model_acc, opera_acc, portf_acc = {}, {}, {}, {}, {} # { (op, m, s, a): { "BOTH": df, "LONG": df... } }
+        temp_asset_cache, strat_acc, model_acc, opera_acc, portf_acc = {}, {}, {}, {}, {} # { (op, m, s, a): { "both": df, "long": df... } }
         unique_dts = set()
 
         # --- 1. COLETA DE DADOS E TIMELINE ---
@@ -443,7 +446,7 @@ class Portfolio(BaseClass, BaseManager):
             a_key = (op_n, m_n, s_n, a_n)
 
             # Extracts configs
-            side_pref = config.get("side", "BOTH").upper() if isinstance(config, dict) else "BOTH"
+            side_pref = config.get("side", "both").lower() if isinstance(config, dict) else "both"
             separate_ls = config.get("analise_long_short_separate", False) if isinstance(config, dict) else False
             calculate_on_data = config.get("calculate_on_data", "all") if isinstance(config, dict) else "all"
 
@@ -455,9 +458,9 @@ class Portfolio(BaseClass, BaseManager):
             #unique_dts.update(timeline_df['datetime'].to_list())
 
             # Preparates direction
-            vias = {"BOTH": side_pref}
+            vias = {"both": side_pref}
             if separate_ls:
-                vias.update({"LONG": "LONG", "SHORT": "SHORT"})
+                vias.update({"long": "long", "short": "short"})
             asset_entry = {}
             
 
@@ -570,6 +573,7 @@ class Portfolio(BaseClass, BaseManager):
             for d_name, models in directions.items():
                 wide_df = pl.DataFrame(models)
                 self.sim_data[o_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
+                #print(f"Operation {o_key} - {d_name}:\n{wide_df.head()}")
 
         # E. Portfólio
         for p_key, directions in portf_acc.items():
@@ -577,9 +581,12 @@ class Portfolio(BaseClass, BaseManager):
             for d_name, components in directions.items():
                 wide_df = pl.DataFrame(components)
                 self.sim_data[p_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
+                #print(f"Portfolio {p_key} - {d_name}:\n{wide_df.head()}")
 
         return True
     
+
+
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
         psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
         params_pool = {}
@@ -604,9 +611,31 @@ class Portfolio(BaseClass, BaseManager):
         # Searches data via _populate_sim_data
         p_data = self._populate_sim_data(key=p_key, i=last_idx, start_idx=0, data_type="aggr")
 
+        
+        # tup = ("operation_test", "RS Mean Reversion")
+        # print(tup)
+        # op=tup[0]
+        # mod=tup[1]
+        # tupkey = op+"_"+mod
+        # print(type(p_data), p_data.keys() if p_data else "No data")
+        # print(pl.DataFrame(p_data["both"]))
+        # print()
+        # print(p_data["both"])
+        #print("\n",pl.DataFrame(p_data["both"][tupkey]).head())
+
+        # p_data = self._populate_sim_data(key=("operation_test",), i=last_idx, start_idx=0, data_type="aggr")
+        # print(type(p_data), p_data.keys() if p_data else "No data")
+        # print(pl.DataFrame(p_data["both"]["RS Mean Reversion"]).head())
+
+        # #-> portf_aggr não está separando entre models? deveria ter todos os models
+        # #-> Problema é que o pre_compute não está interpretando os aggr da forma correta, parece que está errado a forma de salvar em portf_aggr
+
+        # print("\n"*3)
+
+
         if p_data:
             p_node = {p_key: p_data}
-
+           
             # PSM and PMM
             for mgr_key, mgr_class, sch_dict in [
                 ("psm", DEFAULT_MGR_CONFIG["psm"], psm_sch),
@@ -650,7 +679,7 @@ class Portfolio(BaseClass, BaseManager):
 
                     # Searches Strat data
                     s_data = self._populate_sim_data(key=s_key, i=last_idx, start_idx=0, data_type="aggr")
-
+                    
                     if s_data:
                         s_node = {s_key: s_data}
                         for mgr_key, mgr_class, sch_dict in [
@@ -889,21 +918,16 @@ if __name__ == "__main__":
             "MA Trend Following": {
                 "AT15": {
                     "EURUSD": {
-                        "side": "BOTH",
+                        "side": "both",
                         "analise_long_short_separate": True,
                         "calculate_on_data": "wf",
                     },
-                    # "GBPUSD": {
-                    #     "side": "BOTH",
-                    #     "analise_long_short_separate": True,
-                    #     "calculate_on_data": "wf",
-                    # }
                 }
             },
             "RS Mean Reversion": {
                 "AT16": {
                     "USDJPY": {
-                        "side": "BOTH",
+                        "side": "both",
                         "analise_long_short_separate": True,
                         "calculate_on_data": "wf",
                     }

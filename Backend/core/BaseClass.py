@@ -121,61 +121,101 @@ class BaseManager():
     
     # ── Indicators ───────────────────────────────────────────────────────
 
-    def _resolve_data_source(self, address, ind_obj, aggr_ret, global_assets, timeline_df, time_col='datetime'):
-        # Transforma qualquer string/tupla em um DataFrame [datetime, main]
+    def _resolve_data_source(self, address, ind_obj, aggr_ret, global_assets, timeline_df, time_col="datetime"):
+        ind_asset = ind_obj.asset
 
-        # 1. Caso seja um Ativo Físico (ex: "EURUSD")
-        if isinstance(address, str) and address in global_assets:
-            return global_assets[address].data_get(ind_obj.timeframe)
+        # Aggregated returns treatment (@each_{} or @total_{})
+        if isinstance(ind_asset, str) and (ind_asset.startswith("@each") or ind_asset.startswith("@total")):
+            side = ind_asset.split("_")[-1].lower() if "_" in ind_asset else "both"
 
-        # 2. Caso seja um Caminho Exato no sim_data (Tupla)
-        if isinstance(address, tuple) and address in aggr_ret:
-            return pl.DataFrame({time_col: timeline_df[time_col], "main": aggr_ret[address]})
+            # Navegaste aggr nodes
+            for _, node_data in aggr_ret.items():
+                if isinstance(node_data, dict) and side in node_data:
+                    side_data = node_data[side]
+                    
+                    # A - @each_{} takes only column reference address (ex: 'AT15')
+                    if ind_asset.startswith("@each"):
+                        if address in side_data:
+                            target_array = side_data[address]
+                            return pl.DataFrame({
+                                time_col: timeline_df[time_col],
+                                "close": target_array
+                            })
+                        
+                    # B - @total_{} sums all matrix columns horizontally
+                    elif ind_asset.startswith("@total"):
+                        total_array = None
+                        for key, val in side_data.items():
+                            if key in ["datetime"]: continue
+                            
+                            # Sums all data horizontally
+                            arr = pl.Series(val)
+                            total_array = arr if total_array is None else total_array + arr 
 
-        # 3. Caso seja uma Query de Agregação (Ex: "@total_long")
-        if isinstance(address, str) and address.startswith("@total"):
-            side_pref = address.split("_")[-1] if "_" in address else "both"
-            target_series = [v for k, v in aggr_ret.items() if k[-1] == side_pref]
-            if target_series:
-                main_v = pl.DataFrame(target_series).select(pl.mean_horizontal(pl.all())).to_series()
-                return pl.DataFrame({time_col: timeline_df[time_col], "main": main_v})
+                        return pl.DataFrame({
+                            time_col: timeline_df[time_col],
+                            "close": total_array
+                        })
+
+        # Ativos Globais (OHLC bruto)
+        if address in global_assets:
+            return global_assets[address].load(
+                timeframe=ind_obj.timeframe, 
+                source="local", 
+                date_start=self.portfolio.date_start, 
+                date_end=self.portfolio.date_end
+            )
+
+        print(f"    < [BaseClass._resolve_data_source] Warning: Address '{address}' not found in global assets or aggregated returns.")
         return None
-
+    
     def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets, time_col='datetime'):
-        # 1. Timeline Setup (Garantia de ordenação para join_asof)
         timeline_df = (pl.DataFrame({time_col: timeline}) if isinstance(timeline, list) else timeline).sort(time_col)
-
+        
         for ps_name, ps_dict in param_sets.items():
             for ind_key, ind_obj in self.indicators.items():
                 eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
-
-                # 1. Path resolve
-                # Determines final adress list
                 raw_addr = ind_obj.asset
 
-                # Case A: Dinamic Expansion (ex: "@each_long", "@each_both")
+                import os
+                # --- LÓGICA CORRIGIDA PARA O @EACH COM RECURSIVIDADE ---
                 if isinstance(raw_addr, str) and raw_addr.startswith("@each"):
-                    side_pref = raw_addr.split("_")[-1] if "_" in raw_addr else "both"
-                    resolved_addresses = [k for k in aggr_ret.keys() if k[-1] == side_pref]
+                    side_pref = raw_addr.split("_")[-1].lower() if "_" in raw_addr else "both"
+                    resolved_addresses = []
 
-                # Case B: Manual adresses key
+                    for _, valor in aggr_ret.items():
+                        if isinstance(valor, dict) and side_pref in valor:
+                            side_data = valor[side_pref]
+                            
+                            if isinstance(side_data, dict):
+                                # Se houver a chave 'cols', usamos ela (garante compatibilidade)
+                                if "cols" in side_data:
+                                    resolved_addresses.extend(side_data["cols"])
+                                else:
+                                    # Caso contrário, as chaves do dicionário são os nossos alvos
+                                    # Filtramos chaves que não sejam 'data' ou metadados conhecidos
+                                    target_keys = [k for k in side_data.keys() if k not in ["data", "cols", "weights"]]
+                                    resolved_addresses.extend(target_keys)
+                    
+                    resolved_addresses = list(set(resolved_addresses))
+                
                 elif isinstance(raw_addr, list):
                     resolved_addresses = raw_addr
-
-                # Case C: Only 1 adress (Str, Tuple or None)
                 else:
                     resolved_addresses = [raw_addr if raw_addr is not None else "@total_both"]
 
                 # 2. Calculation
                 for addr in resolved_addresses:
                     indicator_pool.setdefault(ind_key, {}).setdefault(addr, {})
-
+             
                     if ps_name not in indicator_pool[ind_key][addr]:
                         data_df = self._resolve_data_source(addr, ind_obj, aggr_ret, global_assets, timeline_df)
+                        
                         if data_df is not None:
                             res_df = self._calculate_indicator(data_df, ind_obj, eff_params)
                             aligned_series = self._align_IND_to_TIMELINE(timeline_df, res_df, time_col)
                             indicator_pool[ind_key][addr][ps_name] = aligned_series.to_numpy()
+           
         return indicator_pool
     
     def _calculate_indicator(self, data: pl.DataFrame, ind_obj: Indicator, eff_params: dict):

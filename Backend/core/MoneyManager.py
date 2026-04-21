@@ -68,21 +68,21 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict) -> Dict[str, float]:
+    def allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> Dict[str, float]:
         # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
         return self._call(self._fn_allocate, self._default_allocate, step_dt, hierarchy, indicator_pool, sim_data, port_returns)
 
-    def size(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict) -> List[str]:
+    def size(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
         # Removes models that don't pass the filter function
         # Returns list of model_names that are active
         return self._call(self._fn_size, self._default_size, step_dt, hierarchy, indicator_pool, sim_data, port_returns)
 
-    def risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict) -> List[str]:
+    def risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
         # Orchestrates rank -> filter -> selection
         # Returns ordered list of active models
         return self._call(self._fn_risk_guard, self._default_risk_guard, step_dt, hierarchy, indicator_pool, sim_data, port_returns)
 
-    def main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key: str) -> bool:
+    def main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
         return self._call(self._fn_main, self._default_main, step_dt, hierarchy, indicator_pool, port_returns, key)

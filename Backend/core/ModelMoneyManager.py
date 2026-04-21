@@ -17,18 +17,18 @@ class ModelMoneyManager(MoneyManager): # Manages Model's risk and money manageme
           
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def _default_allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict):
+    def _default_allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_size(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict):
+    def _default_size(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict):
+    def _default_risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key: str) -> bool:
+    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
 
-        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="BOTH")
+        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both")
 
         hierarchy, indicator_pool, sim_data, port_returns = self.allocate(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
         hierarchy, indicator_pool, sim_data, port_returns = self.size(step_dt, hierarchy, indicator_pool, sim_data, port_returns)
