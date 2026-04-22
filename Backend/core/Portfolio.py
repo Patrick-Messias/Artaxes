@@ -128,14 +128,9 @@ class Portfolio(BaseClass, BaseManager):
                 print(f"Manager calling: {self.name}")
                 print(f"Total indicators types in pool: {len(self.indicator_pool)}")
 
-                for ind_key, addresses in self.indicator_pool.items():
-                    print(f"\n[Indicator: {ind_key}]")
-                    print(f"  └─ Unique addresses found: {list(addresses.keys())}")
-                    
-                    for addr, psets in addresses.items():
-                        print(f"    ├─ Target: {addr}")
-                        for ps_name, data in psets.items():
-                            print(f"    │  └─ PS: {ps_name} | Len: {len(data)}")
+                for ind_key, value in self.indicator_pool.items():
+                    print(f"Indicator: {ind_key}")
+                    print(f"value: {value[-1]}")
                             
                 print(f"\n{'#'*60}\n")
 
@@ -174,24 +169,24 @@ class Portfolio(BaseClass, BaseManager):
                     has_indicators = False
                     plotted_keys = set() 
 
-                    for ind_name, addresses in self.indicator_pool.items():
-                        for addr, psets in addresses.items():
-                            for ps_name, data in psets.items():
-                                unique_key = f"{ind_name}_{addr}_{ps_name}"
-                                
-                                if unique_key not in plotted_keys:
-                                    # IMPORTANTE: Marcar que encontramos indicadores para o título do gráfico
-                                    has_indicators = True 
-                                    
-                                    label = f"{ind_name} | {addr}"
-                                    
-                                    # Se o dado for 2D (ex: [time, value]), extraímos apenas a coluna de valor
-                                    plot_data = data[:, 1] if data.ndim > 1 else data
-                                    
-                                    ax2.plot(self.datetime_timeline, plot_data, label=label, color=colors[c_idx % 20])
-                                    
-                                    plotted_keys.add(unique_key)
-                                    c_idx += 1
+                    for pool_key, data in self.indicator_pool.items():
+                        # pool_key = (level_parts..., ind_key, addr, params...)
+                        # Encontra ind_key: primeiro elemento que é string e não parece ser um name/op
+                        # Mais simples: usa get_ind ou apenas plota todos diretamente
+                        
+                        unique_key = str(pool_key)
+                        if unique_key not in plotted_keys:
+                            has_indicators = True
+                            
+                            # Label legível: pega ind_key e addr da key
+                            # ind_key está depois do level — localiza pelo padrão
+                            # Por ora, usa os últimos elementos antes dos params
+                            label = " | ".join(str(x) for x in pool_key[:4])  # level + ind + addr
+                            
+                            plot_data = data[:, 1] if data.ndim > 1 else data
+                            ax2.plot(self.datetime_timeline, plot_data, label=label, color=colors[c_idx % 20])
+                            plotted_keys.add(unique_key)
+                            c_idx += 1
 
                     if has_indicators:
                         # Legenda ultra compacta para os indicadores
@@ -211,28 +206,6 @@ class Portfolio(BaseClass, BaseManager):
             
         return True
     
-
-
-
-
-
-    # XXX - Testar Walkforward, def deve puxar por ps_id de um wf_id com dado de storage.load e recriar a curva
-    # XXX - Modificar _sim_data para poder puxar wf, wf.parquet tem que ter apenas [dt, ps_id, wf_id]
-    # XXX - Walkforward tem os updates em matrix_resolution='weekly', deve se adaptar para cada um, puxando dados 
-    # XXX - Calculates Aggr calculate_on_data=Literal["all", "wf", "parset"] of the selected data points in portfolio_data
-    # XXX - Adicionar filtro de start_idx e end_idx para walkforward, senão vai estourar memória em SM/MM
-    # XXX - Criar novos strats e models
-
-    # - Eliminar os dados especificos model_df, etc. Solicitar dentro do SM/MM com o _populate_sim_data
-    # - Desenvolver SM/MM ao invés de instanciar dados para op_data ele chama o populate_sim_data na hora
-
-
-
-
-
-
-
-
     # ── Portfolio Defs ───────────────────────────────────────────────
 
     def _system_money_managers(self, i, dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
@@ -666,7 +639,7 @@ class Portfolio(BaseClass, BaseManager):
                 mgr = p_magrs.get(mgr_key) or mgr_class() 
                 mgr.set_portfolio(self)
                 self.indicator_pool, _ = mgr.pre_compute(
-                    global_assets, timeline, p_node, self.indicator_pool)
+                    global_assets, timeline, p_node, self.indicator_pool, p_key)
                 sch_dict[p_name] = mgr.get_schedule(timeline)
                 p_magrs[mgr_key] = mgr
 
@@ -689,7 +662,7 @@ class Portfolio(BaseClass, BaseManager):
                         mgr = m_magrs.get(mgr_key) or mgr_class()
                         mgr.set_portfolio(self)
                         self.indicator_pool, _ = mgr.pre_compute(
-                            global_assets, timeline, m_node, self.indicator_pool)
+                            global_assets, timeline, m_node, self.indicator_pool, m_key)
                         sch_dict[m_key] = mgr.get_schedule(timeline)
                         m_magrs[mgr_key] = mgr
 
@@ -711,7 +684,7 @@ class Portfolio(BaseClass, BaseManager):
                             mgr = s_magrs.get(mgr_key) or mgr_class()
                             mgr.set_portfolio(self)
                             self.indicator_pool, _ = mgr.pre_compute(
-                                global_assets, timeline, s_node, self.indicator_pool)
+                                global_assets, timeline, s_node, self.indicator_pool, s_key)
                             sch_dict[s_key] = mgr.get_schedule(timeline)
                             s_magrs[mgr_key] = mgr
 
@@ -806,13 +779,6 @@ class Portfolio(BaseClass, BaseManager):
     # ──────────────────────────────────────────────────────────────────────────── 
 
     """"""
-    # 1. -> PRIORITARIO
-    # - usar timeline unificada de Storage.load para tudo
-    # - padronizar tuple/key EM TODO LUGAR (USAR TUPLE)
-    # - mantem mesmo path para todos
-
-
-    # 2. Continuação
     # -> Saidas: 
     # Para cada trade:
     # - Se date_exit == datetime então sai 

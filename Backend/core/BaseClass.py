@@ -85,14 +85,23 @@ class BaseManager():
 
     # ── Pre-Simulation ───────────────────────────────────────────────────────
 
-    def pre_compute(self, global_assets, timeline, aggr_ret, indicator_pool):
+    def pre_compute(self, global_assets, timeline, aggr_ret, indicator_pool, manager_level_key: tuple = ()):
+        # manager_level_key: tuple that identifies the level of this manager.
+        #     PSM/PMM  → ("portfolio",)
+        #     MSM/MMM  → ("op", "model_name")
+        #     SSM/SMM  → ("op", "model_name", "strat_name")
+        
         # Defines parsets from params
         param_sets = self._calculate_param_combinations(self.params)
 
         # Calculates Indicators 
-        if self.indicators: indicator_pool = self._calculate_and_map_indicators(global_assets, timeline, aggr_ret, indicator_pool, param_sets)
+        if self.indicators: indicator_pool = self._calculate_and_map_indicators(
+            global_assets, timeline, aggr_ret, 
+            indicator_pool, param_sets, manager_level_key=manager_level_key)
 
-        indicator_pool = self._call(self._fn_pre_compute, self._default_pre_compute, global_assets, timeline, aggr_ret, indicator_pool, param_sets)
+        indicator_pool = self._call(self._fn_pre_compute, self._default_pre_compute, 
+                                    global_assets, timeline, aggr_ret, 
+                                    indicator_pool, param_sets, manager_level_key=manager_level_key)
 
         return indicator_pool, param_sets
 
@@ -177,7 +186,15 @@ class BaseManager():
         print(f"    < [BaseClass._resolve_data_source] Warning: Address '{address}' not found in global assets or aggregated returns.")
         return None
     
-    def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets, time_col='datetime'):
+    def _calculate_and_map_indicators(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets, manager_level_key=(), time_col='datetime'):
+        # Pool key structure:
+        #     (manager_level_key..., ind_key, addr, param_k1, val1, param_k2, val2, ...)
+        # Examples:
+        #     ("portfolio",         "vol", "@total_both", "window", 21)
+        #     ("op", "model",       "vol", "@total_both", "window", 21)   ← different from above
+        #     ("op", "model", "s",  "vol", "@total_both", "window", 21)   ← different from both
+        #     ("op", "model", "s",  "vol", "EURUSD",      "window", 21)
+        
         timeline_df = (pl.DataFrame({time_col: timeline}) if isinstance(timeline, list) else timeline).sort(time_col)
         
         for ps_name, ps_dict in param_sets.items():
@@ -185,7 +202,6 @@ class BaseManager():
                 eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                 raw_addr = ind_obj.asset
 
-                import os
                 # --- LÓGICA CORRIGIDA PARA O @EACH COM RECURSIVIDADE ---
                 if isinstance(raw_addr, str) and raw_addr.startswith("@each"):
                     side_pref = raw_addr.split("_")[-1].lower() if "_" in raw_addr else "both"
@@ -194,15 +210,12 @@ class BaseManager():
                     for _, valor in aggr_ret.items():
                         if isinstance(valor, dict) and side_pref in valor:
                             side_data = valor[side_pref]
-                            
-                            if isinstance(side_data, dict): # NOTE porque "cols"? não preicsa
-                                # Se houver a chave 'cols', usamos ela (garante compatibilidade)
+                            if isinstance(side_data, dict):
                                 if "cols" in side_data:
                                     resolved_addresses.extend(side_data["cols"])
                                 else:
-                                    # Caso contrário, as chaves do dicionário são os nossos alvos
-                                    # Filtramos chaves que não sejam 'data' ou metadados conhecidos
-                                    target_keys = [k for k in side_data.keys() if k not in ["data", "cols", "weights"]]
+                                    target_keys = [k for k in side_data.keys()
+                                                   if k not in {"data", "cols", "weights"}]
                                     resolved_addresses.extend(target_keys)
                     
                     resolved_addresses = list(set(resolved_addresses))
@@ -214,14 +227,21 @@ class BaseManager():
 
                 # 2. Calculation
                 for addr in resolved_addresses:
-                    indicator_pool.setdefault(ind_key, {}).setdefault(addr, {})
-                    
-                    if ps_name not in indicator_pool[ind_key][addr]:
-                        data_df = self._resolve_data_source(addr, ind_obj, aggr_ret, global_assets, timeline_df)
+                    param_items = tuple(
+                        item
+                        for k in sorted(eff_params.keys())
+                        for item in (k, eff_params[k])
+                    )
+                    # Level prefix garantees PSM and SSM with same ind+addr+params are distinct
+                    pool_key = manager_level_key + (ind_key, addr) + param_items
+                    print(f">>>>>>>>>>>>>>>>>>>>>>>>>>manager_level_key: {manager_level_key}, ind_key: {ind_key}, addr: {addr}, params: {eff_params}")
+                    if pool_key not in indicator_pool:
+                        data_df = self._resolve_data_source(
+                            addr, ind_obj, aggr_ret, global_assets, timeline_df)
                         if data_df is not None:
-                            res_df = self._calculate_indicator(data_df, ind_obj, eff_params)
-                            aligned_series = self._align_IND_to_TIMELINE(timeline_df, res_df, time_col)
-                            indicator_pool[ind_key][addr][ps_name] = aligned_series.to_numpy()
+                            res_df  = self._calculate_indicator(data_df, ind_obj, eff_params)
+                            aligned = self._align_IND_to_TIMELINE(timeline_df, res_df, time_col)
+                            indicator_pool[pool_key] = aligned.to_numpy()
            
         return indicator_pool
     
@@ -326,33 +346,91 @@ class BaseManager():
 
 
 
-    def get_ind(self, ind_key, target, i, ps_name=None):
-        try:
-            ps_dict = self.portfolio.indicator_pool[ind_key][target]
-            
-            # 1. Seleciona o array correto (específico ou o único existente)
-            if ps_name is not None:
-                data_array = ps_dict[ps_name]
-            elif len(ps_dict) == 1:
-                data_array = next(iter(ps_dict.values()))
-            else:
-                # Caso múltiplos parsets e nenhum solicitado, retorna um dict de valores no ponto i
-                return {ps: (arr[i, 1] if i < len(arr) else None) for ps, arr in ps_dict.items()}
+    def get_ind(self, 
+                ind_key:        str, 
+                addr:           str = None, 
+                level_key:      tuple = None,
+                **params
+                ):
+        '''
+        Flexible lookup in indicator_pool.
 
-            # 2. Proteção de Índice e extração do VALOR (coluna 1)
-            if i < len(data_array):
-                # data_array[i, 1] garante que pegamos o valor e não o timestamp
-                return data_array[i, 1] 
-            
-            return None # i fora do range deste indicador específico
+        Parameters
+        ----------
+        ind_key    : indicator name, e.g. "vol", "ma"
+        addr       : data address, e.g. "EURUSD", "@total_both"  (None = any)
+        level_key  : manager level tuple, e.g. ("portfolio",)    (None = any level)
+        **params   : optional param filters, e.g. window=21
 
-        except KeyError:
+        Returns
+        -------
+        Single np.ndarray  — when exactly 1 match
+        dict {pool_key: np.ndarray} — when multiple matches
+        None — when no match
+
+        Examples
+        --------
+        # All vol indicators regardless of level
+        self.get_ind("vol")
+
+        # vol for EURUSD in any level
+        self.get_ind("vol", addr="EURUSD")
+
+        # vol created by PSM only
+        self.get_ind("vol", level_key=("portfolio",))
+
+        # exact match: SSM AT15, @total_both, window=21
+        self.get_ind("vol", addr="@total_both",
+                     level_key=("op", "MA Trend Following", "AT15"), window=21)
+        '''
+        matches={}
+
+        for k, v in self.portfolio.indicator_pool.items():
+            # k = (level_parts..., ind_key, addr, param_k1, val1, ...)
+            # Find ind_key position — it's the first non-level element
+            # Structure: level_key + (ind_key, addr, params...)
+            # We search for ind_key anywhere after position 0
+
+            # Locate ind_key in the tuple
+            ind_pos = None
+            for pos, elem in enumerate(k):
+                if elem == ind_key:
+                    ind_pos = pos
+                    break
+            if ind_pos is None:
+                continue
+
+            # addr is always right after ind_key
+            k_addr = k[ind_pos + 1] if ind_pos + 1 < len(k) else None
+
+            # level_key is everything before ind_key
+            k_level = k[:ind_pos]
+
+            # params are everything after addr, in pairs
+            k_params_flat = k[ind_pos + 2:]
+            k_params = {k_params_flat[i]: k_params_flat[i + 1]
+                        for i in range(0, len(k_params_flat) - 1, 2)}
+
+            # Apply filters
+            if addr      and k_addr  != addr:       continue
+            if level_key and k_level != level_key:  continue
+            if params:
+                if not all(k_params.get(pk) == pv for pk, pv in params.items()):
+                    continue
+
+            matches[k] = v
+
+        if not matches:
             return None
-        except IndexError as e:
-            # Debug temporário para ver se o erro é aqui
-            # print(f"Erro de índice no indicador {ind_key} para o alvo {target}: {e}")
-            return None
-        
+        if len(matches) == 1:
+            return next(iter(matches.values()))
+        return matches
+
+
+
+
+
+
     '''
     
     def get_ind(self, ind_key, target, i, ps_name=None): # if ps_name=None returns all parsets

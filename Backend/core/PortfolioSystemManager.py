@@ -39,7 +39,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
 #||=========================================================================================||
 
-    def _default_pre_compute(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets) -> dict:
+    def _default_pre_compute(self, global_assets, timeline, aggr_ret, indicator_pool, param_sets, manager_level_key) -> dict:
         # By Default doesn't calculate anything else, but can be used to prepare signals or other stuff != indicators
         return indicator_pool
                        
@@ -57,8 +57,8 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         #ARRUMAR get_ind DEVE AJUSTAR A KEY AUTOMATICAMENTE E PUXAR POR NOME
 
         # Data 
-        vol = self.get_ind(ind_key="vol", target="@total_both", i=i, ps_name=None) 
-        if vol is not None: print(vol)
+        # vol = self.get_ind("vol", "@total_both", level_key=key) 
+        # if vol is not None: print(vol)
 
         # NOTE Modificar para ter acesso ao ind com e sem opção de tuple key
         #e/ou salvar com identificador de tuple (op, m, s, a)
