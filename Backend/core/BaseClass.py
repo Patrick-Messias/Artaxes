@@ -313,25 +313,76 @@ class BaseManager():
 
     # ── Global Func ───────────────────────────────────────────────────────
 
-    def get_ind(self, ind_key, target, i, ps_name=None): # if ps_name=None returns all parsets
-        # O(1) search, with parset ensemble support 
-        
-        try: # Direct O(1) access to global dict tuple (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
+
+
+
+    # 1. Passar i (idx númerico) para todos os SM/MM para acessar o indicador alinhado à timeline (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
+    # 2. Para o @each_{} salvar apenas com o nome do model ou adicionar o path completo para o resto?
+    # Adicionar tuplas para Indicadores, com cache na hora de calcular para evitar repetir
+
+    # Olhar e entender a sugestão do Claude
+
+
+
+
+
+    def get_ind(self, ind_key, target, i, ps_name=None):
+        try:
             ps_dict = self.portfolio.indicator_pool[ind_key][target]
-            print(ps_dict)
-            # Specific parset request case
+            
+            # 1. Seleciona o array correto (específico ou o único existente)
             if ps_name is not None:
-                return ps_dict[ps_name][i]
+                data_array = ps_dict[ps_name]
+            elif len(ps_dict) == 1:
+                data_array = next(iter(ps_dict.values()))
+            else:
+                # Caso múltiplos parsets e nenhum solicitado, retorna um dict de valores no ponto i
+                return {ps: (arr[i, 1] if i < len(arr) else None) for ps, arr in ps_dict.items()}
+
+            # 2. Proteção de Índice e extração do VALOR (coluna 1)
+            if i < len(data_array):
+                # data_array[i, 1] garante que pegamos o valor e não o timestamp
+                return data_array[i, 1] 
             
-            # Doesn't have a request but only 1 parset (ex: rsi_score = sum(1 for val in rsi.values() if val > 70))
-            if len(ps_dict) == 1:
-                return next(iter(ps_dict.values()))[i]
-            
-            # Case multiple parset and none specifically requested
-            return {ps: arr[i] for ps, arr in ps_dict.items()}
-        
-        except (KeyError, IndexError):
+            return None # i fora do range deste indicador específico
+
+        except KeyError:
             return None
+        except IndexError as e:
+            # Debug temporário para ver se o erro é aqui
+            # print(f"Erro de índice no indicador {ind_key} para o alvo {target}: {e}")
+            return None
+        
+    '''
+    
+    def get_ind(self, ind_key, target, i, ps_name=None): # if ps_name=None returns all parsets
+    # O(1) search, with parset ensemble support 
+    
+    try: # Direct O(1) access to global dict tuple (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
+        ps_dict = self.portfolio.indicator_pool[ind_key][target]
+
+        # Specific parset request case
+        if ps_name is not None:
+            return ps_dict[ps_name][i]
+        
+        # Doesn't have a request but only 1 parset (ex: rsi_score = sum(1 for val in rsi.values() if val > 70))
+        if len(ps_dict) == 1:
+            return next(iter(ps_dict.values()))[i]
+        
+        # Case multiple parset and none specifically requested
+        return {ps: arr[i] for ps, arr in ps_dict.items()}
+    
+    except (KeyError, IndexError):
+        return None
+    
+    
+    '''
+
+
+
+
+
+
         
     def get_data(self, key=None, lookback=1, data_type="aggr", side="BOTH"):
         # Aux method for managers to search data

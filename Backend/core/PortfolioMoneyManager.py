@@ -33,23 +33,23 @@ class PortfolioMoneyManager(MoneyManager): # Manages Model's risk and money mana
           
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
-    def _default_allocate(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
+    def _default_allocate(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_size(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
+    def _default_size(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_risk_guard(self, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
+    def _default_risk_guard(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key):
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
+    def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
 
         # Default uses aggr of models for Portfolio Level
         sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both")
 
-        hierarchy, indicator_pool, sim_data, port_returns = self.allocate(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns = self.size(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns = self.risk_guard(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns = self.allocate(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns = self.size(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns = self.risk_guard(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
         return hierarchy
 

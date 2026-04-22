@@ -244,11 +244,11 @@ class Portfolio(BaseClass, BaseManager):
         if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
             psm = m_map.get("managers", {}).get("psm")
             if psm and dt in psm_sch.get(p_name, set()):
-                hierarchy = psm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
+                hierarchy = psm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
                 #print("PSM")
             pmm = m_map.get("managers", {}).get("pmm")
             if pmm and dt in pmm_sch.get(p_name, set()):
-                hierarchy = pmm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
+                hierarchy = pmm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
                 #print("PMM")
 
         # Model and Strat Levels
@@ -268,10 +268,10 @@ class Portfolio(BaseClass, BaseManager):
                     mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
                     if msm and dt in msm_sch.get(m_key, set()): 
-                        hierarchy = msm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
+                        hierarchy = msm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
                         #print("msM")
                     if mmm and dt in mmm_sch.get(m_key, set()):
-                        hierarchy = mmm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
+                        hierarchy = mmm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
                         #print("mmM")
 
             # Strat level — executa apenas 1x por strat
@@ -283,10 +283,10 @@ class Portfolio(BaseClass, BaseManager):
                     smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
                     if ssm and dt in ssm_sch.get(s_key, set()):
-                        hierarchy = ssm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
+                        hierarchy = ssm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
                         #print("ssm")
                     if smm and dt in smm_sch.get(s_key, set()):
-                        hierarchy = smm.main(dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
+                        hierarchy = smm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
                         #print("smm")
         return hierarchy
 
@@ -922,7 +922,7 @@ if __name__ == "__main__":
             "param1": range(21, 21+1, 1),
         },
         indicators={
-            "vol": Volatility(asset="@each_both", timeframe="tick", 
+            "vol": Volatility(asset="@total_both", timeframe="tick", 
                               window="param1", aggr_days=True, 
                               price_col="pnl", min_periods="param1"),
             # "ema": MA(asset="EURUSD", timeframe="M15", 

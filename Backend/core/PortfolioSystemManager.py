@@ -45,7 +45,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
                        
     # ── Every Datetime [i] ───────────────────────────────────────────────
     
-    def _default_rank(self, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
+    def _default_rank(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
         # Rankea os modelos baseados na performance contida no DataFrame sim_data.
         # No nível de Portfólio, os 'filhos' são modelos.
         # Tentamos buscar 'models', se não existir, buscamos 'strats' (para reuso da lógica)
@@ -57,8 +57,9 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         #ARRUMAR get_ind DEVE AJUSTAR A KEY AUTOMATICAMENTE E PUXAR POR NOME
 
         # Data 
-        vol = self.get_ind(ind_key=key, target="vol", i=step_dt, ps_name=None) 
-        print(vol)
+        vol = self.get_ind(ind_key="vol", target="@total_both", i=i, ps_name=None) 
+        if vol is not None: print(vol)
+
         # NOTE Modificar para ter acesso ao ind com e sem opção de tuple key
         #e/ou salvar com identificador de tuple (op, m, s, a)
 
@@ -83,14 +84,14 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         hierarchy["models"] = ranked
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_filter(self, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
+    def _default_filter(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
         """
         Filtra entidades. Por padrão, mantém todas. 
         Pode ser expandido para remover modelos com drawdown excessivo usando o sim_data.
         """
         return hierarchy, indicator_pool, sim_data, port_returns 
 
-    def _default_rebalance(self, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
+    def _default_rebalance(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
         entities = hierarchy.get("models", [])
         if not entities:
             return hierarchy, indicator_pool, sim_data, port_returns
@@ -113,14 +114,14 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
         return hierarchy, indicator_pool, sim_data, port_returns
 
-    def _default_main(self, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
+    def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
         
         # Default uses aggr of models for Portfolio Level
         sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both") # NOTE MUST BE PORTF_AGGR NOT OPERA_AGGR NOTE # 
 
-        hierarchy, indicator_pool, sim_data, port_returns  = self.rank(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.filter(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.rebalance(step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy, indicator_pool, sim_data, port_returns  = self.rebalance(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
         return hierarchy
    
