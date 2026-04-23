@@ -82,19 +82,19 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         )
 
         hierarchy["models"] = ranked
-        return hierarchy, indicator_pool, sim_data, port_returns
+        return hierarchy
 
     def _default_filter(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
         """
         Filtra entidades. Por padrão, mantém todas. 
         Pode ser expandido para remover modelos com drawdown excessivo usando o sim_data.
         """
-        return hierarchy, indicator_pool, sim_data, port_returns 
+        return hierarchy 
 
     def _default_rebalance(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
         entities = hierarchy.get("models", [])
         if not entities:
-            return hierarchy, indicator_pool, sim_data, port_returns
+            return hierarchy
 
         # 1. Aplicar o corte (Slicing) - Se max_active for 3, pegamos os 3 melhores do ranking
         active_entities = entities
@@ -112,16 +112,16 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         # Atualizamos a lista de ativos para que apenas os selecionados processem ordens
         hierarchy["models"] = active_entities
 
-        return hierarchy, indicator_pool, sim_data, port_returns
+        return hierarchy
 
     def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
         
         # Default uses aggr of models for Portfolio Level
         sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both") # NOTE MUST BE PORTF_AGGR NOT OPERA_AGGR NOTE # 
 
-        hierarchy, indicator_pool, sim_data, port_returns  = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.rebalance(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.rebalance(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
         return hierarchy
    

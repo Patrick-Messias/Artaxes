@@ -25,13 +25,13 @@ class StratSystemManager(SystemManager):
         return indicator_pool
                        
     def _default_rank(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> Dict[str, float]:
-        return hierarchy, indicator_pool, sim_data, port_returns
+        return hierarchy
 
     def _default_filter(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
-        return hierarchy, indicator_pool, sim_data, port_returns # By default doesn't filter out any model
+        return hierarchy # By default doesn't filter out any model
 
     def _default_rebalance(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
-        return hierarchy, indicator_pool, sim_data, port_returns
+        return hierarchy
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
@@ -39,9 +39,9 @@ class StratSystemManager(SystemManager):
 
         sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both")
 
-        hierarchy, indicator_pool, sim_data, port_returns  = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy, indicator_pool, sim_data, port_returns  = self.rebalance(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.rebalance(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
         return hierarchy
 

@@ -409,59 +409,6 @@ class BaseManager():
             return next(iter(sliced_matches.values()))
         return sliced_matches
     
-    '''
-            for k, v in self.portfolio.indicator_pool.items():
-            # Locate ind_key in the tuple
-            ind_pos = None
-            for pos, elem in enumerate(k):
-                if elem == ind_key:
-                    ind_pos = pos
-                    break
-            if ind_pos is None:
-                continue
-
-            # addr is always right after ind_key
-            k_addr = k[ind_pos + 1] if ind_pos + 1 < len(k) else None
-
-            # level_key is everything before ind_key
-            k_level = k[:ind_pos]
-
-            # params are everything after addr, in pairs
-            k_params_flat = k[ind_pos + 2:]
-            k_params = {k_params_flat[i]: k_params_flat[i + 1]
-                        for i in range(0, len(k_params_flat) - 1, 2)}
-
-            # Apply filters
-            if addr      and k_addr  != addr:       continue
-            if level_key and k_level != level_key:  continue
-            if params:
-                if not all(k_params.get(pk) == pv for pk, pv in params.items()):
-                    continue
-
-            matches[k] = v
-
-        if not matches:
-            return None
-        
-        def _slice_data(data_array):
-            vals = data_array[:,1] if data_array.ndim > 1 else data_array
-
-            if idx_start is not None and idx_end is not None:
-                return vals[idx_start:idx_end]
-            elif idx_start is not None:
-                return vals[idx_start]
-            elif idx_end is not None:
-                return vals[:idx_end]
-            return vals
-        
-        # Applies slicing for all matches
-        sliced_matches = {k: _slice_data(v) for k, v in matches.items()}
-
-        if len(matches) == 1:
-            return next(iter(sliced_matches.values()))
-        return sliced_matches
-    '''
-
     def get_data(self, key=None, lookback=1, data_type="aggr", side="BOTH"):
         # Aux method for managers to search data
         if key is None: key = (self.portfolio,)

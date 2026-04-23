@@ -82,10 +82,10 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         # Returns ordered list of active models
         return self._call(self._fn_risk_guard, self._default_risk_guard, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
-    def main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
+    def main(self, i, step_dt, hierarchy: dict, key) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, i, step_dt, hierarchy, indicator_pool, port_returns, key)
+        return self._call(self._fn_main, self._default_main, i, step_dt, hierarchy, self.portfolio.indicator_pool, self.portfolio.portfolio_returns, key)
 
 #||=========================================================================================||
 

@@ -119,91 +119,15 @@ class Portfolio(BaseClass, BaseManager):
             import polars as pl
             import matplotlib as mpl # Import para colormaps novos
 
-            if i == int(len(self.datetime_timeline)-1):
+            if i == int(len(self.datetime_timeline)-4):
                 print("\n" + "="*80)
                 print("      DEBUG SYSTEM: INDICATOR HIERARCHY & LOOKUP TEST")
                 print("="*80)
-
                 for i, k in enumerate(list(self.indicator_pool.keys())):
                     print(f" Exemplo de Chave {i}: {k}")
                 print("="*80)
-
-                # 1. Timeline Check
-                timeline = self.datetime_timeline
-                total_steps = len(timeline)
-                idx_test = total_steps // 2 
-                print(f"[*] Timeline size: {total_steps} | Testing at index: {idx_test}")
-                print(f"[*] Current Timestamp: {timeline[idx_test]}")
-
-                # 2. Acesso Direto aos Managers (Navegação no dict aninhado)
-                msm = self.sm_mm_map["models"]["MA Trend Following"]["managers"]["msm"]
-                ssm = self.sm_mm_map["models"]["MA Trend Following"]["strats"]["AT15"]["managers"]["ssm"]
-                psm = self.sm_mm_map["managers"]["psm"]
-
-                # --- TESTE 1: NÍVEL ESTRATÉGIA (SSM) ---
-                print("\n--- [LEVEL: STRATEGY] ---")
-                # O level_key garante que pegaremos o indicador exclusivo DESTA estratégia, 
-                # evitando conflito com o @total_both do nível Portfolio.
-                lvl_strat = ('operation_test', 'MA Trend Following', 'AT15')
-                
-                ema_val = ssm.get_ind("ema", addr="EURUSD", idx_start=idx_test, window=21, level_key=lvl_strat)
-                vol_strat = ssm.get_ind("vol", addr="@total_both", idx_start=idx_test, window=21, level_key=lvl_strat)
-                ema_slice = ssm.get_ind("ema", addr="EURUSD", idx_start=idx_test-4, idx_end=idx_test+1, window=21, level_key=lvl_strat)
-                
-                print(f"  > Strat: AT15")
-                print(f"    - EMA (EURUSD) [i]: {ema_val}")
-                print(f"    - VOL (@total_both) [i]: {vol_strat}")
-                print(f"    - EMA Slice (last 5): {ema_slice}")
-
-                # --- TESTE 2: NÍVEL MODELO (MSM) ---
-                print("\n--- [LEVEL: MODEL] ---")
-                lvl_mod = ('operation_test', 'MA Trend Following')
-                
-                # Sem passar 'addr', a função trará todos os filhos mapeados (o efeito do @each_both)
-                all_vols = msm.get_ind("vol", idx_start=idx_test, window=21, level_key=lvl_mod)
-                
-                print(f"  > Model: MA Trend Following")
-                if isinstance(all_vols, dict):
-                    print(f"    - Found {len(all_vols)} individual volumes for children:")
-                    for pool_key, val in all_vols.items():
-                        # Encontra dinamicamente o alvo extraindo a string após 'vol' na tupla
-                        addr_target = pool_key[pool_key.index('vol') + 1]
-                        print(f"      - Child {addr_target}: {val}")
-                else:
-                    print(f"    - VOL value: {all_vols}")
-
-                # --- TESTE 3: NÍVEL PORTFOLIO (PSM) ---
-                print("\n--- [LEVEL: PORTFOLIO] ---")
-                # Tentamos pegar o manager. Se self.portfolio_system_manager for None, 
-                # usamos o próprio self (Portfolio) para chamar o get_ind se ele possuir o método.
-                
-                # Definimos o level_key baseado no que vimos no seu print do Pool (Chave 0)
-                # Se o nome do seu portfolio for dinâmico, use (self.name,)
-                lvl_port = ('Portfolio_Test',) 
-
-                # Note que aqui passamos window=21 para bater com a Chave 0
-                port_vol = psm.get_ind("vol", addr="@total_both", idx_start=idx_test, window=21, level_key=lvl_port)
-                
-                if port_vol is not None:
-                    print(f"  > Portfolio Name: {lvl_port[0]}")
-                    print(f"    - Global Portfolio VOL [i]: {port_vol}")
-                else:
-                    print(f"  [!] VOL não encontrado para o nível Portfolio.")
-                    print(f"      Tentando busca genérica sem level_key...")
-                    # Busca reserva: sem filtrar por level, apenas por ind_key e addr
-                    fallback_vol = self.get_ind("vol", addr="@total_both", idx_start=idx_test, window=21)
-                    print(f"    - Resultado busca genérica: {fallback_vol}")
-
-                # --- TESTE 4: TRATAMENTO DE ERROS ---
-                print("\n--- [ERROR HANDLING] ---")
-                if psm:
-                    ghost = psm.get_ind("indicador_fantasma", addr="BTC", idx_start=idx_test)
-                    print(f"  > Ghost Indicator (expected None): {ghost}")
-
-                print("\n" + "="*80)
            
-            
-            if i < 3 or i > len(self.datetime_timeline)-3: 
+            if i < 3 or i > len(self.datetime_timeline)-4: 
                 print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
             
         return True
@@ -215,7 +139,7 @@ class Portfolio(BaseClass, BaseManager):
     # XXX - ADICIONAR opção para pegar apenas 1 valor [i] do ind
     # XXX - Gerar nova DEBUG para testar todas as configurações do BaseClass para os indicadores
 
-    # - Eliminar todos envios de indicador_pool, usar self.portfolio.indicator_pool
+    # XXX - Eliminar todos envios de indicador_pool e portfolio_returns, usar self.portfolio.indicator_pool e self.portfolio.portfolio_returns
     # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
      
     # - Está crashando muito, procurar otimizar o código e talvez instanciar
@@ -239,11 +163,11 @@ class Portfolio(BaseClass, BaseManager):
         if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
             psm = m_map.get("managers", {}).get("psm")
             if psm and dt in psm_sch.get(p_name, set()):
-                hierarchy = psm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
+                hierarchy = psm.main(i, dt, hierarchy, p_key)
                 #print("PSM")
             pmm = m_map.get("managers", {}).get("pmm")
             if pmm and dt in pmm_sch.get(p_name, set()):
-                hierarchy = pmm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, p_key)
+                hierarchy = pmm.main(i, dt, hierarchy, p_key)
                 #print("PMM")
 
         # Model and Strat Levels
@@ -263,10 +187,10 @@ class Portfolio(BaseClass, BaseManager):
                     mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
                     if msm and dt in msm_sch.get(m_key, set()): 
-                        hierarchy = msm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
+                        hierarchy = msm.main(i, dt, hierarchy, m_key)
                         #print("msM")
                     if mmm and dt in mmm_sch.get(m_key, set()):
-                        hierarchy = mmm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, m_key)
+                        hierarchy = mmm.main(i, dt, hierarchy, m_key)
                         #print("mmM")
 
             # Strat level — executa apenas 1x por strat
@@ -278,10 +202,10 @@ class Portfolio(BaseClass, BaseManager):
                     smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
                     if ssm and dt in ssm_sch.get(s_key, set()):
-                        hierarchy = ssm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
+                        hierarchy = ssm.main(i, dt, hierarchy, s_key)
                         #print("ssm")
                     if smm and dt in smm_sch.get(s_key, set()):
-                        hierarchy = smm.main(i, dt, hierarchy, self.indicator_pool, self.portfolio_returns, s_key)
+                        hierarchy = smm.main(i, dt, hierarchy, s_key)
                         #print("smm")
         return hierarchy
 

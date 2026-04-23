@@ -78,10 +78,10 @@ class SystemManager(BaseClass, BaseManager):
         # Returns ordered list of active models
         return self._call(self._fn_rebalance, self._default_rebalance, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
-    def main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
+    def main(self, i, step_dt, hierarchy: dict, key) -> bool:
         # Called every datetime for each model and asset
         # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, i, step_dt, hierarchy, indicator_pool, port_returns, key)
+        return self._call(self._fn_main, self._default_main, i, step_dt, hierarchy, self.portfolio.indicator_pool, self.portfolio.portfolio_returns, key)
 
     # def __repr__(self):
     #     return f"<{self.__class__.__name__} name={self.name}>"
