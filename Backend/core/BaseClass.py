@@ -234,7 +234,6 @@ class BaseManager():
                     )
                     # Level prefix garantees PSM and SSM with same ind+addr+params are distinct
                     pool_key = manager_level_key + (ind_key, addr) + param_items
-                    print(f">>>>>>>>>>>>>>>>>>>>>>>>>>manager_level_key: {manager_level_key}, ind_key: {ind_key}, addr: {addr}, params: {eff_params}")
                     if pool_key not in indicator_pool:
                         data_df = self._resolve_data_source(
                             addr, ind_obj, aggr_ret, global_assets, timeline_df)
@@ -333,64 +332,85 @@ class BaseManager():
 
     # ── Global Func ───────────────────────────────────────────────────────
 
-
-
-
-    # 1. Passar i (idx númerico) para todos os SM/MM para acessar o indicador alinhado à timeline (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
-    # 2. Para o @each_{} salvar apenas com o nome do model ou adicionar o path completo para o resto?
-    # Adicionar tuplas para Indicadores, com cache na hora de calcular para evitar repetir
-
-    # Olhar e entender a sugestão do Claude
-
-
-
-
-
     def get_ind(self, 
                 ind_key:        str, 
                 addr:           str = None, 
+                idx_start:      int = None,
+                idx_end:        int = None,
                 level_key:      tuple = None,
                 **params
                 ):
-        '''
-        Flexible lookup in indicator_pool.
+        
+        # >>> Parameters
+        # ind_key    : indicator name, e.g. "vol", "ma"
+        # addr       : data address, e.g. "EURUSD", "@total_both"  (None = any)
+        # level_key  : manager level tuple, e.g. ("portfolio",)    (None = any level)
+        # idx_start  : starting index for slicing or single point lookup
+        # idx_end    : ending index for slicing
+        # **params   : optional param filters, e.g. window=21
+        # >>> Returns
+        # Single value/array — when exactly 1 match
+        # dict {pool_key: value/array} — when multiple matches
+        # None — when no match
 
-        Parameters
-        ----------
-        ind_key    : indicator name, e.g. "vol", "ma"
-        addr       : data address, e.g. "EURUSD", "@total_both"  (None = any)
-        level_key  : manager level tuple, e.g. ("portfolio",)    (None = any level)
-        **params   : optional param filters, e.g. window=21
-
-        Returns
-        -------
-        Single np.ndarray  — when exactly 1 match
-        dict {pool_key: np.ndarray} — when multiple matches
-        None — when no match
-
-        Examples
-        --------
-        # All vol indicators regardless of level
-        self.get_ind("vol")
-
-        # vol for EURUSD in any level
-        self.get_ind("vol", addr="EURUSD")
-
-        # vol created by PSM only
-        self.get_ind("vol", level_key=("portfolio",))
-
-        # exact match: SSM AT15, @total_both, window=21
-        self.get_ind("vol", addr="@total_both",
-                     level_key=("op", "MA Trend Following", "AT15"), window=21)
-        '''
         matches={}
 
         for k, v in self.portfolio.indicator_pool.items():
-            # k = (level_parts..., ind_key, addr, param_k1, val1, ...)
-            # Find ind_key position — it's the first non-level element
-            # Structure: level_key + (ind_key, addr, params...)
-            # We search for ind_key anywhere after position 0
+            # Searches ind_key position in the tuple
+            try:
+                ind_pos = k.index(ind_key)
+            except ValueError:
+                continue
 
+            # addr is always right after ind_key
+            k_addr = k[ind_pos + 1] if ind_pos + 1 < len(k) else None
+
+            # level_key is everything before ind_key
+            k_level = k[:ind_pos]
+
+            # params are everything after addr, in pairs
+            k_params_flat = k[ind_pos + 2:]
+            k_params = {str(k_params_flat[i]): str(k_params_flat[i + 1]) 
+                        for i in range(0, len(k_params_flat) - 1, 2)}
+
+            # Apply filters
+            if addr      and k_addr  != addr:       continue
+            if level_key and k_level != level_key:  continue
+            if params:
+                match_params = True
+                for pk, pv in params.items():
+                    if str(k_params.get(pk)) != str(pv):
+                        match_params = False
+                        break 
+                if not match_params:
+                    continue
+
+            matches[k] = v
+
+        if not matches:
+            print(f"    < [BaseManager.get_ind] Warning: No matches found for ind_key='{ind_key}', addr='{addr}', level_key='{level_key}', params={params}.")
+            return None
+        
+        def _slice_data(data_array):
+            vals = data_array[:,1] if data_array.ndim > 1 else data_array
+
+            if idx_start is not None and idx_end is not None:
+                return vals[idx_start:idx_end]
+            elif idx_start is not None:
+                return vals[idx_start]
+            elif idx_end is not None:
+                return vals[:idx_end]
+            return vals
+        
+        # Applies slicing for all matches
+        sliced_matches = {k: _slice_data(v) for k, v in matches.items()}
+        
+        if len(sliced_matches) == 1:
+            return next(iter(sliced_matches.values()))
+        return sliced_matches
+    
+    '''
+            for k, v in self.portfolio.indicator_pool.items():
             # Locate ind_key in the tuple
             ind_pos = None
             for pos, elem in enumerate(k):
@@ -422,46 +442,26 @@ class BaseManager():
 
         if not matches:
             return None
+        
+        def _slice_data(data_array):
+            vals = data_array[:,1] if data_array.ndim > 1 else data_array
+
+            if idx_start is not None and idx_end is not None:
+                return vals[idx_start:idx_end]
+            elif idx_start is not None:
+                return vals[idx_start]
+            elif idx_end is not None:
+                return vals[:idx_end]
+            return vals
+        
+        # Applies slicing for all matches
+        sliced_matches = {k: _slice_data(v) for k, v in matches.items()}
+
         if len(matches) == 1:
-            return next(iter(matches.values()))
-        return matches
-
-
-
-
-
-
-    '''
-    
-    def get_ind(self, ind_key, target, i, ps_name=None): # if ps_name=None returns all parsets
-    # O(1) search, with parset ensemble support 
-    
-    try: # Direct O(1) access to global dict tuple (ex: rsi = self.get_ind("rsi_14", "BTCUSD", i))
-        ps_dict = self.portfolio.indicator_pool[ind_key][target]
-
-        # Specific parset request case
-        if ps_name is not None:
-            return ps_dict[ps_name][i]
-        
-        # Doesn't have a request but only 1 parset (ex: rsi_score = sum(1 for val in rsi.values() if val > 70))
-        if len(ps_dict) == 1:
-            return next(iter(ps_dict.values()))[i]
-        
-        # Case multiple parset and none specifically requested
-        return {ps: arr[i] for ps, arr in ps_dict.items()}
-    
-    except (KeyError, IndexError):
-        return None
-    
-    
+            return next(iter(sliced_matches.values()))
+        return sliced_matches
     '''
 
-
-
-
-
-
-        
     def get_data(self, key=None, lookback=1, data_type="aggr", side="BOTH"):
         # Aux method for managers to search data
         if key is None: key = (self.portfolio,)

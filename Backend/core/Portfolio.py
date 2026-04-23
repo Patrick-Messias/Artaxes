@@ -17,9 +17,8 @@ class PortfolioParams():
     name: str = field(default_factory=lambda: f'model_{uuid.uuid4()}')
     portfolio_data: dict=None
     portfolio_parameters: dict=None 
-    portfolio_money_manager: Optional['PortfolioMoneyManager'] = None
-    portfolio_system_manager: Optional['PortfolioSystemManager'] = None
     sm_mm_map: dict = field(default_factory=dict) # SM/MM for all levels
+    global_assets: dict = None
 
     date_start: Optional[str] = None
     date_end: Optional[str] = None
@@ -35,9 +34,8 @@ class Portfolio(BaseClass, BaseManager):
         self.portfolio_data = portfolio_params.portfolio_data
         self.portfolio_parameters = portfolio_params.portfolio_parameters
 
-        self.portfolio_money_manager = portfolio_params.portfolio_money_manager
-        self.portfolio_system_manager = portfolio_params.portfolio_system_manager
         self.sm_mm_map = portfolio_params.sm_mm_map
+        self.global_assets = portfolio_params.global_assets if portfolio_params.global_assets is not None else Asset.load_all() # NOTE Deletar futuramente 
 
         self.date_start = portfolio_params.date_start
         self.date_end = portfolio_params.date_end
@@ -48,7 +46,6 @@ class Portfolio(BaseClass, BaseManager):
 
         self.portfolio_returns: dict={}
         self.sim_data: dict= {}
-        self.global_assets = Asset.load_all()
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
     
         
@@ -123,88 +120,113 @@ class Portfolio(BaseClass, BaseManager):
             import matplotlib as mpl # Import para colormaps novos
 
             if i == int(len(self.datetime_timeline)-1):
+                print("\n" + "="*80)
+                print("      DEBUG SYSTEM: INDICATOR HIERARCHY & LOOKUP TEST")
+                print("="*80)
 
-                print(f"\n{'#'*20} ANALYTICS: INDICATOR POOL {'#'*20}")
-                print(f"Manager calling: {self.name}")
-                print(f"Total indicators types in pool: {len(self.indicator_pool)}")
+                for i, k in enumerate(list(self.indicator_pool.keys())):
+                    print(f" Exemplo de Chave {i}: {k}")
+                print("="*80)
 
-                for ind_key, value in self.indicator_pool.items():
-                    print(f"Indicator: {ind_key}")
-                    print(f"value: {value[-1]}")
-                            
-                print(f"\n{'#'*60}\n")
+                # 1. Timeline Check
+                timeline = self.datetime_timeline
+                total_steps = len(timeline)
+                idx_test = total_steps // 2 
+                print(f"[*] Timeline size: {total_steps} | Testing at index: {idx_test}")
+                print(f"[*] Current Timestamp: {timeline[idx_test]}")
 
-                print(f"\n{'='*30} DEBUG FINAL: INDICADORES & PERFORMANCE {'='*30}")
+                # 2. Acesso Direto aos Managers (Navegação no dict aninhado)
+                msm = self.sm_mm_map["models"]["MA Trend Following"]["managers"]["msm"]
+                ssm = self.sm_mm_map["models"]["MA Trend Following"]["strats"]["AT15"]["managers"]["ssm"]
+                psm = self.sm_mm_map["managers"]["psm"]
+
+                # --- TESTE 1: NÍVEL ESTRATÉGIA (SSM) ---
+                print("\n--- [LEVEL: STRATEGY] ---")
+                # O level_key garante que pegaremos o indicador exclusivo DESTA estratégia, 
+                # evitando conflito com o @total_both do nível Portfolio.
+                lvl_strat = ('operation_test', 'MA Trend Following', 'AT15')
                 
-                port_key = (self.name,) 
-                side_to_plot = "both"
+                ema_val = ssm.get_ind("ema", addr="EURUSD", idx_start=idx_test, window=21, level_key=lvl_strat)
+                vol_strat = ssm.get_ind("vol", addr="@total_both", idx_start=idx_test, window=21, level_key=lvl_strat)
+                ema_slice = ssm.get_ind("ema", addr="EURUSD", idx_start=idx_test-4, idx_end=idx_test+1, window=21, level_key=lvl_strat)
                 
-                if port_key in self.sim_data and side_to_plot in self.sim_data[port_key]:
-                    aggr_info = self.sim_data[port_key][side_to_plot]
-                    matrix = aggr_info["data"]
-                    cols = aggr_info["cols"]
-                    df_plot = pl.DataFrame(matrix, schema=cols).with_columns(
-                        pl.Series("datetime", self.datetime_timeline)
-                    )
+                print(f"  > Strat: AT15")
+                print(f"    - EMA (EURUSD) [i]: {ema_val}")
+                print(f"    - VOL (@total_both) [i]: {vol_strat}")
+                print(f"    - EMA Slice (last 5): {ema_slice}")
 
-                    plt.style.use('dark_background')
-                    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), sharex=True, 
-                                                    gridspec_kw={'height_ratios': [2, 1]})
+                # --- TESTE 2: NÍVEL MODELO (MSM) ---
+                print("\n--- [LEVEL: MODEL] ---")
+                lvl_mod = ('operation_test', 'MA Trend Following')
+                
+                # Sem passar 'addr', a função trará todos os filhos mapeados (o efeito do @each_both)
+                all_vols = msm.get_ind("vol", idx_start=idx_test, window=21, level_key=lvl_mod)
+                
+                print(f"  > Model: MA Trend Following")
+                if isinstance(all_vols, dict):
+                    print(f"    - Found {len(all_vols)} individual volumes for children:")
+                    for pool_key, val in all_vols.items():
+                        # Encontra dinamicamente o alvo extraindo a string após 'vol' na tupla
+                        addr_target = pool_key[pool_key.index('vol') + 1]
+                        print(f"      - Child {addr_target}: {val}")
+                else:
+                    print(f"    - VOL value: {all_vols}")
 
-                    # --- PLOT EQUITY ---
-                    for model_name in cols:
-                        equity_curve = df_plot.get_column(model_name).cum_sum()
-                        ax1.plot(df_plot['datetime'], equity_curve, label=f"Model: {model_name}", alpha=0.7)
+                # --- TESTE 3: NÍVEL PORTFOLIO (PSM) ---
+                print("\n--- [LEVEL: PORTFOLIO] ---")
+                # Tentamos pegar o manager. Se self.portfolio_system_manager for None, 
+                # usamos o próprio self (Portfolio) para chamar o get_ind se ele possuir o método.
+                
+                # Definimos o level_key baseado no que vimos no seu print do Pool (Chave 0)
+                # Se o nome do seu portfolio for dinâmico, use (self.name,)
+                lvl_port = ('Portfolio_Test',) 
 
-                    portfolio_total_equity = df_plot.select(pl.sum_horizontal(cols)).to_series().cum_sum()
-                    ax1.plot(df_plot['datetime'], portfolio_total_equity, label="TOTAL", color='white', lw=2, ls='--')
-                    
-                    # Legenda do Equity mais compacta
-                    ax1.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize='xx-small', handlelength=1)
+                # Note que aqui passamos window=21 para bater com a Chave 0
+                port_vol = psm.get_ind("vol", addr="@total_both", idx_start=idx_test, window=21, level_key=lvl_port)
+                
+                if port_vol is not None:
+                    print(f"  > Portfolio Name: {lvl_port[0]}")
+                    print(f"    - Global Portfolio VOL [i]: {port_vol}")
+                else:
+                    print(f"  [!] VOL não encontrado para o nível Portfolio.")
+                    print(f"      Tentando busca genérica sem level_key...")
+                    # Busca reserva: sem filtrar por level, apenas por ind_key e addr
+                    fallback_vol = self.get_ind("vol", addr="@total_both", idx_start=idx_test, window=21)
+                    print(f"    - Resultado busca genérica: {fallback_vol}")
 
-                    # --- PLOT INDICADORES ---
-                    cmap = mpl.colormaps['tab20']
-                    colors = cmap(np.linspace(0, 1, 20))
-                    c_idx = 0
-                    has_indicators = False
-                    plotted_keys = set() 
+                # --- TESTE 4: TRATAMENTO DE ERROS ---
+                print("\n--- [ERROR HANDLING] ---")
+                if psm:
+                    ghost = psm.get_ind("indicador_fantasma", addr="BTC", idx_start=idx_test)
+                    print(f"  > Ghost Indicator (expected None): {ghost}")
 
-                    for pool_key, data in self.indicator_pool.items():
-                        # pool_key = (level_parts..., ind_key, addr, params...)
-                        # Encontra ind_key: primeiro elemento que é string e não parece ser um name/op
-                        # Mais simples: usa get_ind ou apenas plota todos diretamente
-                        
-                        unique_key = str(pool_key)
-                        if unique_key not in plotted_keys:
-                            has_indicators = True
-                            
-                            # Label legível: pega ind_key e addr da key
-                            # ind_key está depois do level — localiza pelo padrão
-                            # Por ora, usa os últimos elementos antes dos params
-                            label = " | ".join(str(x) for x in pool_key[:4])  # level + ind + addr
-                            
-                            plot_data = data[:, 1] if data.ndim > 1 else data
-                            ax2.plot(self.datetime_timeline, plot_data, label=label, color=colors[c_idx % 20])
-                            plotted_keys.add(unique_key)
-                            c_idx += 1
-
-                    if has_indicators:
-                        # Legenda ultra compacta para os indicadores
-                        ax2.legend(loc='upper left', bbox_to_anchor=(1, 1), 
-                                fontsize='xx-small', handlelength=0.8, borderaxespad=0.5)
-                        ax2.set_title("Indicadores Calculados", color='cyan', fontsize=10)
-                    else:
-                        ax2.set_title("Nenhum indicador encontrado no Pool", color='red', fontsize=10)
-
-                    plt.tight_layout()
-                    plt.show()
-            
+                print("\n" + "="*80)
            
             
             if i < 3 or i > len(self.datetime_timeline)-3: 
                 print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
             
         return True
+    
+
+
+
+
+    # XXX - ADICIONAR opção para pegar apenas 1 valor [i] do ind
+    # XXX - Gerar nova DEBUG para testar todas as configurações do BaseClass para os indicadores
+
+    # - Eliminar todos envios de indicador_pool, usar self.portfolio.indicator_pool
+    # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
+     
+    # - Está crashando muito, procurar otimizar o código e talvez instanciar
+    # - Para otimizar, talvez gerar parquet de aggr no Operation e carregar direto
+    # - Salvar ind em parquet?
+
+
+
+
+
+
     
     # ── Portfolio Defs ───────────────────────────────────────────────
 
@@ -696,11 +718,12 @@ class Portfolio(BaseClass, BaseManager):
 
     # PEGAR NOS INDICADORES PORQUE SM_ASSETS SÓ SERVE PRA INDICADORES E TEM TF DEFINIDO JÁ TMB
     def _get_all_sm_ind_datetimes(self, data_source="local"):
-        assets = Asset.load_all() # NOTE Deletar futuramente
+        assets = self.global_assets #Asset.load_all() # NOTE Deletar futuramente
         unique_ind_dts = set()
         repeated_assets = set()
 
-        sm_inds = self.portfolio_system_manager.indicators if (self.portfolio_system_manager and self.portfolio_system_manager.indicators) else {}
+        psm = self.sm_mm_map.get("managers", {}).get("psm")
+        sm_inds = psm.indicators if (psm and psm.indicators) else {}
         if sm_inds:
             for ind_name, ind_obj in sm_inds.items():
                 tf = ind_obj.timeframe
@@ -718,7 +741,7 @@ class Portfolio(BaseClass, BaseManager):
 
                 # Else gets each asset defined in assets and not in repeated_assets
                 else:
-                    assets = self.portfolio_system_manager.assets if self.portfolio_system_manager and self.portfolio_system_manager.assets else []
+                    assets = psm.assets if psm and psm.assets else []
                     for asset_name in assets:
                         if asset_name not in repeated_assets:
                             asset_obj = self.global_assets.get(asset_name)
@@ -729,11 +752,12 @@ class Portfolio(BaseClass, BaseManager):
         return unique_ind_dts
     
     def _get_all_mm_ind_datetimes(self, data_source="local"):
-        assets = Asset.load_all() # NOTE Deletar futuramente
+        assets = self.global_assets #Asset.load_all() # NOTE Deletar futuramente
         unique_ind_dts = set()
         repeated_assets = set()
 
-        mm_inds = self.portfolio_money_manager.indicators if (self.portfolio_money_manager and self.portfolio_money_manager.indicators) else {}
+        pmm = self.sm_mm_map.get("managers", {}).get("pmm")
+        mm_inds = pmm.indicators if (pmm and pmm.indicators) else {}
         if mm_inds:
             for ind_name, ind_obj in mm_inds.items():
                 tf = ind_obj.timeframe
@@ -751,7 +775,7 @@ class Portfolio(BaseClass, BaseManager):
 
                 # Else gets each asset defined in assets and not in repeated_assets
                 else:
-                    assets = self.portfolio_money_manager.assets if self.portfolio_money_manager and self.portfolio_money_manager.assets else []
+                    assets = pmm.assets if pmm and pmm.assets else []
                     for asset_name in assets:
                         if asset_name not in repeated_assets:
                             asset_obj = assets.get(asset_name)
@@ -891,8 +915,8 @@ if __name__ == "__main__":
             "vol": Volatility(asset="@total_both", timeframe="tick", 
                               window="param1", aggr_days=True, 
                               price_col="pnl", min_periods="param1"),
-            # "ema": MA(asset="EURUSD", timeframe="M15", 
-            #           window="param1", ma_type="ema", price_col="close"),
+            "ema": MA(asset="EURUSD", timeframe="M15", 
+                      window="param1", ma_type="ema", price_col="close"),
         },
     ))
 
@@ -956,12 +980,12 @@ if __name__ == "__main__":
     portfolio_global_parameters = {
         "capital": 100000.0,
     }
-
     portfolio = Portfolio(PortfolioParams(
         name="Portfolio_Test",
         portfolio_data=portfolio_data,
         portfolio_parameters=portfolio_global_parameters,
-        sm_mm_map=sm_mm_map,  
+        sm_mm_map=sm_mm_map, 
+        global_assets=global_assets, 
     ))
 
     portfolio._run()
@@ -1076,48 +1100,6 @@ if __name__ == "__main__":
 
 
 
-'''
-    def _get_all_op_asset_datetimes(self, data_source="local"):
-        assets = Asset.load_all() # NOTE Deletar futuramente
-        storage = Storage(base_path=self.data_storage_base_path)
-        unique_assets_dts = set()
-
-        for op_name, _, m_name, _, _, _, a_name, _ in self._iter_portfolio_data():
-            meta = storage.load_operation_meta(op_name)
-            model_meta = meta.get("models", {}).get(m_name, {})
-
-            tf = model_meta.get("execution_timeframe", meta.get("operation_timeframe", None))
-            if tf is None:
-                print(f"< [Error] No timeframe found for Operation: {op_name}, Model: {m_name}. Skipping Asset: {a_name}")
-                continue
-            date_start = model_meta.get("date_start")
-            date_end = model_meta.get("date_end")
-
-            asset_obj = assets.get(a_name)
-            asset_df = asset_obj.load(tf, data_source, date_start, date_end)
-
-            #Adds to unique
-            self.datetime_timeline.update(asset_df["datetime"])
-
-        return unique_assets_dts
-
-        
-    def _map_all_unique_datetimes(self, external_dts=None):
-        unique_dts = set()
-        
-        if external_dts:
-            unique_dts.update(external_dts)
-
-        # Se houver indicadores globais que não estão nos arquivos de PnL
-        if self.portfolio_system_manager and self.portfolio_system_manager.indicators:
-            unique_dts.update(self._get_all_sm_ind_datetimes())
-
-        self.datetime_timeline = sorted(list(unique_dts))
-        
-        # Print de conferência
-        if self.datetime_timeline:
-            print(f"> Timeline: {self.datetime_timeline[0]} até {self.datetime_timeline[-1]}")
-'''
 
 
 
