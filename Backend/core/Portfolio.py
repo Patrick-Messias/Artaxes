@@ -51,9 +51,8 @@ class Portfolio(BaseClass, BaseManager):
         
     def _simulation(self):
         # 1 - Init, populating sim_data
-        sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
-
-        active_positions = {} 
+        self.sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
+        self.active_positions = {} 
         self.hierarchy = {}
         self.portfolio_returns = {}
         self.indicator_pool = {}
@@ -81,7 +80,7 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
             
             # Exits at [i] open
-            for idf, pos_info in active_positions.items():
+            for idf, pos_info in self.active_positions.items():
                 pass
 
             #||=====================================================================================||#
@@ -105,7 +104,7 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
             
             # Updates PnL of open positions at [i] ends in previous step
-            #update_func_to_use(step_dt, active_positions)
+            #update_func_to_use(step_dt, self.active_positions)
 
             #||=====================================================================================||#
             
@@ -128,7 +127,7 @@ class Portfolio(BaseClass, BaseManager):
                 print("="*80)
            
             if i < 3 or i > len(self.datetime_timeline)-4: 
-                print(f"> {step_dt} - Portfolio PnL: {sim_current_equity:.2f}")
+                print(f"> {step_dt} - Portfolio PnL: {self.sim_current_equity:.2f}")
             
         return True
     
@@ -209,8 +208,8 @@ class Portfolio(BaseClass, BaseManager):
                         #print("smm")
         return True
 
-    def _update_pos_with_backtest_ret(self, step_dt, active_positions):
-        for idf, pos_info in active_positions.items():
+    def _update_pos_with_backtest_ret(self, step_dt):
+        for idf, pos_info in self.active_positions.items():
             # ifs       = (op, mod, strat, asset)
             # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
             tid = pos_info["id"]
@@ -231,7 +230,7 @@ class Portfolio(BaseClass, BaseManager):
             step_perc_total += pos_perc_port    # perc accumulated in this datetime
 
             # PnL
-            pos_pnl_port = sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
+            pos_pnl_port = self.sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
             step_pnl_nominal_total += pos_pnl_port # pnl accumulated in this datetime
 
             # Strat Returns
@@ -243,13 +242,13 @@ class Portfolio(BaseClass, BaseManager):
             }
 
         # Updates global
-        sim_current_equity += step_pnl_nominal_total
+        self.sim_current_equity += step_pnl_nominal_total
         self.portfolio_returns[step_dt] = {
             "portfolio_perc":    step_perc_total,
             "portfolio_pnl": step_pnl_nominal_total
         }
 
-    def _update_pos_with_assets_ret(self, step_dt, active_positions):
+    def _update_pos_with_assets_ret(self, step_dt):
         pass
 
     # ── Data Handling ───────────────────────────────────────────────
@@ -736,7 +735,7 @@ class Portfolio(BaseClass, BaseManager):
 
     # -> Atualização PnL:
     # - Cada posição aberta != da aberta no datetime vai atualizar o PnL, verificando o MAE e MFE para decidir se está tudo bem, atualiza lote (def que pode ser enviada, default None)
-    # - Para cada trade em active_positions deve puxar os dados do trades_matrix, verificar se precisa atualizar o lot (diminuir ou aumentar, pode ser uma def enviada, default None, mantêm mesma coisa até saida) para saber o PnL * Lot atualizado
+    # - Para cada trade em self.active_positions deve puxar os dados do trades_matrix, verificar se precisa atualizar o lot (diminuir ou aumentar, pode ser uma def enviada, default None, mantêm mesma coisa até saida) para saber o PnL * Lot atualizado
     # - Criando e enviando a imagem do datetime para self.portfolio_returns
 
 
