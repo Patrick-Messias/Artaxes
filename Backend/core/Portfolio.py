@@ -54,7 +54,7 @@ class Portfolio(BaseClass, BaseManager):
         sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
 
         active_positions = {} 
-        hierarchy = {}
+        self.hierarchy = {}
         self.portfolio_returns = {}
         self.indicator_pool = {}
         self.current_idx = 0
@@ -87,7 +87,7 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
             
             # Entries at [i] open - MM Tactical Level - Bottom Up (MM can change with exit/entry)
-            for idf, pos_info in hierarchy.items():
+            for idf, pos_info in self.hierarchy.items():
                 if portfolio_simulation_with_backtest_results: pass
                     
                     # B.1. Calculates All SM and MM for each item in hierarchy
@@ -110,7 +110,7 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
             
             # Updates System and Money Managers - Top Down - at [i] ends
-            hierarchy = self._system_money_managers(i, step_dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
+            self._system_money_managers(i, step_dt, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
                                                     
             #||=====================================================================================||#
                 
@@ -138,10 +138,10 @@ class Portfolio(BaseClass, BaseManager):
 
     # XXX - ADICIONAR opção para pegar apenas 1 valor [i] do ind
     # XXX - Gerar nova DEBUG para testar todas as configurações do BaseClass para os indicadores
-
     # XXX - Eliminar todos envios de indicador_pool e portfolio_returns, usar self.portfolio.indicator_pool e self.portfolio.portfolio_returns
     # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
-     
+    # XXX - Transformar hierarchy em self.hierarchy no nível Portfolio.py, assim com self.indicator_pool
+    # - Desenvolvendo SM/MM
     # - Está crashando muito, procurar otimizar o código e talvez instanciar
     # - Para otimizar, talvez gerar parquet de aggr no Operation e carregar direto
     # - Salvar ind em parquet?
@@ -154,7 +154,7 @@ class Portfolio(BaseClass, BaseManager):
     
     # ── Portfolio Defs ───────────────────────────────────────────────
 
-    def _system_money_managers(self, i, dt, hierarchy, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
+    def _system_money_managers(self, i, dt, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
         m_map = self.sm_mm_map
         p_name = self.name
         p_key = (p_name,)
@@ -163,11 +163,11 @@ class Portfolio(BaseClass, BaseManager):
         if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
             psm = m_map.get("managers", {}).get("psm")
             if psm and dt in psm_sch.get(p_name, set()):
-                hierarchy = psm.main(i, dt, hierarchy, p_key)
+                self.hierarchy = psm.main(i, dt, p_key)
                 #print("PSM")
             pmm = m_map.get("managers", {}).get("pmm")
             if pmm and dt in pmm_sch.get(p_name, set()):
-                hierarchy = pmm.main(i, dt, hierarchy, p_key)
+                self.hierarchy = pmm.main(i, dt, p_key)
                 #print("PMM")
 
         # Model and Strat Levels
@@ -187,10 +187,10 @@ class Portfolio(BaseClass, BaseManager):
                     mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
                     if msm and dt in msm_sch.get(m_key, set()): 
-                        hierarchy = msm.main(i, dt, hierarchy, m_key)
+                        self.hierarchy = msm.main(i, dt, m_key)
                         #print("msM")
                     if mmm and dt in mmm_sch.get(m_key, set()):
-                        hierarchy = mmm.main(i, dt, hierarchy, m_key)
+                        self.hierarchy = mmm.main(i, dt, m_key)
                         #print("mmM")
 
             # Strat level — executa apenas 1x por strat
@@ -202,12 +202,12 @@ class Portfolio(BaseClass, BaseManager):
                     smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
                     if ssm and dt in ssm_sch.get(s_key, set()):
-                        hierarchy = ssm.main(i, dt, hierarchy, s_key)
+                        self.hierarchy = ssm.main(i, dt, s_key)
                         #print("ssm")
                     if smm and dt in smm_sch.get(s_key, set()):
-                        hierarchy = smm.main(i, dt, hierarchy, s_key)
+                        self.hierarchy = smm.main(i, dt, s_key)
                         #print("smm")
-        return hierarchy
+        return True
 
     def _update_pos_with_backtest_ret(self, step_dt, active_positions):
         for idf, pos_info in active_positions.items():
@@ -526,8 +526,6 @@ class Portfolio(BaseClass, BaseManager):
 
         return True
     
-
-
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
         psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
         params_pool = {}
@@ -636,8 +634,6 @@ class Portfolio(BaseClass, BaseManager):
 
         return params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
 
-
-    
     # ── Datetime timeline mapping ───────────────────────────────────────────────
 
     # PEGAR NOS INDICADORES PORQUE SM_ASSETS SÓ SERVE PRA INDICADORES E TEM TF DEFINIDO JÁ TMB
