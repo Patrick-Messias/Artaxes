@@ -527,6 +527,69 @@ class Portfolio(BaseClass, BaseManager):
 
         return True
     
+    def _init_hierarchy(self):
+        n_models = len({m for _, _, m, *_ in self._iter_portfolio_data()})
+        hcy = {}
+
+        portf_side = self.sm_mm_map.get("managers", {}).get("side", 'both')
+        portf_sep_side = self.sm_mm_map.get("managers", {}).get("separate_ls", False)
+
+        for op_name, _, m_name, _, s_name, _, a_name, _ in self._iter_portfolio_data():
+            m_key = (m_name,)
+            s_key = (m_name, s_name)
+            a_key = (m_name, s_name, a_name)
+
+            # Model Level
+            model_config = self.sm_mm_map.get("models", {}).get(m_name, {})
+            model_side = model_config.get("managers", {}).get("side", portf_side)
+            model_sep_side = model_config.get("managers", {}).get("separate_ls", portf_sep_side)
+            if m_key not in hcy:
+                hcy[m_key] = {
+                    "active":   True,
+                    "side": model_side,
+                    "separate_ls": model_sep_side,
+                    "weight":   1.0 / n_models,
+                    "capital":  0.0,   
+                    "exposure": 0.0,
+                    "score":    0.0,
+                    "strats":   {}
+                }
+
+            # Strat level
+            strat_config = self.sm_mm_map.get("strats", {}).get(s_name, {})
+            strat_side = strat_config.get("managers", {}).get("side", portf_side)
+            strat_sep_side = strat_config.get("managers", {}).get("separate_ls", portf_sep_side)
+            if s_key not in hcy[m_key]["strats"]:
+                hcy[m_key]["strats"][s_key] = {
+                    "active":   True,
+                    "side": strat_side,
+                    "separate_ls": strat_sep_side,
+                    "weight":   1.0,
+                    "capital":  0.0,
+                    "exposure": 0.0,
+                    "score":    0.0,
+                    "assets":   {}
+                }
+
+            # Asset level
+            config = self.portfolio_data[op_name][m_name][s_name][a_name]
+            asset_side = config.get("side", portf_side) if isinstance(config, dict) else portf_side
+            asset_sep_side = config.get("analise_long_short_separate", portf_sep_side) if isinstance(config, dict) else portf_sep_side
+            if a_key not in hcy[m_key]["strats"][s_key]["assets"]:
+                hcy[m_key]["strats"][s_key]["assets"][a_key] = {
+                    "active":      True,
+                    "side":        asset_side,
+                    "separate_ls": asset_sep_side,
+                    "weight":      1.0,
+                    "capital":     0.0,
+                    "exposure":    0.0,
+                    "score":       0.0,
+                    "wf_ids": {},
+                }
+
+        self.hierarchy = hcy
+        return True
+
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
         psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
         params_pool = {}
@@ -724,6 +787,7 @@ class Portfolio(BaseClass, BaseManager):
         # Data Init - Loads data, saves unique datetimes and generates aggr results
         print("     > Populating Portfolio Data from Database")
         self._load_selected_saved_returns_data()
+        self._init_hierarchy()
 
         # Runs Portfolio Simulation
         print("     > Executing Portfolio Simulation")
@@ -859,18 +923,18 @@ if __name__ == "__main__":
 
     # SM/MM mapeados por nível — referenciados durante a simulação
     sm_mm_map = {
-        "managers": {"psm": psm, "pmm": pmm, "separate_ls": True},
+        "managers": {"psm": psm, "pmm": pmm, "separate_ls": True, "side": 'both'},
         "models": {
             "MA Trend Following": {
-                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True},
+                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
                 "strats": {
-                    "AT15": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True}}
+                    "AT15": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both'}}
                 }
             },
             "RS Mean Reversion": {
-                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True},
+                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
                 "strats": {
-                    "AT16": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True}}
+                    "AT16": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both'}}
                 }
             }
         }
