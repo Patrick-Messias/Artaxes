@@ -1,95 +1,94 @@
-import pandas as pd, numpy as np
-from Indicator import Indicator
+import polars as pl, numpy as np
+from typing import Union
+from Backend.core.Indicator import Indicator
 
 class HURST(Indicator):
+    # Indicador Hurst Exponent.
+    # Avalia se a série tem comportamento de reversão à média (H < 0.5), 
+    # passeio aleatório (H = 0.5) ou tendência (H > 0.5).
+    #
+    # Métodos:
+    #     "simple" -> Rescaled Range simplificado.
+    #     "rs"     -> Rescaled Range clássico com polyfit.
+
     def __init__(self, asset=None, timeframe=None, **params):
-        super().__init__(asset, timeframe, **params)
+        defaults = {
+            'window': 63, 
+            'calc_type': 'simple',      # Mudado de 'type' para evitar conflito com palavra reservada do Python
+            'data_target': 'pct_change', # O que calcular: 'close', 'pct_change', 'log_returns'
+            'price_col': 'close'         # Coluna base para puxar do DataFrame
+        }
+        defaults.update(params)
+        super().__init__(asset, timeframe, **defaults)
+        self.name = "hurst"
 
-    def calculate(self, df: pd.DataFrame) -> pd.Series:
-        price_col = self.params.get('price_col', 'pct_change')
-        window = self.params.get('window', 63)
-        calc_type = self.params.get('type', 'simple')
+    def _calculate_logic(self, data: Union[pl.DataFrame, pl.Series], **kwargs) -> pl.Series:
+        window = int(kwargs.get('window', 63))
+        calc_type = str(kwargs.get('calc_type', 'simple')).lower()
+        data_target = str(kwargs.get('data_target', 'pct_change')).lower()
+        price_col = str(kwargs.get('price_col', 'close'))
 
-        def simple_hurst(x):
-            n = len(x)
-            if n < 2:
-                return np.nan
-            deviations = x - np.mean(x)
+        # 1. Extração da Série base (idêntico ao VAR)
+        if isinstance(data, pl.Series):
+            s = data
+        elif isinstance(data, pl.DataFrame):
+            if price_col not in data.columns:
+                price_col = next((c for c in data.columns if c.lower() not in ['ts', 'datetime']), data.columns[0])
+            s = data.get_column(price_col)
+        else:
+            raise ValueError(f"HURST: Type not supported: {type(data)}")
+
+        # 2. Transformação dos Dados (Retornos, Log, ou Preço Puro)
+        if data_target == 'pct_change':
+            s = s.pct_change().fill_null(0.0)
+        elif data_target == 'log_returns':
+            # log_returns = ln(P_t / P_{t-1})
+            s = s.log().diff().fill_null(0.0)
+        elif data_target == 'close':
+            pass # Usa a série pura
+        else:
+            raise ValueError(f"HURST: Transformação não suportada: {data_target}")
+
+        # 3. Funções Numéricas Otimizadas para a Janela
+        def simple_hurst(window_series: pl.Series) -> float:
+            arr = window_series.to_numpy()
+            n = len(arr)
+            if n < 2: return float('nan')
+            
+            deviations = arr - np.mean(arr)
             cumulative_dev = np.cumsum(deviations)
             R = np.max(cumulative_dev) - np.min(cumulative_dev)
-            S = np.std(x, ddof=1)
-            if S == 0 or R == 0:
-                return 0.5
-            return np.log(R/S) / np.log(n)
+            S = np.std(arr, ddof=1)
+            
+            if S == 0 or R == 0: return 0.5
+            return float(np.log(R/S) / np.log(n))
 
-        def hurst_rs(x, min_lag=2, max_lag=20):
-            n = len(x)
-            lags = range(min_lag, min(max_lag, n//2))
-            if len(lags) < 2:
-                return np.nan
-            tau = [np.std(np.subtract(x[lag:], x[:-lag])) for lag in lags]
-            poly = np.polyfit(np.log(lags), np.log(tau), 1)
-            return poly[0] * 2.0
+        def hurst_rs(window_series: pl.Series) -> float:
+            arr = window_series.to_numpy()
+            n = len(arr)
+            min_lag, max_lag = 2, 20
+            lags = range(min_lag, min(max_lag, n // 2))
+            
+            if len(lags) < 2: return float('nan')
+            
+            tau = [np.std(np.subtract(arr[lag:], arr[:-lag])) for lag in lags]
+            
+            # Proteção contra erros matemáticos (ex: série flat gerando log(0))
+            with np.errstate(divide='ignore', invalid='ignore'):
+                try:
+                    poly = np.polyfit(np.log(lags), np.log(tau), 1)
+                    return float(poly[0] * 2.0)
+                except:
+                    return float('nan')
 
-        if price_col == 'pct_change' and 'pct_change' not in df.columns:
-            price_series = df['close'].pct_change().fillna(0)
-        elif price_col == 'close':
-            price_series = df['close']
-        elif price_col == 'log_returns':
-            price_series = np.log(df['close']).diff().fillna(0)
-        else:
-            raise ValueError(f"Coluna não suportada: {price_col}")
-
+        # 4. Aplicação Deslizante (Rolling Map)
         if calc_type == 'simple':
-            return price_series.rolling(window=window).apply(simple_hurst, raw=True)
+            hurst_series = s.rolling_map(simple_hurst, window_size=window)
         elif calc_type == 'rs':
-            return price_series.rolling(window=window).apply(hurst_rs, raw=True)
+            hurst_series = s.rolling_map(hurst_rs, window_size=window)
         else:
             raise ValueError(f"Tipo não suportado: {calc_type}")
 
+        return hurst_series.fill_null(0.0).alias(self.name)
 
-
-
-
-
-
-# class HURST(Indicator):
-#     def __init__(self, asset=None, timeframe: str=None, window: int = 63, type: str = 'simple', price_col: str = 'pct_change'):
-#         super().__init__(asset, timeframe, window = window, type = type.lower(), price_col = price_col)
-
-#     def calculate(self, df: pd.DataFrame) -> pd.Series:
-#         price_col = self.params.get('price_col', 'close')
-#         window = self.params.get('window', 63)
-#         type = self.params.get('type')
-
-#         def simple_hurst(x):
-#             n = len(x)
-#             if n < 2:
-#                 return np.nan
-#             deviations = x - np.mean(x)
-#             cumulative_dev = np.cumsum(deviations)
-#             R = np.max(cumulative_dev) - np.min(cumulative_dev)
-#             S = np.std(x, ddof=1)
-#             if S == 0 or R == 0:
-#                 return 0.5
-#             return np.log(R/S) / np.log(n)
-
-#         def hurst_rs(x, min_lag=2, max_lag=20):
-#             n = len(x)
-#             lags = range(min_lag, min(max_lag, n//2))
-#             if len(lags) < 2:
-#                 return np.nan
-#             tau = [np.std(np.subtract(x[lag:], x[:-lag])) for lag in lags]
-#             poly = np.polyfit(np.log(lags), np.log(tau), 1)
-#             return poly[0] * 2.0
-
-#         if price_col == 'pct_change' and 'pct_change' not in df.columns:
-#             df['pct_change'] = df['close'].pct_change().fillna(0)
-
-#         if type == 'simple':
-#             return df[price_col].rolling(window=window).apply(simple_hurst, raw=True)
-#         elif type == 'rs':
-#             return df[price_col].rolling(window=window).apply(hurst_rs, raw=True)
-#         else:
-#             raise ValueError(f"Unsupported type: {type}")
 

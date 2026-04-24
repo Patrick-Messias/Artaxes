@@ -408,23 +408,91 @@ class BaseManager():
         if len(sliced_matches) == 1:
             return next(iter(sliced_matches.values()))
         return sliced_matches
-    
-    def get_data(self, key=None, lookback=1, data_type="aggr", side="BOTH"):
-        # Aux method for managers to search data
-        if key is None: key = (self.portfolio,)
 
+
+    def get_data(self, key=None, lookback=1, data_type="aggr", side="both"):
+        """
+        Método auxiliar para Managers buscarem dados. 
+        Se data_type='aggr', retorna um dicionário de todos os filhos ativos para rebalanceamento.
+        """
+        # 1. Definição da Key Base (Default: Raiz do Portfolio)
+        if key is None: 
+            key = (self.portfolio.name,)
+
+        # 2. Cálculo da Janela Temporal
+        current_idx = self.portfolio.current_idx
         if lookback is None or lookback == 0:
             start_idx = 0
         else:
-            start_idx = max(0, self.portfolio.current_idx - lookback+1)
+            # +1 para garantir que o slice inclua a quantidade correta de períodos
+            start_idx = max(0, current_idx - lookback + 1)
 
+        # 3. COLETA HIERÁRQUICA (Para Rebalanceamento em Memória)
+        if data_type == "aggr":
+            collected_results = {}
+            depth = len(key)
+            
+            # Identifica quem são os "filhos" que devem ser coletados baseados na profundidade da key
+            # key length 1 -> (op,)       -> Busca Modelos
+            # key length 2 -> (op, m)    -> Busca Estratégias
+            # key length 3 -> (op, m, s) -> Busca Ativos
+            
+            target_nodes = {}
+            if depth == 1:
+                target_nodes = self.portfolio.hierarchy.get('models', {})
+            elif depth == 2:
+                target_nodes = self.portfolio.hierarchy['models'].get(key, {}).get('strats', {})
+            elif depth == 3:
+                # Localiza a estratégia correta dentro do modelo para pegar os ativos
+                m_key = (key[0], key[1])
+                target_nodes = self.portfolio.hierarchy['models'].get(m_key, {}).get('strats', {}).get(key, {}).get('assets', {})
+
+            # Itera sobre os filhos, verifica se estão ativos e coleta os dados de cada um
+            for child_key, child_info in target_nodes.items():
+                if not child_info.get('active', True): 
+                    continue
+                
+                # Chama o _populate para o filho específico
+                # Note: passamos side=None para pegar 'both', 'long' e 'short' de uma vez
+                child_data = self.portfolio._populate_sim_data(
+                    key=child_key, 
+                    i=current_idx, 
+                    start_idx=start_idx, 
+                    data_type="aggr",
+                    side=None 
+                )
+                
+                if child_data:
+                    collected_results[child_key] = child_data
+            
+            return collected_results # Retorna { (tupla_filho): { 'both': {...}, 'long': {...} } }
+
+        # 4. COLETA INDIVIDUAL (Para Parsets ou Walkforward Matrix)
+        # Mantém o comportamento padrão para consultas de um único nó
         return self.portfolio._populate_sim_data(
             key=key,
-            i=self.portfolio.current_idx,
+            i=current_idx,
             start_idx=start_idx,
             data_type=data_type,
             side=side
         )
+
+    # def get_data(self, key=None, lookback=1, data_type="aggr", side="BOTH"):
+    #     # Aux method for managers to search data
+    #     if key is None: key = (self.portfolio,)
+
+    #     if lookback is None or lookback == 0:
+    #         start_idx = 0
+    #     else:
+    #         start_idx = max(0, self.portfolio.current_idx - lookback+1)
+
+    #     return self.portfolio._populate_sim_data(
+    #         key=key,
+    #         i=self.portfolio.current_idx,
+    #         start_idx=start_idx,
+    #         data_type=data_type,
+    #         side=side
+    #     )
 
     def get_schedule(self, timeline: list) -> set:
         freq = self.reb_frequency 

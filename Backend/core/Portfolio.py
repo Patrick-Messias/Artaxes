@@ -44,6 +44,7 @@ class Portfolio(BaseClass, BaseManager):
 
         self.datetime_timeline = portfolio_params.datetime_timeline
 
+        self.hierarchy: dict={}
         self.portfolio_returns: dict={}
         self.sim_data: dict= {}
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
@@ -53,7 +54,6 @@ class Portfolio(BaseClass, BaseManager):
         # 1 - Init, populating sim_data
         self.sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
         self.active_positions = {} 
-        self.hierarchy = {}
         self.portfolio_returns = {}
         self.indicator_pool = {}
         self.current_idx = 0
@@ -140,7 +140,12 @@ class Portfolio(BaseClass, BaseManager):
     # XXX - Eliminar todos envios de indicador_pool e portfolio_returns, usar self.portfolio.indicator_pool e self.portfolio.portfolio_returns
     # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
     # XXX - Transformar hierarchy em self.hierarchy no nível Portfolio.py, assim com self.indicator_pool
+    
+    # - Garantir que get_data use tupla como key
+    # - Corrigir PSM
+
     # - Desenvolvendo SM/MM
+    # - analise_long_short_separate está errado na hora do calculo do aggr
     # - Está crashando muito, procurar otimizar o código e talvez instanciar
     # - Para otimizar, talvez gerar parquet de aggr no Operation e carregar direto
     # - Salvar ind em parquet?
@@ -266,10 +271,11 @@ class Portfolio(BaseClass, BaseManager):
             data_type (str): "aggr" (memória) ou "parset" (disco/parquet).
             ps_id (str/int): ID específico da posição para filtragem.
         """
+        lookup_key = "_".join(key) if isinstance(key, tuple) else key
         
         # --- CASO 1: DADOS AGREGADOS (Rápido, em Memória) ---
         if data_type == "aggr":
-            node = self.sim_data.get(key)
+            node = self.sim_data.get(lookup_key)
             if not node: return None
 
             directions = ["both", "long", "short"]
@@ -383,7 +389,40 @@ class Portfolio(BaseClass, BaseManager):
         # --- 1. COLETA DE DADOS E TIMELINE ---
         for op_n, _, m_n, _, s_n, _, a_n, _ in self._iter_portfolio_data():
             config = self.portfolio_data[op_n][m_n][s_n][a_n]
+            m_key = (op_n, m_n)
+            s_key = (op_n, m_n, s_n)
             a_key = (op_n, m_n, s_n, a_n)
+            
+            # Hierarchy Mapping 
+            a_side = config.get("side", "both").lower()
+            a_sep_ls = config.get("analise_long_short_separate", True)
+            self.hierarchy.setdefault('models', {})
+            
+            # Model
+            if m_key not in self.hierarchy['models']:
+                self.hierarchy['models'][m_key] = {
+                    'active': True, 
+                    'weight': 0.0, 
+                    'score': 0.0,
+                    'strats': {}
+                    # Nota: O 'separate_side' do modelo virá do sm_mm_map depois
+                }
+            
+            # Strat
+            if s_key not in self.hierarchy['models'][m_key]['strats']:
+                self.hierarchy['models'][m_key]['strats'][s_key] = {
+                    'active': True,
+                    'weight': 0.0,
+                    'assets': {}
+                }
+                
+            # Asset
+            self.hierarchy['models'][m_key]['strats'][s_key]['assets'][a_key] = {
+                'active': True,
+                'weight': 0.0,
+                'side': a_side,               # Herdado do portfolio_data
+                'separate_ls': a_sep_ls       # Herdado do portfolio_data
+            }
 
             # Extracts configs
             side_pref = config.get("side", "both").lower() if isinstance(config, dict) else "both"
@@ -548,28 +587,6 @@ class Portfolio(BaseClass, BaseManager):
 
         # Searches data via _populate_sim_data
         p_data = self._populate_sim_data(key=p_key, i=last_idx, start_idx=0, data_type="aggr")
-
-        
-        # tup = ("operation_test", "RS Mean Reversion")
-        # print(tup)
-        # op=tup[0]
-        # mod=tup[1]
-        # tupkey = op+"_"+mod
-        # print(type(p_data), p_data.keys() if p_data else "No data")
-        # print(pl.DataFrame(p_data["both"]))
-        # print()
-        # print(p_data["both"])
-        #print("\n",pl.DataFrame(p_data["both"][tupkey]).head())
-
-        # p_data = self._populate_sim_data(key=("operation_test",), i=last_idx, start_idx=0, data_type="aggr")
-        # print(type(p_data), p_data.keys() if p_data else "No data")
-        # print(pl.DataFrame(p_data["both"]["RS Mean Reversion"]).head())
-
-        # #-> portf_aggr não está separando entre models? deveria ter todos os models
-        # #-> Problema é que o pre_compute não está interpretando os aggr da forma correta, parece que está errado a forma de salvar em portf_aggr
-
-        # print("\n"*3)
-
 
         if p_data:
             p_node = {p_key: p_data}
@@ -855,7 +872,7 @@ if __name__ == "__main__":
                 "AT15": {
                     "EURUSD": {
                         "side": "both",
-                        "analise_long_short_separate": True,
+                        "analise_long_short_separate": True, # if side=both, and True, creates separate Aggr
                         "calculate_on_data": "wf",
                     },
                     # "GBPUSD": {
@@ -879,18 +896,18 @@ if __name__ == "__main__":
 
     # SM/MM mapeados por nível — referenciados durante a simulação
     sm_mm_map = {
-        "managers": {"psm": psm, "pmm": pmm},
+        "managers": {"psm": psm, "pmm": pmm, "separate_ls": True},
         "models": {
             "MA Trend Following": {
-                "managers": {"msm": msm, "mmm": mmm},
+                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True},
                 "strats": {
-                    "AT15": {"managers": {"ssm": ssm, "smm": smm}}
+                    "AT15": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True}}
                 }
             },
             "RS Mean Reversion": {
-                "managers": {"msm": msm, "mmm": mmm},
+                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True},
                 "strats": {
-                    "AT16": {"managers": {"ssm": ssm, "smm": smm}}
+                    "AT16": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True}}
                 }
             }
         }
@@ -910,6 +927,9 @@ if __name__ == "__main__":
     portfolio._run()
 
     """
+    PCA-Regime-Adjusted Momentum (PCA-RAM)
+    EW-PCA (Entropy Weighting-PCA)
+
     DEFAULT
     Portofolio
     SM: Rankear com EWPCA (aggr dos models) para definir PC1 e PC2
