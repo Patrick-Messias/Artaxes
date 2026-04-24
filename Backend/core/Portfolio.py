@@ -141,9 +141,6 @@ class Portfolio(BaseClass, BaseManager):
     # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
     # XXX - Transformar hierarchy em self.hierarchy no nível Portfolio.py, assim com self.indicator_pool
     
-    # - Garantir que get_data use tupla como key
-    # - Corrigir PSM
-
     # - Desenvolvendo SM/MM
     # - analise_long_short_separate está errado na hora do calculo do aggr
     # - Está crashando muito, procurar otimizar o código e talvez instanciar
@@ -271,11 +268,10 @@ class Portfolio(BaseClass, BaseManager):
             data_type (str): "aggr" (memória) ou "parset" (disco/parquet).
             ps_id (str/int): ID específico da posição para filtragem.
         """
-        lookup_key = "_".join(key) if isinstance(key, tuple) else key
         
         # --- CASO 1: DADOS AGREGADOS (Rápido, em Memória) ---
         if data_type == "aggr":
-            node = self.sim_data.get(lookup_key)
+            node = self.sim_data.get(key)
             if not node: return None
 
             directions = ["both", "long", "short"]
@@ -389,40 +385,7 @@ class Portfolio(BaseClass, BaseManager):
         # --- 1. COLETA DE DADOS E TIMELINE ---
         for op_n, _, m_n, _, s_n, _, a_n, _ in self._iter_portfolio_data():
             config = self.portfolio_data[op_n][m_n][s_n][a_n]
-            m_key = (op_n, m_n)
-            s_key = (op_n, m_n, s_n)
             a_key = (op_n, m_n, s_n, a_n)
-            
-            # Hierarchy Mapping 
-            a_side = config.get("side", "both").lower()
-            a_sep_ls = config.get("analise_long_short_separate", True)
-            self.hierarchy.setdefault('models', {})
-            
-            # Model
-            if m_key not in self.hierarchy['models']:
-                self.hierarchy['models'][m_key] = {
-                    'active': True, 
-                    'weight': 0.0, 
-                    'score': 0.0,
-                    'strats': {}
-                    # Nota: O 'separate_side' do modelo virá do sm_mm_map depois
-                }
-            
-            # Strat
-            if s_key not in self.hierarchy['models'][m_key]['strats']:
-                self.hierarchy['models'][m_key]['strats'][s_key] = {
-                    'active': True,
-                    'weight': 0.0,
-                    'assets': {}
-                }
-                
-            # Asset
-            self.hierarchy['models'][m_key]['strats'][s_key]['assets'][a_key] = {
-                'active': True,
-                'weight': 0.0,
-                'side': a_side,               # Herdado do portfolio_data
-                'separate_ls': a_sep_ls       # Herdado do portfolio_data
-            }
 
             # Extracts configs
             side_pref = config.get("side", "both").lower() if isinstance(config, dict) else "both"
@@ -587,7 +550,7 @@ class Portfolio(BaseClass, BaseManager):
 
         # Searches data via _populate_sim_data
         p_data = self._populate_sim_data(key=p_key, i=last_idx, start_idx=0, data_type="aggr")
-
+        
         if p_data:
             p_node = {p_key: p_data}
            
