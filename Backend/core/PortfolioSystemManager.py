@@ -38,33 +38,121 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
     
     def _default_rank(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
         # Ranks models by metric defined in model_hierarchy. Returns dict[model_name: score]
-        # for m_key in hierarchy['models'].keys():
-        #     m_pnl = sim_data.get(m_key, {}).get('both', {}).get('data')
-        #     if m_pnl is not None:
-        #         hierarchy['models'][m_key]['score'] = float(m_pnl[i])
+        for m_key, m_info in hierarchy.items():
+            if not m_info.get('active', True): 
+                continue
+
+            # Searches specific data for this model
+            separate_ls = m_info.get("separate_ls", False)
+            side = m_info.get("side", "both")
+            if side == "both":
+                side = ["long", "short"] if separate_ls else ["both"]
+
+            print(f"m_key: {m_key}")
+            print(f"sim_data keys: {list(sim_data.keys())}")
+
+            m_data = sim_data[m_key]
+            if not m_data: 
+                continue
+
+            for sd in side:
+                if sd in m_data and len(m_data[sd]) > 0:
+                    series = m_data[sd]
+                    returns = series.flatten()
+
+                    if len(returns) > 0:
+                        score = sum(returns)
+                        m_info[sd]['score'] = score
         
         return hierarchy
 
     def _default_filter(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
         # Disables models that don't pass the filter function. Returns dict with 'active' field updated
-        # for m_key in hierarchy['models'].keys():
-        #     score = hierarchy['models'][m_key].get('score', 0)
-            
-        #     # Exemplo: Desativa se o score for negativo
-        #     if score < 0:
-        #         hierarchy['models'][m_key]['active'] = False
+        
+        for m_key, m_info in hierarchy.items():
+            if not m_info.get('active', True): 
+                continue
+
+            separate_ls = m_info.get("separate_ls", False)
+            side = m_info.get("side", "both")
+            if side == "both":
+                side = ["long", "short"] if separate_ls else ["both"]
+
+            for sd in side:
+                score = m_info[sd]['score']
+
+                if score < -0.05:
+                    m_info[sd]['weight'] = 0.0
             
         return hierarchy
 
     def _default_rebalance(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
+        # Rebalances Models using HRP by default
+        import numpy as np, polars as pl
+        from indicators.HRP import HRP
 
+        lookback = self.reb_lookback
+        start_idx = max(0, i-lookback)
+
+        matrix_data = {}
+        model_map = {}
+
+        # Collects and prepares matrix
+        for m_key, m_info in hierarchy.items():
+            if not m_info.get('active', True): 
+                continue
+
+            m_data = sim_data[m_key]
+            if not m_data: 
+                continue
+
+            separate_ls = m_info.get("separate_ls", False)
+            side = m_info.get("side", "both")
+            if side == "both":
+                side = ["long", "short"] if separate_ls else ["both"]
+
+            for sd in side:
+                series = m_data[sd]['data']
+                returns = series.flatten()
+
+                if len(returns) > (lookback * 0.5) and not np.all(returns == 0):
+                    col_id = f"{m_key[0]}_{sd}"
+                    matrix_data[col_id] = returns
+                    model_map[col_id] = (m_key, side)
+
+        # Not enough data
+        if len(matrix_data) < 2:
+            print(f"    < [PortfolioSystemManager._default_rebalance] lenght of matrix_data < 2")
+            return hierarchy
+        
+        # Calculates HRP
+        df_returns = pl.DataFrame(matrix_data).fill_null(0.0)
+        try:
+            hrp_engine = HRP()
+            weights_dict = hrp_engine._calculate_logic(df_returns)
+        except Exception as e:
+            print(f"    < [PortfolioSystemManager._default_rebalance] HRP Failed in idx {i}: {e}")
+            return hierarchy
+        
+        # Clears previous price
+        for m_key, m_info in hierarchy['models'].items():
+            for s in ["both", "long", "short"]:
+                m_info['metrics'][s]['weight'] = 0.0
+
+        # Applies new weights
+        for col_id, weight in weights_dict.items():
+            m_key, sd = model_map[col_id]
+            hierarchy['models'][m_key][side]['weight'] = weight
+
+        print(weights_dict)
 
         return hierarchy
 
     def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
         
         # Default uses aggr of models for Portfolio Level
-        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both") 
+        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr") 
+        print(sim_data)
 
         hierarchy = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
         hierarchy = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)

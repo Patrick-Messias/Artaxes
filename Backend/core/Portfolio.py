@@ -245,10 +245,11 @@ class Portfolio(BaseClass, BaseManager):
 
         # Updates global
         self.sim_current_equity += step_pnl_nominal_total
-        self.portfolio_returns[step_dt] = {
-            "portfolio_perc":    step_perc_total,
-            "portfolio_pnl": step_pnl_nominal_total
-        }
+        self.portfolio_returns[step_dt].update({
+            "portfolio_perc": step_perc_total,
+            "portfolio_pnl": step_pnl_nominal_total,
+            "equity": self.sim_current_equity
+        })
 
     def _update_pos_with_assets_ret(self, step_dt):
         pass
@@ -264,7 +265,7 @@ class Portfolio(BaseClass, BaseManager):
             key (tuple): Chave da hierarquia (op,), (op, m), (op, m, s) ou (op, m, s, a).
             i (int): Índice final da timeline.
             start_idx (int): Índice inicial da busca (default 0).
-            side (str): "both", "long", "long".
+            side (str|list): "both", "long", "long".
             data_type (str): "aggr" (memória) ou "parset" (disco/parquet).
             ps_id (str/int): ID específico da posição para filtragem.
         """
@@ -274,27 +275,28 @@ class Portfolio(BaseClass, BaseManager):
             node = self.sim_data.get(key)
             if not node: return None
 
-            directions = ["both", "long", "short"]
-            
             def slice_data(block):
                 # Retorna o slice do start_idx até o i atual (inclusive)
                 # zipando com as colunas para manter o formato de dicionário
                 data_slice = block["data"][start_idx : i + 1]
                 cols = block["cols"]
                 return {col: data_slice[:, idx].tolist() for idx, col in enumerate(cols)}
-
-            if side is not None:
-                side_upper = side.lower()
-                data_block = node.get(side_upper)
+            
+            # Case of only 1 str
+            if isinstance(side, str):
+                data_block = node.get(side.lower())
                 return slice_data(data_block) if data_block else None
 
-            # Retorno multi-direcional
-            full_payload = {}
-            for d in directions:
-                data_block = node.get(d)
+            # Case of list or None, returns mapped dict {"side": {}}
+            target_sides = [s.lower() for s in side] if isinstance(side, list) else ["both", "long", "short"]
+            
+            payload = {}
+            for s in target_sides:
+                data_block = node.get(s)
                 if data_block:
-                    full_payload[d.lower()] = slice_data(data_block)
-            return full_payload if full_payload else None
+                    payload[s] = slice_data(data_block)
+            
+            return payload if payload else None
 
         # --- CASO 2: DADOS DE PARSET (Leitura de Disco/Storage) ---
         elif data_type == "parset":
@@ -528,7 +530,8 @@ class Portfolio(BaseClass, BaseManager):
         return True
     
     def _init_hierarchy(self):
-        n_models = len({m for _, _, m, *_ in self._iter_portfolio_data()})
+        models_found = {(op, m) for op, _, m, *_ in self._iter_portfolio_data()}
+        n_models = len(models_found)
         hcy = {}
 
         portf_side = self.sm_mm_map.get("managers", {}).get("side", 'both')
@@ -548,10 +551,9 @@ class Portfolio(BaseClass, BaseManager):
                     "active":   True,
                     "side": model_side,
                     "separate_ls": model_sep_side,
-                    "weight":   1.0 / n_models,
-                    "capital":  0.0,   
-                    "exposure": 0.0,
-                    "score":    0.0,
+                    "both":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0 / n_models},
+                    "long":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": (1.0 / n_models) /2},
+                    "short": {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": (1.0 / n_models) /2},
                     "strats":   {}
                 }
 
@@ -564,10 +566,9 @@ class Portfolio(BaseClass, BaseManager):
                     "active":   True,
                     "side": strat_side,
                     "separate_ls": strat_sep_side,
-                    "weight":   1.0,
-                    "capital":  0.0,
-                    "exposure": 0.0,
-                    "score":    0.0,
+                    "both":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
+                    "long":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
+                    "short": {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
                     "assets":   {}
                 }
 
@@ -580,10 +581,9 @@ class Portfolio(BaseClass, BaseManager):
                     "active":      True,
                     "side":        asset_side,
                     "separate_ls": asset_sep_side,
-                    "weight":      1.0,
-                    "capital":     0.0,
-                    "exposure":    0.0,
-                    "score":       0.0,
+                    "both":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
+                    "long":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
+                    "short": {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
                     "wf_ids": {},
                 }
 
