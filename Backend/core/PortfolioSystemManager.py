@@ -36,127 +36,139 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
                        
     # ── Every Datetime [i] ───────────────────────────────────────────────
     
-    def _default_rank(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
-        # Ranks models by metric defined in model_hierarchy. Returns dict[model_name: score]
-        for m_key, m_info in hierarchy.items():
-            if not m_info.get('active', True): 
-                continue
+    def _default_rank(self, i, step_dt, hierarchy, indicator_pool, aggr_data, port_returns, key) -> dict:
+        import numpy as np
 
-            # Searches specific data for this model
-            separate_ls = m_info.get("separate_ls", False)
-            side = m_info.get("side", "both")
-            if side == "both":
-                side = ["long", "short"] if separate_ls else ["both"]
+        for sd in ["both", "long", "short"]:
+            if sd not in aggr_data: continue
 
-            print(f"m_key: {m_key}")
-            print(f"sim_data keys: {list(sim_data.keys())}")
+            for m_key, m_info in self.portfolio.iter_hierarchy(target_level="models"):
+                # O nome da coluna no portf_aggr é f"{op}_{model}"
+                col_name = f"{m_key[0]}_{m_key[1]}"
+                if col_name in aggr_data[sd].keys():
+                    pnl = np.sum(aggr_data[sd][col_name])
+                    m_info[sd]['score'] = 1.0 if pnl > 0.0 else 0.0
+                else: 
+                    continue
 
-            m_data = sim_data[m_key]
-            if not m_data: 
-                continue
-
-            for sd in side:
-                if sd in m_data and len(m_data[sd]) > 0:
-                    series = m_data[sd]
-                    returns = series.flatten()
-
-                    if len(returns) > 0:
-                        score = sum(returns)
-                        m_info[sd]['score'] = score
-        
         return hierarchy
 
-    def _default_filter(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
-        # Disables models that don't pass the filter function. Returns dict with 'active' field updated
-        
-        for m_key, m_info in hierarchy.items():
-            if not m_info.get('active', True): 
-                continue
-
+    def _default_filter(self, i, step_dt, hierarchy, indicator_pool, aggr_data, port_returns, key) -> dict:
+        for m_key, m_info in self.portfolio.iter_hierarchy(target_level="models"):
+            side_config = m_info.get("side", "both")
             separate_ls = m_info.get("separate_ls", False)
-            side = m_info.get("side", "both")
-            if side == "both":
-                side = ["long", "short"] if separate_ls else ["both"]
+            
+            sides = ["long", "short"] if (side_config == "both" and separate_ls) \
+                    else [side_config if side_config != "both" else "both"]
 
-            for sd in side:
-                score = m_info[sd]['score']
-
-                if score < -0.05:
-                    m_info[sd]['weight'] = 0.0
+            is_active = False
+            for sd in sides:
+                score = m_info[sd].get('score', 0.0)
+                # Lógica de filtro (exemplo: score mínimo)
+                if score > -0.1: 
+                    is_active = True
+            
+            m_info['active'] = is_active
             
         return hierarchy
 
-    def _default_rebalance(self, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key) -> dict:
-        # Rebalances Models using HRP by default
+    def _default_rebalance(self, i, step_dt, hierarchy, indicator_pool, aggr_data, port_returns, key) -> dict:
         import numpy as np, polars as pl
         from indicators.HRP import HRP
 
         lookback = self.reb_lookback
-        start_idx = max(0, i-lookback)
 
-        matrix_data = {}
-        model_map = {}
+        # 1. Identifica modelos ativos e limpa pesos
+        active_models = []
+        for m_key, m_info in self.portfolio.iter_hierarchy(target_level="models"):
+            for s in ["both", "long", "short"]: 
+                if s in m_info: m_info[s]['weight'] = 0.0
+            if m_info.get('active', True):
+                active_models.append(m_key)
 
-        # Collects and prepares matrix
-        for m_key, m_info in hierarchy.items():
-            if not m_info.get('active', True): 
-                continue
-
-            m_data = sim_data[m_key]
-            if not m_data: 
-                continue
-
-            separate_ls = m_info.get("separate_ls", False)
-            side = m_info.get("side", "both")
-            if side == "both":
-                side = ["long", "short"] if separate_ls else ["both"]
-
-            for sd in side:
-                series = m_data[sd]['data']
-                returns = series.flatten()
-
-                if len(returns) > (lookback * 0.5) and not np.all(returns == 0):
-                    col_id = f"{m_key[0]}_{sd}"
-                    matrix_data[col_id] = returns
-                    model_map[col_id] = (m_key, side)
-
-        # Not enough data
-        if len(matrix_data) < 2:
-            print(f"    < [PortfolioSystemManager._default_rebalance] lenght of matrix_data < 2")
+        if len(active_models) < 2: 
             return hierarchy
-        
-        # Calculates HRP
-        df_returns = pl.DataFrame(matrix_data).fill_null(0.0)
-        try:
-            hrp_engine = HRP()
-            weights_dict = hrp_engine._calculate_logic(df_returns)
-        except Exception as e:
-            print(f"    < [PortfolioSystemManager._default_rebalance] HRP Failed in idx {i}: {e}")
-            return hierarchy
-        
-        # Clears previous price
-        for m_key, m_info in hierarchy['models'].items():
-            for s in ["both", "long", "short"]:
-                m_info['metrics'][s]['weight'] = 0.0
 
-        # Applies new weights
-        for col_id, weight in weights_dict.items():
-            m_key, sd = model_map[col_id]
-            hierarchy['models'][m_key][side]['weight'] = weight
+        # 2. Processa cada via (side)
+        for sd in ["both", "long", "short"]:
+            if sd not in aggr_data: continue
+            
+            matrix_data = {}
+            target_col_names = []
+            
+            for m_key in active_models:
+                col_name = f"{m_key[0]}_{m_key[1]}"
+                
+                if col_name in aggr_data[sd]:
+                    # --- BLINDAGEM 1: Conversão forçada no NumPy ---
+                    # Garante que o dado saia da lista Python como Float64 real
+                    raw_val = aggr_data[sd][col_name]
+                    returns = np.array(raw_val, dtype=np.float64).flatten()
+                    
+                    # Ignora se for tudo NaN ou se a série for muito curta para correlação
+                    if len(returns) > 1 and not np.all(np.isnan(returns)):
+                        # Substitui Infs/NaNs por 0.0 para não quebrar a matriz de covariância
+                        matrix_data[col_name] = np.nan_to_num(returns, nan=0.0, posinf=0.0, neginf=0.0)
+                        target_col_names.append((m_key, col_name))
 
-        print(weights_dict)
+            if len(matrix_data) < 2: continue
+
+            # 3. Cálculo do HRP com Sanitização de Schema
+            try:
+                # --- BLINDAGEM 2: Schema Explícito no Polars ---
+                # Definir o schema impede que o Polars tente "adivinhar" que é String
+                explicit_schema = {name: pl.Float64 for name in matrix_data.keys()}
+                
+                df_hrp = (
+                    pl.DataFrame(matrix_data, schema=explicit_schema)
+                    .fill_null(0.0)
+                    .fill_nan(0.0)
+                )
+
+                # --- BLINDAGEM 3: Filtro de segurança pré-HRP ---
+                # Garante que nenhuma coluna String "escapou" para o cálculo
+                df_hrp = df_hrp.select(pl.col(pl.Float64))
+                if df_hrp.width < 2: continue
+
+                hrp_engine = HRP()
+                weights = hrp_engine._calculate_logic(df_hrp)
+                if i % 1000 == 0 or i == 55394:
+                    print(f"df_hrp: {type(df_hrp)}")
+                    print(f"weights: {type(weights)}")
+                # 4. Distribuição dos pesos
+                for m_key, col_name in target_col_names:
+                    if col_name in weights:
+                        hierarchy['models'][m_key][sd]['weight'] = float(weights[col_name])
+                        
+            except Exception as e:
+                # O erro 55394 agora será capturado aqui sem travar o backtest
+                if i % 1000 == 0 or i == 55394: # Evita spam de log, mas foca no erro
+                    print(f"    < [PSM Rebalance] Side '{sd}' at idx {i} skip: {e}")
 
         return hierarchy
+
+    # 1. Testar novas defs pra PSM
+    # 2. Definir métodologia que funcione em todos os níveis de PSM/PMM para padronizar uso
+
 
     def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
         
         # Default uses aggr of models for Portfolio Level
-        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr") 
-        print(sim_data)
+        port_key = (self.portfolio.name,)
+        port_aggr_data = self.get_data(key=port_key, lookback=self.reb_lookback, data_type="aggr", side=["both", "long", "short"])
 
-        hierarchy = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
-        hierarchy = self.rebalance(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        if not port_aggr_data:
+            print("     < [PSM._default_main] No aggr data found")
+            return hierarchy
+
+        # 2. Roda o Rank (Vetorizado sobre a matriz global)
+        hierarchy = self._default_rank(i, step_dt, hierarchy, indicator_pool, port_aggr_data, port_returns, port_key)
+
+        # 3. Roda o Filter (Decide quem fica ativo baseado nos scores)
+        hierarchy = self._default_filter(i, step_dt, hierarchy, indicator_pool, port_aggr_data, port_returns, port_key)
+
+        # 4. Roda o Rebalance (Calcula pesos para os que sobreviveram)
+        hierarchy = self._default_rebalance(i, step_dt, hierarchy, indicator_pool, port_aggr_data, port_returns, port_key)
 
         return hierarchy
    

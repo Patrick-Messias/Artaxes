@@ -411,7 +411,7 @@ class BaseManager():
 
 
 
-    def get_data(self, key=None, lookback=1, data_type="aggr", side="BOTH", psid_or_wfid=None):
+    def get_data(self, key=None, lookback=1, data_type="aggr", side="both", psid_or_wfid=None):
         # Aux method for managers to search data
         if key is None: key = (self.portfolio.name,)
 

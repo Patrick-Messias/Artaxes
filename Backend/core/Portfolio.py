@@ -492,9 +492,13 @@ class Portfolio(BaseClass, BaseManager):
             self.sim_data[s_key] = {"type": "aggr"}
             for d_name, assets in directions.items():
                 wide_df = pl.DataFrame(assets)
+
+                s_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
+                wide_df = wide_df.with_columns(s_avg)
+
                 self.sim_data[s_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
                 
-                m_series = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias(s_key[2])
+                m_series = wide_df.get_column("@total").alias(s_key[2])
                 model_acc.setdefault((s_key[0], s_key[1]), {}).setdefault(d_name, {})[s_key[2]] = m_series
 
         # C. Modelos -> Portfólio
@@ -502,12 +506,14 @@ class Portfolio(BaseClass, BaseManager):
             self.sim_data[m_key] = {"type": "aggr"}
             for d_name, strats in directions.items():
                 wide_df = pl.DataFrame(strats)
+                m_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
+                wide_df = wide_df.with_columns(m_avg)
+
                 self.sim_data[m_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
 
-                o_series = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias(m_key[1])
+                o_series = wide_df.get_column("@total").alias(m_key[1])
                 opera_acc.setdefault((m_key[0],), {}).setdefault(d_name, {})[m_key[1]] = o_series
                 
-                # Acumula para o Portfólio Global
                 port_col = f"{m_key[0]}_{m_key[1]}"
                 portf_acc.setdefault((self.name,), {}).setdefault(d_name, {})[port_col] = o_series
 
@@ -529,28 +535,25 @@ class Portfolio(BaseClass, BaseManager):
 
         return True
     
+
     def _init_hierarchy(self):
         models_found = {(op, m) for op, _, m, *_ in self._iter_portfolio_data()}
         n_models = len(models_found)
         hcy = {}
 
-        portf_side = self.sm_mm_map.get("managers", {}).get("side", 'both')
-        portf_sep_side = self.sm_mm_map.get("managers", {}).get("separate_ls", False)
-
         for op_name, _, m_name, _, s_name, _, a_name, _ in self._iter_portfolio_data():
-            m_key = (m_name,)
-            s_key = (m_name, s_name)
-            a_key = (m_name, s_name, a_name)
+            m_key = (op_name, m_name)
+            s_key = (op_name, m_name, s_name)
+            a_key = (op_name, m_name, s_name, a_name)
 
             # Model Level
-            model_config = self.sm_mm_map.get("models", {}).get(m_name, {})
-            model_side = model_config.get("managers", {}).get("side", portf_side)
-            model_sep_side = model_config.get("managers", {}).get("separate_ls", portf_sep_side)
             if m_key not in hcy:
+                model_config = self.sm_mm_map.get("models", {}).get(m_name, {})
+                
                 hcy[m_key] = {
                     "active":   True,
-                    "side": model_side,
-                    "separate_ls": model_sep_side,
+                    "side": model_config.get("managers", {}).get("side", "both"),
+                    "separate_ls": model_config.get("managers", {}).get("separate_ls", False),
                     "both":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0 / n_models},
                     "long":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": (1.0 / n_models) /2},
                     "short": {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": (1.0 / n_models) /2},
@@ -558,33 +561,31 @@ class Portfolio(BaseClass, BaseManager):
                 }
 
             # Strat level
-            strat_config = self.sm_mm_map.get("strats", {}).get(s_name, {})
-            strat_side = strat_config.get("managers", {}).get("side", portf_side)
-            strat_sep_side = strat_config.get("managers", {}).get("separate_ls", portf_sep_side)
             if s_key not in hcy[m_key]["strats"]:
+                strat_config = self.sm_mm_map.get("strats", {}).get(s_name, {})
+                
                 hcy[m_key]["strats"][s_key] = {
-                    "active":   True,
-                    "side": strat_side,
-                    "separate_ls": strat_sep_side,
-                    "both":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
-                    "long":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
-                    "short": {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
-                    "assets":   {}
+                    "active":      True,
+                    "side":        strat_config.get("managers", {}).get("side", "both"),
+                    "separate_ls": strat_config.get("managers", {}).get("separate_ls", False),
+                    "both":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
+                    "long":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
+                    "short":       {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
+                    "assets":      {}
                 }
 
             # Asset level
-            config = self.portfolio_data[op_name][m_name][s_name][a_name]
-            asset_side = config.get("side", portf_side) if isinstance(config, dict) else portf_side
-            asset_sep_side = config.get("analise_long_short_separate", portf_sep_side) if isinstance(config, dict) else portf_sep_side
             if a_key not in hcy[m_key]["strats"][s_key]["assets"]:
+                config = self.portfolio_data[op_name][m_name][s_name][a_name]
+
                 hcy[m_key]["strats"][s_key]["assets"][a_key] = {
                     "active":      True,
-                    "side":        asset_side,
-                    "separate_ls": asset_sep_side,
-                    "both":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
-                    "long":  {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
-                    "short": {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
-                    "wf_ids": {},
+                    "side":        config.get("side", "both") if isinstance(config, dict) else "both",
+                    "separate_ls": config.get("analise_long_short_separate", False) if isinstance(config, dict) else False,
+                    "both":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
+                    "long":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
+                    "short":       {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
+                    "wf_ids":      {},
                 }
 
         self.hierarchy = hcy
@@ -755,6 +756,38 @@ class Portfolio(BaseClass, BaseManager):
                 for s_name, s_obj in m_obj.items():
                     for a_name, a_obj in s_obj.items():
                         yield op_name, op_obj, m_name, m_obj, s_name, s_obj, a_name, a_obj
+
+    def iter_hierarchy(self, target_level="assets", active_only=False):
+        # target_level (str): To which level should it iterate to
+        # active_only (bool): If True, ignores where "active" == False
+        models_dict = self.hierarchy.get("models", self.hierarchy)
+
+        # Models
+        for m_key, m_info in models_dict.items():
+            if active_only and not m_info.get("active", True):
+                continue
+            if target_level == "models":
+                yield m_key, m_info
+                continue
+
+            # Strats
+            strats_dict = m_info.get("strats", {})
+            for s_key, s_info in strats_dict.items():
+                if active_only and not s_info.get("active", True):
+                    continue
+                if target_level == "strats":
+                    yield m_key, m_info, s_key, s_info
+                    continue
+
+                # Assets
+                assets_dict = s_info.get("assets", {})
+                for a_key, a_info in assets_dict.items():
+                    if active_only and not a_info.get("active", True):
+                        continue
+                    if target_level == "assets":
+                        yield m_key, m_info, s_key, s_info, a_key, a_info
+
+
 
     # ── Portfolio Optimization ───────────────────────────────────────────────
 
