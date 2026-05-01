@@ -1,10 +1,9 @@
-import polars as pl
-import numpy as np
+import polars as pl, numpy as np, pandas as pd, sys
 from typing import Union
 from scipy.cluster.hierarchy import linkage
+from scipy.spatial.distance import squareform
 from scipy.stats import spearmanr
-import matplotlib.pyplot as plt
-import sys
+
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\core')
 from Indicator import Indicator # type: ignore
 
@@ -23,156 +22,158 @@ class HRP(Indicator):
         defaults = {
             'window': 63,
             'linkage_method': 'single', # 'single', 'complete', 'average', 'ward'
-            'price_col': 'close'
+            'price_col': 'close',
+            'is_returns': True
         }
         defaults.update(params)
         super().__init__(asset, timeframe, **defaults)
         self.name = "hrp_weight"
 
-    def _calculate_logic(self, data: pl.DataFrame, **kwargs) -> pl.Series:
-        window = int(kwargs.get('window', 63))
-        method = str(kwargs.get('linkage_method', 'single'))
-        target_asset = self.asset # O asset específico deste indicador
+    def _calculate_logic(self, data: pl.DataFrame, **kwargs) -> Union[pl.Series, dict]:
+        # 1. Sanitização de Entrada (Resolve o erro 'list.contains')
+        # Forçamos todas as colunas numéricas a serem Float64 e removemos lixo
+        df = data.select([
+            pl.col(c).cast(pl.Float64, strict=False) 
+            for c in data.columns if c not in ['ts', 'datetime']
+        ]).fill_null(0.0).fill_nan(0.0)
 
-        # 1. Garantir que temos retornos
-        # O input esperado aqui é o DataFrame de preços de múltiplos ativos/modelos
-        returns_df = data.select([
-            pl.col(c).pct_change().fill_null(0.0) for c in data.columns 
-            if c not in ['ts', 'datetime']
-        ])
-        
+        window = int(kwargs.get('window', self.params.get('window', 63)))
+        method = str(kwargs.get('linkage_method', self.params.get('linkage_method', 'single')))
+        is_returns = kwargs.get('is_returns', self.params.get('is_returns', True))
+        target_asset = self.asset 
+
+        # 2. Garantir que temos retornos (Apenas se a entrada for Preço)
+        if not is_returns:
+            returns_df = df.select([
+                pl.col(c).pct_change().fill_null(0.0) for c in df.columns
+            ])
+        else:
+            returns_df = df
+
         asset_names = returns_df.columns
-        if target_asset not in asset_names:
-            # Fallback caso o nome do asset não esteja nas colunas
-            return pl.Series([0.0] * len(data)).alias(self.name)
-
-        target_idx = asset_names.index(target_asset)
         numpy_returns = returns_df.to_numpy()
         num_rows = len(numpy_returns)
-        weights_history = np.zeros(num_rows)
+        
+        # Se o dataframe for menor que a janela, ajustamos a janela
+        effective_window = min(window, num_rows)
 
-        # 2. Funções auxiliares do HRP (Padrão de Prado)
+        # --- FUNÇÕES CORE HRP (Mantidas conforme Prado) ---
         def get_ivp(cov):
-            # Variance Inversion
-            ivp = 1.0 / np.diag(cov)
+            variance = np.diag(cov)
+            # Evita divisão por zero em ativos sem volatilidade
+            variance = np.where(variance <= 0, 1e-9, variance)
+            ivp = 1.0 / variance
             ivp /= ivp.sum()
             return ivp
 
         def get_cluster_var(cov, c_items):
-            # Variance of a cluster
             cov_c = cov[np.ix_(c_items, c_items)]
             w_ = get_ivp(cov_c)
             c_var = np.dot(np.dot(w_, cov_c), w_)
             return c_var
 
         def get_quasi_diag(link):
-            # Sort clusters
             link = link.astype(int)
-            sort_ix = pd.Series([link[-1, 0], link[-1, 1]])
+            sort_ix = [link[-1, 0], link[-1, 1]]
             num_items = link[-1, 3]
-            while sort_ix.max() >= num_items:
-                sort_ix.index = range(0, sort_ix.shape[0] * 2, 2)
-                df0 = sort_ix[sort_ix >= num_items]
-                i = df0.index
-                j = df0.values - num_items
-                sort_ix[i] = link[j, 0]
-                df1 = pd.Series(link[j, 1], index=i + 1)
-                sort_ix = pd.concat([sort_ix, df1]).sort_index()
-            return sort_ix.tolist()
+            while max(sort_ix) >= num_items:
+                new_sort_ix = []
+                for x in sort_ix:
+                    if x >= num_items:
+                        idx = x - num_items
+                        new_sort_ix.extend([link[idx, 0], link[idx, 1]])
+                    else:
+                        new_sort_ix.append(x)
+                sort_ix = new_sort_ix
+            return sort_ix
 
-        import pandas as pd # Usado internamente apenas para o sort_ix do HRP
+        # 3. Execução do HRP
+        # Se estamos no modo Manager (Rebalance), calculamos apenas para a última janela
+        # Se estamos no modo Indicador (Backtest), calculamos o histórico
+        
+        def calculate_at_point(matrix_slice):
+            # Garante que matrix_slice seja 2D (Linhas, Colunas)
+            if matrix_slice.ndim == 1:
+                matrix_slice = matrix_slice.reshape(-1, 1)
+            
+            # Se tivermos apenas 1 linha de dados, não há como calcular correlação/covariância
+            if matrix_slice.shape[0] < 2:
+                return np.ones(len(asset_names)) / len(asset_names)
 
-        # 3. Loop deslizante (como o HRP é matricial, rodamos via NumPy para performance)
-        for t in range(window, num_rows):
-            window_slice = numpy_returns[t-window:t]
+            # 1. Matriz de Correlação Spearman
+            # Forçamos o cálculo entre colunas (axis=0)
+            corr_res = spearmanr(matrix_slice, axis=0)
             
-            # Covariância e Correlação
-            cov = np.cov(window_slice, rowvar=False)
-            corr, _ = spearmanr(window_slice)
+            # O spearmanr pode retornar um escalar se houver apenas 2 colunas em versões antigas
+            # ou um objeto com o atributo .statistic
+            if hasattr(corr_res, 'statistic'):
+                corr = corr_res.statistic
+            else:
+                corr = corr_res[0] if isinstance(corr_res, tuple) else corr_res
+
+            # Se a correlação vier como escalar (comum em matrizes 2x2), transformamos em matriz
+            if np.isscalar(corr):
+                corr = np.array([[1.0, corr], [corr, 1.0]])
+
+            if np.isnan(corr).all(): 
+                return np.ones(len(asset_names)) / len(asset_names)
             
-            # Distância baseada em correlação
-            dist = np.sqrt((1.0 - corr) / 2.0)
+            # 2. Matriz de Distância
+            dist = np.sqrt(np.clip((1.0 - corr) / 2.0, 0, 1))
             np.fill_diagonal(dist, 0)
             
-            # Linkage e Quasi-Diagonalização
-            # dist precisa ser condensada para o linkage
-            from scipy.spatial.distance import squareform
-            link = linkage(squareform(dist), method=method)
-            sort_ix = get_quasi_diag(link)
-            
-            # Bisseção Recursiva
-            weights = np.ones(len(asset_names))
-            items = [sort_ix]
-            
-            while len(items) > 0:
-                items = [items[i][j:k] for i in range(len(items)) 
-                         for j, k in ((0, len(items[i]) // 2), (len(items[i]) // 2, len(items[i])))]
+            # 3. Covariância
+            cov = np.cov(matrix_slice, rowvar=False)
+            # Garante que cov seja matriz mesmo com 2 ativos
+            if np.isscalar(cov):
+                cov = np.array([[cov]])
+
+            # 4. Clustering e Pesos
+            try:
+                link = linkage(squareform(dist), method=method)
+                sort_ix = get_quasi_diag(link)
                 
-                for i in range(0, len(items), 2):
-                    c_left = items[i]
-                    c_right = items[i+1]
-                    
-                    if len(c_left) > 0 and len(c_right) > 0:
-                        var_l = get_cluster_var(cov, c_left)
-                        var_r = get_cluster_var(cov, c_right)
-                        alpha = 1 - var_l / (var_l + var_r)
-                        
-                        weights[c_left] *= alpha
-                        weights[c_right] *= (1 - alpha)
+                weights = np.ones(len(asset_names))
+                items = [sort_ix]
                 
-                # Remove listas unitárias (folhas da árvore)
-                items = [i for i in items if len(i) > 1]
+                while len(items) > 0:
+                    items = [items[i][j:k] for i in range(len(items)) 
+                             for j, k in ((0, len(items[i]) // 2), (len(items[i]) // 2, len(items[i])))]
+                    for i in range(0, len(items), 2):
+                        c_l, c_r = items[i], items[i+1]
+                        if len(c_l) > 0 and len(c_r) > 0:
+                            var_l = get_cluster_var(cov, c_l)
+                            var_r = get_cluster_var(cov, c_r)
+                            alpha = 1 - var_l / (var_l + var_r)
+                            weights[c_l] *= alpha
+                            weights[c_r] *= (1 - alpha)
+                    items = [i for i in items if len(i) > 1]
+                return weights
+            except Exception:
+                # Se o clustering falhar (ex: distância zero), retorna Equal Weight
+                return np.ones(len(asset_names)) / len(asset_names)
+
+        # Decisão de Retorno:
+        if target_asset is None:
+            # MODO MANAGER: Retorna dicionário de pesos do último ponto disponível
+            final_weights = calculate_at_point(numpy_returns[-effective_window:])
+            return dict(zip(asset_names, final_weights))
+        else:
+            # MODO INDICADOR: Retorna pl.Series histórica para o target_asset
+            weights_history = np.zeros(num_rows)
+            target_idx = asset_names.index(target_asset) if target_asset in asset_names else 0
             
-            weights_history[t] = weights[target_idx]
+            # Rodar apenas do window em diante para performance
+            for t in range(effective_window, num_rows + 1):
+                window_slice = numpy_returns[max(0, t-effective_window):t]
+                if window_slice.shape[0] < 2: continue
+                w_t = calculate_at_point(window_slice)
+                if t < num_rows:
+                    weights_history[t] = w_t[target_idx]
+                else:
+                    # Caso seja o ponto exato final
+                    weights_history[-1] = w_t[target_idx]
+            
+            return pl.Series(weights_history).fill_null(0.0).alias(self.name)
 
-        return pl.Series(weights_history).fill_null(0.0).alias(self.name)
-
-'''
-# ==========================================
-# MAIN TEMPORÁRIA PARA TESTE
-# ==========================================
-if __name__ == "__main__":
-    # 1. Gerar dados sintéticos (3 modelos correlacionados)
-    np.random.seed(42)
-    n_obs = 500
-    
-    # Modelo 1: Base
-    m1 = np.random.normal(0.0001, 0.01, n_obs)
-    # Modelo 2: Correlacionado com M1 (60%)
-    m2 = 0.6 * m1 + 0.4 * np.random.normal(0.0001, 0.01, n_obs)
-    # Modelo 3: Baixa correlação e mais volátil
-    m3 = np.random.normal(0.0001, 0.03, n_obs)
-    
-    # Converter retornos em "Preços" para o indicador
-    df_prices = pl.DataFrame({
-        "Model_A": np.exp(np.cumsum(m1)),
-        "Model_B": np.exp(np.cumsum(m2)),
-        "Model_C": np.exp(np.cumsum(m3))
-    })
-
-    print("--- Calculando HRP Weights para cada modelo ---")
-    
-    # Calcular pesos para o Model A e Model C (os mais diferentes)
-    hrp_a = HRP(asset="Model_A", window=21)
-    hrp_b = HRP(asset="Model_B", window=21)
-    hrp_c = HRP(asset="Model_C", window=21)
-
-    res_a = hrp_a._calculate_logic(df_prices)
-    res_b = hrp_b._calculate_logic(df_prices)
-    res_c = hrp_c._calculate_logic(df_prices)
-
-    print(res_a)
-
-    # Plotar
-    plt.figure(figsize=(12, 6))
-    plt.plot(res_a.to_numpy(), label="HRP Weight: Model A (Estável/Corr)", color='blue')
-    plt.plot(res_b.to_numpy(), label="HRP Weight: Model B (Corr)", color='green')
-    plt.plot(res_c.to_numpy(), label="HRP Weight: Model C (Volátil/Indep)", color='red')
-    plt.title("HRP Weight Allocation Over Time")
-    plt.axhline(0.33, color='gray', linestyle='--', label="Equal Weight (1/3)")
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    plt.show()
-
-'''
 

@@ -132,13 +132,14 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
                 hrp_engine = HRP()
                 weights = hrp_engine._calculate_logic(df_hrp)
-                if i % 1000 == 0 or i == 55394:
-                    print(f"df_hrp: {type(df_hrp)}")
-                    print(f"weights: {type(weights)}")
+      
                 # 4. Distribuição dos pesos
                 for m_key, col_name in target_col_names:
                     if col_name in weights:
-                        hierarchy['models'][m_key][sd]['weight'] = float(weights[col_name])
+                        hierarchy[m_key][sd]['weight'] = float(weights[col_name]) 
+                        if i % 1000 == 0 or i == 55394:
+                            print(f"hierarchy['models'][m_key][sd]['weight']: {hierarchy[m_key][sd]['weight']}")
+                            print(f"type: {type(hierarchy[m_key][sd]['weight'])}")
                         
             except Exception as e:
                 # O erro 55394 agora será capturado aqui sem travar o backtest
@@ -147,8 +148,9 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
 
         return hierarchy
 
-    # 1. Testar novas defs pra PSM
-    # 2. Definir métodologia que funcione em todos os níveis de PSM/PMM para padronizar uso
+    
+    # 1. Corrigir HRP e adicionar pesos para os modelos ativos
+    # 2. Confirmar tuple keys para tudo
 
 
     def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
