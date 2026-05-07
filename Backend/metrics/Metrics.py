@@ -219,7 +219,7 @@ def CorrelationClusteringMC(
 """ 
 
 # Random Strategy Test - Backtests random strategies on same data set, if my strategy is worst then "p-val > 0.05" then it's probably just lucky random overfit
-""" - Creates random entry rules strategy, keeps all other rules, backtests on same data-set, optimize real strategy and optimize all others
+""" - Analises metrics form Strat and creates random entry rules strategy, keeps all other rules, backtests on same data-set, optimize real strategy and optimize all others
     - P-Value is defined by how many random curves are worst than my strategy, p_var = 0.95
 """ 
 

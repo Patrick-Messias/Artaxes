@@ -22,10 +22,10 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
     def __init__(self, psm_params: PortfolioSystemManagerParams):
         super().__init__(psm_params)
 
-        self.reb_metric                         = psm_params.reb_metric
+        self.reb_metric                         = getattr(psm_params, 'reb_metric', 'pnl')
         self.model_hierarchy                    = dict(psm_params.model_hierarchy)
         self.max_active_models                  = psm_params.max_active_models
-        self.reb_method                         = psm_params.reb_method
+        self.reb_method                         = getattr(psm_params, 'reb_method', 'fixed')
         self.reb_closes_open_trades_on_rebalance = psm_params.reb_closes_open_trades_on_rebalance
 
 #||=========================================================================================||
@@ -138,8 +138,7 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
                     if col_name in weights:
                         hierarchy[m_key][sd]['weight'] = float(weights[col_name]) 
                         if i % 1000 == 0 or i == 55394:
-                            print(f"hierarchy['models'][m_key][sd]['weight']: {hierarchy[m_key][sd]['weight']}")
-                            print(f"type: {type(hierarchy[m_key][sd]['weight'])}")
+                            print(f"hierarchy[{m_key}][{sd}]['weight']: {hierarchy[m_key][sd]['weight']}")
                         
             except Exception as e:
                 # O erro 55394 agora será capturado aqui sem travar o backtest
@@ -147,10 +146,6 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
                     print(f"    < [PSM Rebalance] Side '{sd}' at idx {i} skip: {e}")
 
         return hierarchy
-
-    
-    # 1. Corrigir HRP e adicionar pesos para os modelos ativos
-    # 2. Confirmar tuple keys para tudo
 
 
     def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
