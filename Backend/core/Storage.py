@@ -90,8 +90,19 @@ class Storage:
             new_df = pl.concat([old, new_df])
         new_df.sort("datetime").write_parquet(file_path)
 
+    # def save_operation_meta(self, op_name: str, meta_dict: dict):
+    #     path = self.base_path / op_name / "operation_meta.json"
+    #     with open(path, "w") as f:
+    #         json.dump(meta_dict, f, indent=4)
+
     def save_operation_meta(self, op_name: str, meta_dict: dict):
-        path = self.base_path / op_name / "operation_meta.json"
+        # Define o caminho da pasta da operação
+        folder_path = Path(self.base_path) / op_name
+        
+        # CRUCIAL: Cria a pasta e todas as subpastas necessárias
+        folder_path.mkdir(parents=True, exist_ok=True)
+        
+        path = folder_path / "operation_meta.json"
         with open(path, "w") as f:
             json.dump(meta_dict, f, indent=4)
 

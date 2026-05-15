@@ -7,7 +7,7 @@ from PortfolioMoneyManager import PortfolioMoneyManager
 from BaseClass import BaseClass, BaseManager
 from Storage import Storage
 from Asset import Asset
-import polars as pl, uuid, sys
+import polars as pl, uuid, sys, os, json
 
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
@@ -27,6 +27,37 @@ class PortfolioParams():
     global_datetime_prefix: str="%Y-%m-%d %H:%M:%S"
 
     datetime_timeline: set=field(default_factory=set)
+
+
+
+    # XXX - ADICIONAR opção para pegar apenas 1 valor [i] do ind
+    # XXX - Gerar nova DEBUG para testar todas as configurações do BaseClass para os indicadores
+    # XXX - Eliminar todos envios de indicador_pool e portfolio_returns, usar self.portfolio.indicator_pool e self.portfolio.portfolio_returns
+    # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
+    # XXX - Transformar hierarchy em self.hierarchy no nível Portfolio.py, assim com self.indicator_pool
+    
+
+    - Gerar mais estratégias mockup para testar
+    - Agora backtest.cpp tem que verificar o ativo e calcular o lot como lote minimo e pnl $ além do %
+
+
+    
+    - Ler metadados dos resultados para ter acesso aos assets dos models, até porque ter os pode ser que
+o modelo seja modificado, então teria dados diferentes se for ler na hora, testar get_metadata_by_key() e 
+get_assets_from_model_meta() também
+    - Terminar todos os SystemManagers com a ultima versão no Gemini, resolvendo qual aggr o MSM vai receber
+    - Gerar o sistema de entrada e junto desenvolver os Money Managers
+    - Desenvolver sistema de saida 
+    
+
+    # - analise_long_short_separate está errado na hora do calculo do aggr
+    # - Está crashando muito, procurar otimizar o código e talvez instanciar
+    # - Para otimizar, talvez gerar parquet de aggr no Operation e carregar direto
+    # - Salvar ind em parquet?
+
+
+
+
 
 class Portfolio(BaseClass, BaseManager): 
     def __init__(self, portfolio_params: PortfolioParams):
@@ -130,28 +161,6 @@ class Portfolio(BaseClass, BaseManager):
                 print(f"> {step_dt} - Portfolio PnL: {self.sim_current_equity:.2f}")
             
         return True
-    
-
-
-
-
-    # XXX - ADICIONAR opção para pegar apenas 1 valor [i] do ind
-    # XXX - Gerar nova DEBUG para testar todas as configurações do BaseClass para os indicadores
-    # XXX - Eliminar todos envios de indicador_pool e portfolio_returns, usar self.portfolio.indicator_pool e self.portfolio.portfolio_returns
-    # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
-    # XXX - Transformar hierarchy em self.hierarchy no nível Portfolio.py, assim com self.indicator_pool
-    
-    # - Desenvolvendo SM/MM
-    # - analise_long_short_separate está errado na hora do calculo do aggr
-    # - Está crashando muito, procurar otimizar o código e talvez instanciar
-    # - Para otimizar, talvez gerar parquet de aggr no Operation e carregar direto
-    # - Salvar ind em parquet?
-
-
-
-
-
-
     
     # ── Portfolio Defs ───────────────────────────────────────────────
 
@@ -787,7 +796,51 @@ class Portfolio(BaseClass, BaseManager):
                     if target_level == "assets":
                         yield m_key, m_info, s_key, s_info, a_key, a_info
 
+    def get_metadata_by_key(self, key: tuple, meta_path: str = "Backend/results/operation_test/operation_meta.json"):
+        """
+        Navega no JSON de metadados usando a hierarquia da key.
+        Exemplos de key:
+        - ("operation_test",) -> Retorna dados da operação
+        - ("operation_test", "MA Trend Following") -> Retorna dados do modelo
+        - ("operation_test", "MA Trend Following", "AT15") -> Retorna dados da estratégia
+        """
+        if not os.path.exists(meta_path):
+            print(f"Erro: Metadado não encontrado em {meta_path}")
+            return None
 
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+
+        try:
+            # Nível 0: Operação (op_name)
+            # O JSON fornecido é a própria operação
+            current_node = data
+            
+            # Nível 1: Modelo
+            if len(key) > 1:
+                model_name = key[1]
+                current_node = current_node.get("models", {}).get(model_name)
+            
+            # Nível 2: Estratégia
+            if len(key) > 2 and current_node:
+                strat_name = key[2]
+                current_node = current_node.get("strats", {}).get(strat_name)
+                
+            return current_node
+
+        except Exception as e:
+            print(f"Erro ao ler metadados para a chave {key}: {e}")
+            return None
+
+    def get_assets_from_model_meta(self, model_meta):
+        """Extrai todos os ativos únicos de todas as estratégias de um modelo"""
+        assets = set()
+        if not model_meta or "strats" not in model_meta:
+            return []
+        
+        for strat in model_meta["strats"].values():
+            assets.update(strat.get("assets", []))
+        return list(assets)
 
     # ── Portfolio Optimization ───────────────────────────────────────────────
 
@@ -989,6 +1042,7 @@ if __name__ == "__main__":
     """
     PCA-Regime-Adjusted Momentum (PCA-RAM)
     EW-PCA (Entropy Weighting-PCA)
+    HRP
 
     DEFAULT
     Portofolio
@@ -1065,34 +1119,12 @@ if __name__ == "__main__":
 
 
     """
-    # XXX -> Resolver problema minutos wf
-    # -> IMPORTANTE -> AO INVÉS DE PEGAR DATETIMES DOS WF/PNL, USAR DOS ASSETS DOS MODELOS, JÁ QUE PROVAVELMENTE VAI USAR NO SYSTEM/MONEY
-    # -> Como vai ficar a estrutura de System/Money? ter uma lista de indicators e assets que vão ser usados?
-
-    # money_manager_equilizer = {"frequency": 0.5 trades per day, "avg_win", "avg_loss"}    
-    
-    
+    Pontos para melhorar para V2
+    - 3 SM para rankear, filtrar e limitar com pesos cada Nível e Asset
+    - 1 MM para gerenciar as Strat(s) e Asset(s) dos param_set selecionados
+    - Carregar o objeto do Model também, além dos resultados, para ter acesso aos ativos
 
 
-        def _debug_sim_data_structure(self):
-        print("\n" + "="*50)
-        print("DEBUG: ESTRUTURA DO SIM_DATA")
-        print("="*50)
-        
-        if not self.sim_data:
-            print("ERRO: sim_data está VAZIO!")
-            return
-
-        for key, info in self.sim_data.items():
-            tipo = info.get("type", "N/A")
-            length = len(info["pnl"]) if "pnl" in info else "N/A"
-            aggr_pnl = "Sim" if "aggr_pnl" in info else "Não"
-            
-            # Formata a visualização da tupla/chave
-            key_desc = f"LEN({len(key)}) {key}"
-            print(f"Key: {key_desc:<40} | Type: {tipo:<6} | PnL Size: {length:<8} | Has Aggr: {aggr_pnl}")
-        
-        print("="*50 + "\n")
     """
 
 

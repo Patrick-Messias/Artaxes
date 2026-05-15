@@ -76,7 +76,7 @@ class OperationParams():
     metrics: Optional[Dict[str, Indicator]] = field(default_factory=dict)
 
     # Settings
-    operation_timeframe: str=None
+    #operation_timeframe: str=None
     date_start: str=None
     date_end: str=None
     save: bool=False
@@ -90,7 +90,7 @@ class Operation(BaseClass):
 
         self.metrics = op_params.metrics
 
-        self.operation_timeframe = op_params.operation_timeframe
+        #self.operation_timeframe = op_params.operation_timeframe
         self.date_start = op_params.date_start
         self.date_end = op_params.date_end
         self.save = op_params.save
@@ -249,6 +249,7 @@ class Operation(BaseClass):
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_keys[ps_name] = []
 
+                        #if strat_obj.indicators is not None:
                         for ind_key, ind_obj in strat_obj.indicators.items():
                             eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
                             ind_p_hash = self.param_suffix(eff_params)
@@ -539,7 +540,7 @@ class Operation(BaseClass):
                         asset_batch["simulations"] = batch_sims
 
                         full_output = self._run_cpp_operation(asset_batch)
-
+                        
                         self._save_trades(full_output, model_name, strat_name, asset_name, wfm_con)
 
                     # ── FINALIZA WFM (pivot) ───────────────────────────────────
@@ -738,8 +739,7 @@ class Operation(BaseClass):
             import traceback; traceback.print_exc()
             return {"trades_columnar": None, "wfm_columnar": None, "ps_names": []}
 
-    def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str,
-                     wfm_con=None):
+    def _save_trades(self, full_output: dict, m_name: str, s_name: str, a_name: str, wfm_con=None):
         if not full_output: return
  
         tc       = full_output.get("trades_columnar")
@@ -910,6 +910,7 @@ class Operation(BaseClass):
 
     #     return result
 
+
    
     def transfer_htf_columns(self, ltf_df, htf_df, ind_name):
         
@@ -994,9 +995,8 @@ class Operation(BaseClass):
 
         models_dict = self._get_all_models()  # objetos Model reais
         models_map  = self._results_map.get(self.name, {}).get("models", {})
-
         meta = {
-            "operation_timeframe": self.operation_timeframe,
+            #"operation_timeframe": self.operation_timeframe,
             "date_start":          self.date_start,
             "date_end":            self.date_end,
             "models":              {},
@@ -1006,7 +1006,7 @@ class Operation(BaseClass):
             model_real = models_dict.get(m_name)         
 
             meta["models"][m_name] = {
-                "execution_timeframe": getattr(model_real, "execution_timeframe", self.operation_timeframe),
+                "execution_timeframe": getattr(model_real, "execution_timeframe"), #, self.operation_timeframe
                 "date_start":          getattr(model_real, "date_start", self.date_start),
                 "date_end":            getattr(model_real, "date_end",   self.date_end),
                 "strats":              {},
@@ -1055,8 +1055,7 @@ class Operation(BaseClass):
         model:             Optional[str] = None,
         strat:             Optional[str] = None,
         asset:             Optional[str] = None,
-        load_from_storage: bool = True,
-    ):
+        load_from_storage: bool = True,):
         """
         Imprime resumo de performance por parset.
         Filtros opcionais: model, strat, asset.
@@ -1390,7 +1389,7 @@ class Operation(BaseClass):
         # I - Init and Validation of Operation
         print(f"\n>>> I - Init and Validating Operation <<<")
         self._validate_operation()
-        self._init_data()
+        #self._init_data()
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
@@ -1417,43 +1416,27 @@ class Operation(BaseClass):
 # || ======================================================================================================================================================================= ||
 
 if __name__ == "__main__":
-    # eurusd = Asset(
-    #     name='EURUSD',
-    #     type='currency_pair',
-    #     market='forex',
-    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
-    # gbpusd = Asset(
-    #     name='GBPUSD',
-    #     type='currency_pair',
-    #     market='forex',
-    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
-    # usdjpy = Asset(
-    #     name='USDJPY',
-    #     type='currency_pair',
-    #     market='forex',
-    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados\\Forex')
-    # winfut = Asset(
-    #     name='WIN$',
-    #     type='futures',
-    #     market='b3',
-    #     data_path=f'C:\\Users\\Patrick\\Desktop\\Artaxes Portfolio\\MAIN\\MT5_Dados')
-
+    
+    import itertools
+    import polars as pl
+    from pathlib import Path
+    
     assets = Asset.load_all()
     eurusd = assets.get("EURUSD")
     gbpusd = assets.get("GBPUSD")
     usdjpy = assets.get("USDJPY")
-    winfut = assets.get("WINFUT")
+    winfut = assets.get("WIN$")
     
-    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
+    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
     # =======================================================================================================|| Global Above
 
-    model_assets=['EURUSD', "GBPUSD", "USDJPY"] # Only keys #, 'GBPUSD'
-    model_execution_tf = 'M15'
+    AT15_model_execution_tf = 'M15'
+    AT20_model_execution_tf = 'M10'
 
     strat_param_sets = {
         'AT15': { 
-            'execution_tf': model_execution_tf,
+            'execution_tf': AT15_model_execution_tf,
             'backtest_start_idx': 21,
             'limit_order_exclusion_after_period': 1,
             'limit_order_perc_treshold_for_order_diff': 0.03,
@@ -1470,7 +1453,35 @@ if __name__ == "__main__":
             'param1': range(21, 21+1, 21), #50
             'param2': range(8, 24+1, 8), # 3
             'param3': ['sma'] #, 'ema', 'ema'
-        }
+        },
+        'AT20': { 
+            'execution_tf': AT20_model_execution_tf,
+            'backtest_start_idx': 21,
+            'limit_order_exclusion_after_period': 1,
+            'limit_order_perc_treshold_for_order_diff': 0.03,
+            'limit_can_enter_at_market_if_gap': False,
+            'limit_opposite_order_closes_pending': False,
+
+            'exit_nb_only_if_pnl_is': 0, 
+            'exit_nb_long': range(0, 0+1, 7),
+            'exit_nb_short': range(0, 0+1, 7),
+            
+            'sl_perc': range(2, 10+1, 4), # 3
+            'tp_perc': range(2, 10+1, 4), 
+            'param2': range(10, 80+1, 10), # 3
+        },
+        'AT30': { 
+            'execution_tf': AT20_model_execution_tf,
+            'backtest_start_idx': 21,
+            'limit_order_exclusion_after_period': 1,
+            'limit_order_perc_treshold_for_order_diff': 0.03,
+            'limit_can_enter_at_market_if_gap': False,
+            'limit_opposite_order_closes_pending': False,
+
+            'exit_nb_only_if_pnl_is': 0, 
+            'exit_nb_long': range(5, 5+1, 7),
+            'exit_nb_short': range(5, 5+1, 7),
+        },
     }
 
     from MA import MA # type: ignore
@@ -1481,18 +1492,22 @@ if __name__ == "__main__":
     from DayOpen import DayOpen # type: ignore
 
     # User imput Indicators
-    ind = { 
-        'atr': ATR_SL(asset=None, timeframe=model_execution_tf, window='param2'),
-        'var': VAR(asset=None, timeframe=model_execution_tf, window='param2', alpha=0.01, var_type='parametric', price_col='close'),
-        #'ema': MA(asset=None, timeframe=model_execution_tf, window='param1', ma_type='param3', price_col='close'),
+    AT15_indicators = { 
+        'atr': ATR_SL(asset=None, timeframe=AT15_model_execution_tf, window='param2'),
+        'var': VAR(asset=None, timeframe=AT15_model_execution_tf, window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+        #'ema': MA(asset=None, timeframe=AT15_model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         # 'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
-        # 'max': PriorCote(asset=None, timeframe=model_execution_tf, price_col='high'),
-        # 'min': PriorCote(asset=None, timeframe=model_execution_tf, price_col='low'),
-        # 'open_day': DayOpen(assertsset=None, timeframe=model_execution_tf),
+        # 'max': PriorCote(asset=None, timeframe=AT15_model_execution_tf, price_col='high'),
+        # 'min': PriorCote(asset=None, timeframe=AT15_model_execution_tf, price_col='low'),
+        # 'open_day': DayOpen(assertsset=None, timeframe=AT15_model_execution_tf),
+    }
+    AT20_indicators = {
+        'atr': ATR_SL(asset=None, timeframe=AT20_model_execution_tf, window='param2'),
+        #'open_day': DayOpen(asset=None, timeframe=AT20_model_execution_tf),
     }
 
-    def strat_signals(df: pl.DataFrame, params: dict) -> dict:
+    def AT15_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point
 
         atr = df['atr']
@@ -1586,7 +1601,196 @@ if __name__ == "__main__":
             'dist_signal_ref': dist_signal_ref,
 
             '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
+        }  
+    def AT20_Signals(df: pl.DataFrame, params: dict) -> dict:
+        # Can use columns df['high'] or str 'high' to point
+
+        atr = df['atr']
+        #day_open = df['open_day']
+        #atr_range = (atr * 3)
+
+        bull = df['close'] < df['open'] 
+        bear = df['close'] > df['open']
+
+        entry_long  = bull & bull.shift(1) & bull.shift(2) #& (df['close'] > day_open + atr_range) # & (df['close'] > day_open) #& (ema < ema.shift(1))
+        entry_short = bear & bear.shift(1) & bear.shift(2) #& (df['close'] < day_open - atr_range) # & (df['close'] < day_open) #& (ema > ema.shift(1))
+
+        exit_tf_long  = bear & bear.shift(1)
+        exit_tf_short = bull & bull.shift(1)
+
+        # Preço da ordem pendente
+        limit_long_price  = df['open'] #'high[1]' #
+        limit_short_price = df['open'] #'low[1]' #
+
+        # Distâncias (definidas ANTES de serem usadas)
+        sl_long_price  = limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = limit_long_price + atr * params['sl_perc'] 
+
+        # TP absoluto: 2R
+        tp_long_price  = None #limit_long_price + atr  * params['tp_perc']
+        tp_short_price = None #limit_long_price - atr * params['tp_perc']
+
+        # Trailing: 0.5R
+        trail_long_dist  = None #sl_long_dist  * 0.5
+        trail_short_dist = None #sl_short_dist * 0.5
+
+        # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
+        be_long_dist  = None #sl_long_dist  * 1.0
+        be_short_dist = None #sl_short_dist * 1.0
+
+        # Position Sizing
+        #var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
+        lot_series = None #(pl.lit(0.01) / var).clip(0.1, 10.0)
+
+        # n = len(df)
+        # compound_fract_vals = np.ones(n, dtype=np.float64)
+        # compound_fract_vals[10000:] = 0.1
+        # compound_fract_series = pl.Series("compound_fract_series", compound_fract_vals)
+        compound_fract_series = None
+        dist_signal_ref = None
+        
+        if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
+        if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
+        if exit_tf_long is not None and not isinstance(exit_tf_long, str): exit_tf_long = exit_tf_long.shift(1)
+        if exit_tf_short is not None and not isinstance(exit_tf_short, str): exit_tf_short = exit_tf_short.shift(1)
+        
+        if tp_long_price is not None and not isinstance(tp_long_price, str): tp_long_price = tp_long_price.shift(1)
+        if tp_short_price is not None and not isinstance(tp_short_price, str): tp_short_price = tp_short_price.shift(1)
+        if sl_long_price is not None and not isinstance(sl_long_price, str): sl_long_price = sl_long_price.shift(1)
+        if sl_short_price is not None and not isinstance(sl_short_price, str): sl_short_price = sl_short_price.shift(1)
+        
+        if limit_long_price is not None and not isinstance(limit_long_price, str): limit_long_price = limit_long_price.shift(1)
+        if limit_short_price is not None and not isinstance(limit_short_price, str): limit_short_price = limit_short_price.shift(1)
+        
+        if trail_long_dist is not None and not isinstance(trail_long_dist, str): trail_long_dist = trail_long_dist.shift(1)
+        if trail_short_dist is not None and not isinstance(trail_short_dist, str): trail_short_dist = trail_short_dist.shift(1)
+        
+        if be_long_dist is not None and not isinstance(be_long_dist, str): be_long_dist = be_long_dist.shift(1)
+        if be_short_dist is not None and not isinstance(be_short_dist, str): be_short_dist = be_short_dist.shift(1)
+
+        if lot_series is not None and not isinstance(lot_series, str): lot_series = lot_series.shift(1)
+        if compound_fract_series is not None and not isinstance(compound_fract_series, str): compound_fract_series = compound_fract_series.shift(1)
+        if dist_signal_ref is not None and not isinstance(dist_signal_ref, str): dist_signal_ref = dist_signal_ref.shift(1)
+        return {
+            'entry_long':       entry_long,
+            'entry_short':      entry_short,
+            'exit_long':        exit_tf_long,
+            'exit_short':       exit_tf_short,
+
+            'sl_price_long':    sl_long_price,
+            'sl_price_short':   sl_short_price,
+            'tp_price_long':    tp_long_price,
+            'tp_price_short':   tp_short_price,
+
+            'limit_long':       limit_long_price,
+            'limit_short':      limit_short_price,
+
+            'trail_long':       trail_long_dist,
+            'trail_short':      trail_short_dist,
+
+            'be_trigger_long':  be_long_dist,
+            'be_trigger_short': be_short_dist,
+
+            'custom_lot_size_long':  lot_series,
+            'custom_lot_size_short': lot_series,
+            'compound_fract_series': compound_fract_series,
+            'dist_signal_ref': dist_signal_ref,
+
+            '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
         }
+    def AT30_Signals(df: pl.DataFrame, params: dict) -> dict:
+        # Can use columns df['high'] or str 'high' to point
+        close = df['close']
+        high = df['high']
+        low = df['low']
+
+        entry_long  = close < low.shift(1) 
+        entry_short = close > high.shift(1)
+
+        exit_tf_long  = close > high.shift(1) 
+        exit_tf_short = close < low.shift(1) 
+
+        # Preço da ordem pendente
+        limit_long_price  = df['open'] #'high[1]' #
+        limit_short_price = df['open'] #'low[1]' #
+
+        # Distâncias (definidas ANTES de serem usadas)
+        sl_long_price  = None# limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = None #limit_long_price + atr * params['sl_perc'] 
+
+        # TP absoluto: 2R
+        tp_long_price  = None #limit_long_price + atr  * params['tp_perc']
+        tp_short_price = None #limit_long_price - atr * params['tp_perc']
+
+        # Trailing: 0.5R
+        trail_long_dist  = None #sl_long_dist  * 0.5
+        trail_short_dist = None #sl_short_dist * 0.5
+
+        # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
+        be_long_dist  = None #sl_long_dist  * 1.0
+        be_short_dist = None #sl_short_dist * 1.0
+
+        # Position Sizing
+        #var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
+        lot_series = None #(pl.lit(0.01) / var).clip(0.1, 10.0)
+
+        # n = len(df)
+        # compound_fract_vals = np.ones(n, dtype=np.float64)
+        # compound_fract_vals[10000:] = 0.1
+        # compound_fract_series = pl.Series("compound_fract_series", compound_fract_vals)
+        compound_fract_series = None
+        dist_signal_ref = None
+        
+        if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
+        if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
+        if exit_tf_long is not None and not isinstance(exit_tf_long, str): exit_tf_long = exit_tf_long.shift(1)
+        if exit_tf_short is not None and not isinstance(exit_tf_short, str): exit_tf_short = exit_tf_short.shift(1)
+        
+        if tp_long_price is not None and not isinstance(tp_long_price, str): tp_long_price = tp_long_price.shift(1)
+        if tp_short_price is not None and not isinstance(tp_short_price, str): tp_short_price = tp_short_price.shift(1)
+        if sl_long_price is not None and not isinstance(sl_long_price, str): sl_long_price = sl_long_price.shift(1)
+        if sl_short_price is not None and not isinstance(sl_short_price, str): sl_short_price = sl_short_price.shift(1)
+        
+        if limit_long_price is not None and not isinstance(limit_long_price, str): limit_long_price = limit_long_price.shift(1)
+        if limit_short_price is not None and not isinstance(limit_short_price, str): limit_short_price = limit_short_price.shift(1)
+        
+        if trail_long_dist is not None and not isinstance(trail_long_dist, str): trail_long_dist = trail_long_dist.shift(1)
+        if trail_short_dist is not None and not isinstance(trail_short_dist, str): trail_short_dist = trail_short_dist.shift(1)
+        
+        if be_long_dist is not None and not isinstance(be_long_dist, str): be_long_dist = be_long_dist.shift(1)
+        if be_short_dist is not None and not isinstance(be_short_dist, str): be_short_dist = be_short_dist.shift(1)
+
+        if lot_series is not None and not isinstance(lot_series, str): lot_series = lot_series.shift(1)
+        if compound_fract_series is not None and not isinstance(compound_fract_series, str): compound_fract_series = compound_fract_series.shift(1)
+        if dist_signal_ref is not None and not isinstance(dist_signal_ref, str): dist_signal_ref = dist_signal_ref.shift(1)
+        return {
+            'entry_long':       entry_long,
+            'entry_short':      entry_short,
+            'exit_long':        exit_tf_long,
+            'exit_short':       exit_tf_short,
+
+            'sl_price_long':    sl_long_price,
+            'sl_price_short':   sl_short_price,
+            'tp_price_long':    tp_long_price,
+            'tp_price_short':   tp_short_price,
+
+            'limit_long':       limit_long_price,
+            'limit_short':      limit_short_price,
+
+            'trail_long':       trail_long_dist,
+            'trail_short':      trail_short_dist,
+
+            'be_trigger_long':  be_long_dist,
+            'be_trigger_short': be_short_dist,
+
+            'custom_lot_size_long':  lot_series,
+            'custom_lot_size_short': lot_series,
+            'compound_fract_series': compound_fract_series,
+            'dist_signal_ref': dist_signal_ref,
+
+            '__sig_key_params': []
+        }
+
 
     AT15 = Strat(
         StratParams(
@@ -1611,18 +1815,92 @@ if __name__ == "__main__":
                 sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
             )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
-            indicators=ind,
-            signals=strat_signals
+            indicators=AT15_indicators,
+            signals=AT15_Signals
+        )
+    ) 
+    AT20 = Strat(
+        StratParams(
+            name="AT20",
+            operation=Walkforward(
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
+                wfm_is_always_higher_or_equal_to_oos=True,
+                matrix_resolution='weekly', time_mode = 'calendar_days',
+                is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
+                wf_selection_metric='wfe', wf_selection_analysis_radius_n=1,
+                wf_selection_logic='highest_stable', wf_returns_mode='selected'
+            ),
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
+                order_type='market', limit_order_base_calc_ref_price='open', 
+                slippage=0.0, commission=0.0, # * Tick 
+                day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
+                day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
+                fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
+                backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
+            strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
+                sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
+                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
+            )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+            params=strat_param_sets['AT20'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
+            indicators=AT20_indicators,
+            signals=AT20_Signals
+        )
+    )
+    AT30 = Strat(
+        StratParams(
+            name="AT30",
+            operation=Walkforward(
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
+                wfm_is_always_higher_or_equal_to_oos=True,
+                matrix_resolution='weekly', time_mode = 'calendar_days',
+                is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
+                wf_selection_metric='wfe', wf_selection_analysis_radius_n=1,
+                wf_selection_logic='highest_stable', wf_returns_mode='selected'
+            ),
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
+                order_type='market', limit_order_base_calc_ref_price='open', 
+                slippage=0.0, commission=0.0, # * Tick 
+                day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
+                day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
+                fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
+                backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
+            strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
+                sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
+                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
+            )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+            params=strat_param_sets['AT30'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
+            indicators={},
+            signals=AT30_Signals
         )
     )
 
     model_1 = Model(
         ModelParams(
-            name='MA Trend Following',
-            assets=model_assets, # CURR_ASSET refers to this one in strat_support_assets
+            name='FX MA Trend Following',
+            assets=['EURUSD', "GBPUSD", "USDJPY"], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT15': AT15},
-            execution_timeframe=model_execution_tf,
-            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="Model1_MM")),
+            execution_timeframe=AT15_model_execution_tf,
+            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_1_mm")),
+            model_system_manager=None  # Optional - will use default system management
+        )
+    )
+    model_2 = Model(
+        ModelParams(
+            name='FX Mean Reversion',
+            assets=['EURUSD', "GBPUSD", "USDJPY"], # CURR_ASSET refers to this one in strat_support_assets
+            strat={'AT30': AT30},
+            execution_timeframe=AT15_model_execution_tf,
+            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_2_mm")),
+            model_system_manager=None  # Optional - will use default system management
+        )
+    )
+    model_3 = Model(
+        ModelParams(
+            name='Futures Mean Reversion',
+            assets=['WIN$'], # CURR_ASSET refers to this one in strat_support_assets
+            strat={'AT20': AT20, 'AT30': AT30},
+            execution_timeframe=AT20_model_execution_tf,
+            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_3_mm")),
             model_system_manager=None  # Optional - will use default system management
         )
     )
@@ -1630,9 +1908,9 @@ if __name__ == "__main__":
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_1],
+            data=[model_1, model_2, model_3],
             assets=global_assets,
-            operation_timeframe=model_execution_tf, # Must always be the smaller timeframe among all strat execution_timeframe
+            #operation_timeframe=AT15_model_execution_tf, # NOTE maybe unnecessary, remove later
             date_start=None, #'2020-01-01',
             date_end=None, #
             save=True,
@@ -1641,7 +1919,7 @@ if __name__ == "__main__":
     )
 
     operation.run()
-
+    
 
 """ ||===================================================|| TASKS ||===================================================||
 
@@ -1663,6 +1941,7 @@ if __name__ == "__main__":
 # XXX - Modernize Classes
 # XXX - Adicionar novo Backtester para Close-Close, Open-Open.
 
+# - Move operation_timeframe from Model to Strat
 # - SM and MM for Portfolio and Models
 
 # - Deselop SM selection system for Models/Strats/Assets

@@ -2,41 +2,30 @@ import polars as pl
 from Indicator import Indicator
 
 class DayOpen(Indicator):
+    """
+    Calcula o preço de abertura do primeiro candle de cada dia e 
+    o replica para todos os candles daquele mesmo dia usando a nova metodologia.
+    """
     def __init__(self, asset=None, timeframe=None, **params):
-        super().__init__(asset, timeframe, **params)
+        # Definimos 'price_col' como 'open' por padrão para este indicador
+        defaults = {
+            'price_col': 'open'
+        }
+        defaults.update(params)
+        super().__init__(asset, timeframe, **defaults)
         self.name = "day_open"
 
-    def _calculate_logic(self, df: pl.DataFrame, **kwargs) -> pl.DataFrame:
-        """
-        Calcula o preço de abertura do primeiro candle de cada dia e 
-        o replica para todos os candles daquele mesmo dia.
-        """
-        target_name = kwargs.get('ind_name', self.name)
-        
-        # 1. Criamos um identificador único para o dia (YYYY-MM-DD)
-        # Diferente do truncate("1w"), o date() agrupa estritamente por dia civil
-        df_work = df.sort("datetime").with_columns(
-            pl.col("datetime").dt.date().alias("_day_id")
+    def _get_expr(self, **kwargs) -> pl.Expr:
+        price_col = str(kwargs.get('price_col', 'open'))
+
+        # A "mágica" do Polars para substituir o Join:
+        # 1. Pegamos a coluna de preço (open).
+        # 2. .first() pega o primeiro valor do grupo.
+        # 3. .over(pl.col("datetime").dt.date()) define que o grupo é o dia civil.
+        return (
+            pl.col(price_col)
+            .first()
+            .over(pl.col("datetime").dt.date())
+            .fill_null(strategy="forward")
+            .fill_null(0.0)
         )
-
-        # 2. Agrupamos para extrair o PRIMEIRO open de cada dia
-        day_stats = (
-            df_work.group_by("_day_id", maintain_order=True)
-            .agg(
-                pl.col("open").first().alias("_first_open")
-            )
-        )
-
-        # 3. Join de volta: Cada candle (ex: 10:10, 10:20...) se associa ao 
-        # _first_open do seu respectivo _day_id.
-        # NÃO usamos shift(1) aqui porque o Open do dia é um dado "safe" (não muda)
-        result_df = df_work.join(
-            day_stats.select(["_day_id", "_first_open"]),
-            on="_day_id",
-            how="left"
-        ).rename({"_first_open": target_name})
-
-        # 4. Limpeza e preenchimento de segurança
-        return result_df.select([
-            pl.col(target_name).fill_null(strategy="forward").fill_null(0.0)
-        ])
