@@ -71,6 +71,37 @@ inline int extract_minutes(const std::string& dt) {
     }
 }
 
+// Backtest asset context structure
+struct AssetContext {
+    double tick_size;
+    double tick_val;
+    double contract_size;
+    double min_lot;
+    double lot_step;
+    double lot_max;
+    double leverage;
+    std::string capital_coin;
+};
+
+// Backtest MM context structure
+struct MMContext {
+    double capital;
+
+    std::string sizing_method;
+    std::string capital_method;
+    std::optional<double> compound_fract;
+    std::optional<double> dist_fixed;
+    std::optional<double> fixed_lot;
+    std::optional<double> risk_pct;
+    std::optional<double> risk_pct_min;
+    std::optional<double> risk_pct_max;
+    std::optional<double> pct;
+    std::optional<double> kelly_weight;
+    std::optional<double> var_confidence;
+    std::optional<double> min_trades;
+    std::optional<std::string> ref_long;
+    std::optional<std::string> ref_short;
+};
 
 struct DailyResult {
     long long ts; // Format int 'YYYYMMDDHHMMSS', ex "2023-10-25 14:30:00" -> 20231025143000

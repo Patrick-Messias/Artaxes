@@ -73,6 +73,8 @@ class OperationParams():
     assets: Optional[Dict[str, Any]] = field(default_factory=dict) # Global Assets
 
     # Metrics
+    reference_capital: float=100000.0
+    reference_capital_coin: str="USD"
     metrics: Optional[Dict[str, Indicator]] = field(default_factory=dict)
 
     # Settings
@@ -88,6 +90,8 @@ class Operation(BaseClass):
         self.data = op_params.data
         self.assets = op_params.assets 
 
+        self.reference_capital = op_params.reference_capital
+        self.reference_capital_coin = op_params.reference_capital_coin
         self.metrics = op_params.metrics
 
         #self.operation_timeframe = op_params.operation_timeframe
@@ -481,12 +485,29 @@ class Operation(BaseClass):
                             'trades': []
                         }
 
-                        mm_params = {"method": "neutral"} #smm.to_sim_params() if smm is not None else {"method": "neutral"}
+                        # Strat Money Manager rules NOTE DEPOIS MOVER ACIMA PARA NIVEL STRAT
+                        mm_params = {"sizing_method": getattr(strat_obj.strat_money_manager, "sizing_method", "neutral")} #smm.to_sim_params() if smm is not None else {"method": "neutral"}
+                        mm_params["capital_method"] = getattr(strat_obj.strat_money_manager, "capital_method", "fixed")
+                        mm_params["compound_fract"] = getattr(strat_obj.strat_money_manager, "compound_fract", 1.0)
+                        mm_params["dist_fixed"] = getattr(strat_obj.strat_money_manager, "dist_fixed", 0)
+                        mm_params["fixed_lot"] = getattr(strat_obj.strat_money_manager, "fixed_lot", 1.0)
+                        mm_params["risk_pct"] = getattr(strat_obj.strat_money_manager, "risk_pct", 0.01)
+                        mm_params["risk_pct_min"] = getattr(strat_obj.strat_money_manager, "risk_pct_min", 0.001)
+                        mm_params["risk_pct_max"] = getattr(strat_obj.strat_money_manager, "risk_pct_max", 0.05)
+                        mm_params["pct"] = getattr(strat_obj.strat_money_manager, "pct", 0.01)
+                        mm_params["kelly_weight"] = getattr(strat_obj.strat_money_manager, "kelly_weight", 0.25)
+                        mm_params["var_confidence"] = getattr(strat_obj.strat_money_manager, "var_confidence", 0.95)
+                        mm_params["min_trades"] = getattr(strat_obj.strat_money_manager, "min_trades", 0)
+
+                        # Asset specific rules
                         mm_params["tick"]         = getattr(asset_class, "tick",         0.01)
                         mm_params["tick_fin_val"] = getattr(asset_class, "tick_fin_val", 1.0)
+                        mm_params["contract_size"] = getattr(asset_class, "contract_size", 1.0)
                         mm_params["min_lot"]      = getattr(asset_class, "min_lot",      0.01)
                         mm_params["lot_step"]     = getattr(asset_class, "lot_step",     getattr(asset_class, "min_lot", 0.01))
-                        mm_params["lot_max"]      = getattr(asset_class, "lot_max",      10000)
+                        mm_params["lot_max"]      = getattr(asset_class, "lot_max",      100000)
+                        mm_params["reference_capital"]      = getattr(self.reference_capital,      100000.0)
+                        mm_params["reference_capital_coin"]      = getattr(self.reference_capital_coin, "USD")
 
                         sim_signal_refs = dict(ps_signal_refs[ps_name])
                         if mm_params.get("method") == "signal":
@@ -1914,7 +1935,6 @@ if __name__ == "__main__":
             date_start=None, #'2020-01-01',
             date_end=None, #
             save=True,
-            metrics={}
         )
     )
 

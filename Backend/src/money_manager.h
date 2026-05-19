@@ -3,12 +3,15 @@
 #include <vector>
 #include <unordered_map>
 #include <nlohmann/json.hpp>
+#include "Utils.h"
 
 using json = nlohmann::json;
 
 struct LotResult {
     double lot_size;  // positivo=long, negativo=short
     bool   is_long;
+    double required_margin;
+    double scaling_factor;
 };
 
 // ── MoneyManager C++ ──────────────────────────────────────────────────────────
@@ -35,7 +38,8 @@ struct LotResult {
 class MoneyManager {
 public:
     static LotResult calculate(
-        const json&                                             mm_params,
+        MMContext                                               mm_context,
+        AssetContext                                            asset_context,
         double                                                  price,
         bool                                                    is_long,
         double                                                  sl_price,      // SL do trade (0 se não definido)
@@ -46,22 +50,25 @@ public:
     );
 
 private:
-    static double apply_capital_method(const json& mm_params, size_t bar_idx,
+    static double apply_capital_method(MMContext mm_context,
+                                       AssetContext asset_context,
+                                       size_t bar_idx,
                                        double cumulative_profit,
                                        const std::unordered_map<std::string, const double*>& fast_pool);
 
-    static double resolve_dist(const json& mm_params, double price, double sl_price,
+    static double resolve_dist(MMContext mm_context, AssetContext asset_context, double price, double sl_price,
                                size_t bar_idx,
                                const std::unordered_map<std::string, const double*>& fast_pool);
 
-    static double apply_lot_constraints(double lot, const json& mm_params);
+    static double apply_lot_constraints(AssetContext asset_context, double lot);
 
     static double pool_val(const std::string& ref, size_t bar_idx,
                            const std::unordered_map<std::string, const double*>& fast_pool);
 
-    static double calc_kelly(double capital, double price, double tick_fin_val,
-                             const std::vector<double>& profits, const json& mm_params);
+    static double calc_kelly(MMContext mm_context,
+                                double capital, double price, double tick_fin_val,
+                             const std::vector<double>& profits);
 
-    static double calc_var(double capital, double price, double tick_fin_val,
-                           const std::vector<double>& profits, const json& mm_params);
+    static double calc_var(MMContext mm_context, double capital, double price, double tick_fin_val,
+                           const std::vector<double>& profits);
 };

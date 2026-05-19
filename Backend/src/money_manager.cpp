@@ -29,18 +29,20 @@ double MoneyManager::pool_val(
 // "compound" → capital + profit_usd × fract
 //              fract: escalar mm["compound_fract"] ou série fast_pool["compound_fract"]
 double MoneyManager::apply_capital_method(
-    const json&                                             mm_params,
+    MMContext mm_context,
+    AssetContext asset_context,
     size_t                                                  bar_idx,
     double                                                  cumulative_profit,
     const std::unordered_map<std::string, const double*>&   fast_pool)
 {
-    const double capital = mm_params.value("capital",        100000.0);
-    const std::string cm = mm_params.value("capital_method", "fixed");
+    double capital = mm_context.capital;
+    const std::string capital_coin = asset_context.capital_coin;
+    const std::string cm = mm_context.capital_method;
+    double fract = mm_context.compound_fract.value_or(1.0);
 
     if (cm == "fixed") return capital;
 
     // compound — fract escalar ou série (série substitui escalar se presente)
-    double fract = mm_params.value("compound_fract", 1.0);
     double series_val = pool_val("compound_fract_series", bar_idx, fast_pool);
     if (series_val > 0.0) fract = series_val;
 
@@ -55,7 +57,8 @@ double MoneyManager::apply_capital_method(
 // ── resolve_dist ──────────────────────────────────────────────────────────────
 // Prioridade: fast_pool["dist_ref"] → abs(entry - sl) → dist_fixed → tick
 double MoneyManager::resolve_dist(
-    const json&                                             mm_params,
+    MMContext mm_context, 
+    AssetContext asset_context,
     double                                                  price,
     double                                                  sl_price,
     size_t                                                  bar_idx,
@@ -72,27 +75,23 @@ double MoneyManager::resolve_dist(
     }
 
     // 3. Valor fixo em pontos
-    if (mm_params.contains("dist_fixed") && mm_params["dist_fixed"].is_number()) {
-        double val = mm_params["dist_fixed"].get<double>();
-        if (val > 0.0) return val;
-    }
+    double dist_fix = mm_context.dist_fixed.value_or(0.0);
+    if (dist_fix > 0) return dist_fix;
 
     // 4. Tick do asset — fallback mínimo
-    if (mm_params.contains("tick") && mm_params["tick"].is_number()) {
-        double val = mm_params["tick"].get<double>();
-        if (val > 0.0) return val;
-    }
+    double tick = asset_context.tick_size;
+    if (tick > 0) return tick;
 
     return price * 0.001;
 }
 
 // ── apply_lot_constraints ─────────────────────────────────────────────────────
 // Aplica min_lot, max_lot e lot_step — equivalente ao que MT5 faz antes de enviar ordem
-double MoneyManager::apply_lot_constraints(double lot, const json& mm_params)
+double MoneyManager::apply_lot_constraints(AssetContext asset_context, double lot)
 {
-    double min_lot  = mm_params.value("min_lot",  0.01);
-    double max_lot  = mm_params.value("max_lot",  10000.0);
-    double lot_step = mm_params.value("lot_step", min_lot);
+    double min_lot  = asset_context.min_lot; 
+    double max_lot  = asset_context.lot_max; 
+    double lot_step = asset_context.min_lot; 
 
     if (lot_step <= 0.0) lot_step = min_lot;
 
@@ -101,10 +100,10 @@ double MoneyManager::apply_lot_constraints(double lot, const json& mm_params)
 }
 
 // ── calc_kelly ────────────────────────────────────────────────────────────────
-double MoneyManager::calc_kelly(double capital, double price, double tick_fin_val,
-                                const std::vector<double>& profits, const json& mm_params)
+double MoneyManager::calc_kelly(MMContext mm_context, double capital, double price, double tick_fin_val,
+                                const std::vector<double>& profits)
 {
-    int min_trades = mm_params.value("min_trades", 30);
+    int min_trades = mm_context.min_trades.value_or(0);
     if ((int)profits.size() < min_trades) return 1.0;
 
     int    wins = 0, losses = 0;
@@ -122,18 +121,19 @@ double MoneyManager::calc_kelly(double capital, double price, double tick_fin_va
     double kelly_f  = (win_rate * b - (1.0 - win_rate)) / b;
     if (kelly_f <= 0.0) return 1.0;
 
-    kelly_f *= mm_params.value("kelly_weight", 0.25);
+    double kelly_weight = mm_context.kelly_weight.value_or(0.25);
+    kelly_f *= kelly_weight;
     return (capital * kelly_f) / (price * tick_fin_val);
 }
 
 // ── calc_var ──────────────────────────────────────────────────────────────────
-double MoneyManager::calc_var(double capital, double price, double tick_fin_val,
-                              const std::vector<double>& profits, const json& mm_params)
+double MoneyManager::calc_var(MMContext mm_context, double capital, double price, double tick_fin_val,
+                              const std::vector<double>& profits)
 {
-    int min_trades = mm_params.value("min_trades", 30);
+    int min_trades = mm_context.min_trades.value_or(0);
     if ((int)profits.size() < min_trades) return 1.0;
 
-    double confidence = mm_params.value("var_confidence", 0.95);
+    double confidence = mm_context.var_confidence.value_or(0.95); 
     std::vector<double> sorted = profits;
     std::sort(sorted.begin(), sorted.end());
 
@@ -143,13 +143,14 @@ double MoneyManager::calc_var(double capital, double price, double tick_fin_val,
 
     if (var >= 0.0) return 1.0;
 
-    double risk_pct = mm_params.value("risk_pct", 0.01);
+    double risk_pct = mm_context.risk_pct.value_or(0.01); 
     return (capital * risk_pct) / (std::abs(var) * tick_fin_val);
 }
 
 // ── calculate ─────────────────────────────────────────────────────────────────
 LotResult MoneyManager::calculate(
-    const json&                                             mm_params,
+    MMContext                                               mm_context,
+    AssetContext                                            asset_context,
     double                                                  price,
     bool                                                    is_long,
     double                                                  sl_price,
@@ -158,45 +159,46 @@ LotResult MoneyManager::calculate(
     const std::vector<double>&                              trade_profits,
     double                                                  cumulative_profit)
 {
-    if (mm_params.is_null() || !mm_params.is_object())
-        return { is_long ? 1.0 : -1.0, is_long };
+    const std::string method = mm_context.sizing_method;
+    double min_lot = asset_context.min_lot;
+    double contract_size = asset_context.contract_size;
+    double leverage = asset_context.leverage;
+    const std::string capital_coin = asset_context.capital_coin;
 
-    const std::string method = mm_params.value("method", "neutral");
-
-    double capital      = apply_capital_method(mm_params, bar_idx, cumulative_profit, fast_pool);
-    double tick_fin_val = mm_params.value("tick_fin_val", 1.0);
-    double tick         = mm_params.value("tick",         0.01);
-    double risk_pct     = mm_params.value("risk_pct",     0.01);
+    double calculate_capital      = apply_capital_method(mm_context, asset_context, bar_idx, cumulative_profit, fast_pool);
+    double tick_fin_val = asset_context.tick_val;
+    double tick         = asset_context.tick_size;
+    double risk_pct     = mm_context.risk_pct.value_or(0.01);
 
     double lot = 1.0;
 
     if (method == "neutral") {
-        lot = 1.0;
+        lot = min_lot;
     }
     else if (method == "fixed") {
-        lot = mm_params.value("fixed_lot", 1.0);
+        lot = mm_context.fixed_lot.value_or(1.0);
     }
     else if (method == "risk_per_trade") {
-        double dist       = resolve_dist(mm_params, price, sl_price, bar_idx, fast_pool);
+        double dist       = resolve_dist(mm_context, asset_context, price, sl_price, bar_idx, fast_pool);
         double dist_ticks = dist / tick;
         if (dist_ticks > 0.0)
-            lot = (capital * risk_pct) / (dist_ticks * tick_fin_val);
+            lot = (calculate_capital * risk_pct) / (dist_ticks * tick_fin_val);
     }
     else if (method == "pct_capital") {
-        double pct = mm_params.value("pct", 0.02);
+        double pct = mm_context.pct.value_or(0.01);
         if (price > 0.0 && tick_fin_val > 0.0)
-            lot = (capital * pct) / (price * tick_fin_val);
+            lot = (calculate_capital * pct) / (price * tick_fin_val);
     }
     else if (method == "kelly") {
-        lot = calc_kelly(capital, price, tick_fin_val, trade_profits, mm_params);
+        lot = calc_kelly(mm_context, calculate_capital, price, tick_fin_val, trade_profits);
     }
     else if (method == "var") {
-        lot = calc_var(capital, price, tick_fin_val, trade_profits, mm_params);
+        lot = calc_var(mm_context, calculate_capital, price, tick_fin_val, trade_profits);
     }
     else if (method == "signal") {
         std::string ref_key = is_long
-            ? mm_params.value("ref_long",  "custom_lot_size_long")
-            : mm_params.value("ref_short", "custom_lot_size_short");
+            ? mm_context.ref_long.value_or("custom_lot_size_long") 
+            : mm_context.ref_short.value_or("custom_lot_size_short");
         double val = pool_val(ref_key, bar_idx, fast_pool);
         lot = (val > 0.0) ? val : 1.0;
     }
@@ -206,7 +208,13 @@ LotResult MoneyManager::calculate(
     }
 
     // Constraints do asset — camada final (min_lot, max_lot, lot_step)
-    lot = apply_lot_constraints(lot, mm_params);
+    lot = apply_lot_constraints(asset_context, lot);
 
-    return { is_long ? lot : -lot, is_long };
+    double margin_req = (price * contract_size * std::abs(lot)) / leverage;
+    double scale = (margin_req > 0) ? (calculate_capital / margin_req) : 1.0;
+
+    // Applies lot side
+    lot = is_long ? lot : -lot;
+
+    return { lot, is_long, margin_req, scale };
 }

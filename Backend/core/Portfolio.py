@@ -36,18 +36,29 @@ class PortfolioParams():
     # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
     # XXX - Transformar hierarchy em self.hierarchy no nível Portfolio.py, assim com self.indicator_pool
     
-
-    - Gerar mais estratégias mockup para testar
-    - Agora backtest.cpp tem que verificar o ativo e calcular o lot como lote minimo e pnl $ além do %
-
-
+    # XXX - Gerar mais estratégias mockup para testar
     
-    - Ler metadados dos resultados para ter acesso aos assets dos models, até porque ter os pode ser que
-o modelo seja modificado, então teria dados diferentes se for ler na hora, testar get_metadata_by_key() e 
-get_assets_from_model_meta() também
-    - Terminar todos os SystemManagers com a ultima versão no Gemini, resolvendo qual aggr o MSM vai receber
-    - Gerar o sistema de entrada e junto desenvolver os Money Managers
-    - Desenvolver sistema de saida 
+
+                                                                                              I M P O R T A N T E   L E R
+    
+    - No backtest de Operation para cada Asset-Strat calcular o capital para lot_min com leverage mínimo aproximando de 100k, add para ledger: pnl (agora é o pnl $ final de 1 lot), perc (% final de 1 lot), raw_perc (% final de 1 lot)
+add para matrix: lot (agora é asset.lot_min ao invés de 1), required_capital_unit (capital mínimo necessário para lot_min e leverage min), pnl (resultado $ para dt atual), perc (resultado % para dt atual), raw_perc (var % do asset mesmo)
+Assim posso ter o menor lot dentro de 100k e depois, na hora de fazer o aggr usar o fator de multiplicação para igualar todos mais próximo de 100k possível
+apenas diferenciar margin, capital, etc. para isso vai precisar reimplementar o sistema de gestão financeira básica, usando tudo no mínimo. NOTE Permitido fator de multiplicação < 1 para casos onde a margem > capital minimo
+
+Em resumo:
+- Backtest calcular os resultados com lot minimo dentro de 100k
+- Na hora de calcular o aggr, fazer 100k/required_capital_unit para calcular para ter o fator de multiplicação para * os resultados e "igualar" ao máximo os resultados diferentes
+- Em Portfolio posso apenas usar esses dados para encontrar a posição ideal para o capital alocado ao Model-Strat-Asset
+- ELIMINAR lot_value de asset
+
+#    - Ler metadados dos resultados para ter acesso aos assets dos models
+
+
+
+#     - Terminar todos os SystemManagers com a ultima versão no Gemini, resolvendo qual aggr o MSM vai receber
+#     - Gerar o sistema de entrada e junto desenvolver os Money Managers
+#     - Desenvolver sistema de saida 
     
 
     # - analise_long_short_separate está errado na hora do calculo do aggr
@@ -981,29 +992,45 @@ if __name__ == "__main__":
 
     portfolio_data = {
         "operation_test": {
-            "MA Trend Following": {
+            "FX MA Trend Following": {
                 "AT15": {
                     "EURUSD": {
                         "side": "both",
                         "analise_long_short_separate": True, # if side=both, and True, creates separate Aggr
                         "calculate_on_data": "wf",
                     },
-                    # "GBPUSD": {
-                    #     "side": "both",
-                    #     "analise_long_short_separate": True,
-                    #     "calculate_on_data": "wf",
-                    # },
+                    "GBPUSD": {
+                        "side": "both",
+                        "analise_long_short_separate": True, 
+                        "calculate_on_data": "wf",
+                    },
                 }
             },
-            "RS Mean Reversion": {
-                "AT16": {
+            "FX Mean Reversion": {
+                "AT30": {
                     "USDJPY": {
                         "side": "both",
                         "analise_long_short_separate": True,
                         "calculate_on_data": "wf",
                     }
                 }
-            }
+            },
+            "Futures Mean Reversion": {
+                "AT20": {
+                    "WIN$": {
+                        "side": "both",
+                        "analise_long_short_separate": True,
+                        "calculate_on_data": "wf",
+                    }
+                },
+                "AT30": {
+                    "WIN$": {
+                        "side": "both",
+                        "analise_long_short_separate": True,
+                        "calculate_on_data": "wf",
+                    }
+                }
+            },
         }
     }
 
@@ -1011,18 +1038,25 @@ if __name__ == "__main__":
     sm_mm_map = {
         "managers": {"psm": psm, "pmm": pmm, "separate_ls": True, "side": 'both'},
         "models": {
-            "MA Trend Following": {
+            "FX MA Trend Following": {
                 "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
                 "strats": {
                     "AT15": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both'}}
                 }
             },
-            "RS Mean Reversion": {
+            "FX Mean Reversion": {
                 "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
                 "strats": {
-                    "AT16": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both'}}
+                    "AT30": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both'}}
                 }
-            }
+            },
+            "Futures Mean Reversion": {
+                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
+                "strats": {
+                    "AT20": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both'}},
+                    "AT30": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both'}}
+                }
+            },
         }
     }
 

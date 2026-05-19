@@ -338,16 +338,18 @@ class Asset:
         "futures": {
             "b3": {
                 "WIN$": {
-                    "tick": 1, "tick_fin_val": 0.2,
-                    "lot_value": 20000.0, "min_lot": 1, "lot_step": 1, "lot_max": 10000,
+                    "tick": 5, "tick_fin_val": 1.0, "contract_size": 0.2, # "lot_value": 20000.0, é close * tick_fin_val
+                    "min_lot": 1, "lot_step": 1, "lot_max": 10000,
+                    "coin_pnl": "BRL", "coin_margin": "BRL",
                     "leverage": 20, "margin_rate": 0.05,
                     "commissions": 0.5, "slippage": 0.25, "spread": 0.25,
                     "swap_long": 0.0, "swap_short": 0.0,
                     "datetime_candle_references": "open",
                 },
                 "WDO$": {
-                    "tick": 5, "tick_fin_val": 5.0,
-                    "lot_value": 40000.0, "min_lot": 1, "lot_step": 1, "lot_max": 10000,
+                    "tick": 0.5, "tick_fin_val": 5.0, "contract_size": 10.0, # "lot_value": 40000.0, 
+                    "min_lot": 1, "lot_step": 1, "lot_max": 10000,
+                    "coin_pnl": "BRL", "coin_margin": "BRL",
                     "leverage": 20, "margin_rate": 0.05,
                     "commissions": 0.5, "slippage": 0.25, "spread": 0.25,
                     "swap_long": 0.0, "swap_short": 0.0,
@@ -358,8 +360,9 @@ class Asset:
         "currency_pair": {
             "forex": {
                 "generic": {
-                    "tick": 0.0001, "tick_fin_val": 10,
-                    "lot_value": 100000.0, "min_lot": 0.01, "lot_step": 0.01, "lot_max": 500,
+                    "tick": 0.0001, "tick_fin_val": 10.0, "contract_size": 100000.0, #"lot_value": 100000.0, 
+                    "min_lot": 0.01, "lot_step": 0.01, "lot_max": 500,
+                    "coin_pnl": "USD", "coin_margin": "USD",
                     "leverage": 100, "margin_rate": 0.01,
                     "commissions": 1.5, "slippage": 0.75, "spread": 0.75,
                     "swap_long": -0.5, "swap_short": -0.5,
@@ -370,8 +373,9 @@ class Asset:
         "stock": {
             "NASDAQ": {
                 "generic": {
-                    "tick": 0.01, "tick_fin_val": 1,
-                    "lot_value": 100, "min_lot": 1, "lot_step": 1, "lot_max": 10000,
+                    "tick": 0.01, "tick_fin_val": 1.0, "contract_size": 1.0, #"lot_value": 100, 
+                    "min_lot": 1.0, "lot_step": 1.0, "lot_max": 10000,
+                    "coin_pnl": "USD", "coin_margin": "USD",
                     "leverage": 1, "margin_rate": 1.0,
                     "commissions": 5.0, "slippage": 0.05, "spread": 0.02,
                     "swap_long": 0.0, "swap_short": 0.0,
@@ -382,8 +386,8 @@ class Asset:
     }
 
     _DEFAULT_PARAMS: Dict = {
-        "tick": 0.01, "tick_fin_val": 1.0,
-        "lot_value": 100.0, "min_lot": 1.0, "lot_step": 1.0, "lot_max": 10000.0,
+        "tick": 0.01, "tick_fin_val": 1.0, "contract_size": 1.0, #"lot_value": 100.0, 
+        "min_lot": 1.0, "lot_step": 1.0, "lot_max": 10000.0,
         "leverage": 1.0, "margin_rate": 1.0,
         "commissions": 0.0, "slippage": 0.0, "spread": 0.0,
         "swap_long": 0.0, "swap_short": 0.0,

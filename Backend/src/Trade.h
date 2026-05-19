@@ -11,6 +11,10 @@ struct Trade {
     double entry_price    = 0.0;
     double position_value = 0.0;
     double lot_size       = 0.0;
+
+    double scaling_factor = 0.0;
+    double margin_required = 0.0;
+
     double stop_loss      = 0.0;
     double take_profit    = 0.0;
     double max_fav_price  = 0.0;

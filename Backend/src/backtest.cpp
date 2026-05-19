@@ -119,11 +119,6 @@ SimulationOutput Backtest::run_simulation(
     try {
         const json& params = sim;
 
-        // ── money_manager params — lidos uma vez antes do loop ────────────────
-        const json mm_params = params.contains("money_manager")
-            ? params["money_manager"]
-            : json(nullptr);
-
         const double* open  = get_price_ptr("open");
         const double* high  = get_price_ptr("high");
         const double* low   = get_price_ptr("low");
@@ -209,6 +204,36 @@ SimulationOutput Backtest::run_simulation(
         int    nb_short            = params.value("exit_nb_short", 0);
         int    exit_nb_only_if_pnl = params.value("exit_nb_only_if_pnl_is", 0);
 
+        // Asset Money Management Metrics
+        const json mm_params = params.contains("money_manager")
+            ? params["money_manager"]
+            : json(nullptr);
+
+        AssetContext asset_context;
+        asset_context.tick_size = mm_params.value("tick", 0.01);
+        asset_context.tick_val = mm_params.value("tick_fin_val", 1.0);
+        asset_context.contract_size = mm_params.value("contract_size", 1.0);
+        asset_context.min_lot = mm_params.value("min_lot", 0.01);
+        asset_context.lot_step = mm_params.value("lot_step", asset_context.min_lot);
+        asset_context.lot_max = mm_params.value("lot_max", std::numeric_limits<double>::infinity());
+        asset_context.leverage = mm_params.value("leverage", 1.0);
+        asset_context.capital_coin = mm_params.value("reference_capital_coin", "USD");
+        
+        MMContext mm_context;
+        mm_context.capital = mm_params.value("reference_capital", 100000.0);
+        mm_context.sizing_method = mm_params.value("sizing_method", "neutral");
+        mm_context.capital_method = mm_params.value("capital_method", "fixed");
+        mm_context.compound_fract = mm_params.value("compound_fract", 1.0);
+        mm_context.dist_fixed = mm_params.value("dist_fixed", 0);
+        mm_context.fixed_lot = mm_params.value("fixed_lot", 1.0);
+        mm_context.risk_pct = mm_params.value("risk_pct", 0.01);
+        mm_context.risk_pct_min = mm_params.value("risk_pct_min", 0.001);
+        mm_context.risk_pct_max = mm_params.value("risk_pct_max", 0.05);
+        mm_context.pct = mm_params.value("pct", 0.01);
+        mm_context.kelly_weight = mm_params.value("kelly_weight", 0.25);
+        mm_context.var_confidence = mm_params.value("var_confidence", 0.95);
+        mm_context.min_trades = mm_params.value("min_trades", 0);
+
         auto snp = exec_settings.value("strat_num_pos", json::array({1,1}));
         int max_long  = snp[0].get<int>(), max_short = snp[1].get<int>();
         auto mpd = exec_settings.value("strat_max_num_pos_per_day", json::array({1,1}));
@@ -278,15 +303,40 @@ SimulationOutput Backtest::run_simulation(
             double exit_price = apply_exit_slip(raw_exit, reason, is_long);
             double net_pnl;
             double dv;
- 
-            if (is_pct_mode) {
-                // pct_change: profit acumulado barra a barra no trade
-                net_pnl = t.profit;  // acumulado em update_pct_pnl
-                dv      = t.daily_pnl_accum;  // retorno da barra de saída
+
+            if (is_pct_mode) { // pct_change: profit acumulado barra a barra no trade
+                double raw_pct_return = t.profit;
+                dv = t.daily_pnl_accum;
+
+                if (mm_context.sizing_method == "neutral") {
+                    // Equalizes to 100k, financial PnL is %, applied over all allocated capital exposition
+                    double notional_exposure = mm_context.capital * asset_context.leverage;
+                    net_pnl = (raw_pct_return / 100.0) * notional_exposure;
+                } else {
+                    net_pnl = raw_pct_return;
+                }
+
             } else {
-                net_pnl = (((exit_price - entry) - commission) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
-                double prev_p = t.daily_pnl_accum;
-                dv = (((exit_price - prev_p) - commission) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+                if (mm_context.sizing_method == "neutral") {
+                    // Raw financial PnL 
+                    double pnl_ticks = (exit_price - entry) / asset_context.tick_size;
+                    double pnl_cash = pnl_ticks * asset_context.tick_val * std::abs(t.lot_size) * (is_long ? 1.0 : -1.0);
+                    
+                    // Subtracts comission if comission is $
+                    // pnl_cash -= commission * std::abs(t.lot_size);
+
+                    // Applies scale factor saved in trade open
+                    net_pnl = pnl_cash * t.scaling_factor;
+
+                    // normalized dv optional 
+                    dv = 0.0;
+                } else {
+                    // Calculates classic % return for method=="perc"
+                    net_pnl = (((exit_price - entry) - commission) / entry) * 100.0 * (is_long ? 1.0 : -1.0);
+                    double prev_p = t.daily_pnl_accum;
+                    dv = (((exit_price - prev_p) - commission) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+                }
+
             }
  
             t.exit_price  = exit_price;
@@ -326,11 +376,13 @@ SimulationOutput Backtest::run_simulation(
             if (tp > 0.0) t.take_profit = tp;
 
             LotResult lr = MoneyManager::calculate(
-                mm_params, fill, is_long,
+                mm_context, asset_context, fill, is_long,
                 t.stop_loss,
                 idx, fast_pool, trade_profits, temp_cumulative_pnl
             );
             t.lot_size = lr.lot_size;
+            t.scaling_factor = lr.scaling_factor;
+            t.margin_required = lr.required_margin;
  
             t.max_fav_price  = is_pct_mode ? 0.0 : fill;
             t.max_adv_price  = is_pct_mode ? 0.0 : fill;
