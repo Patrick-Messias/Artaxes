@@ -549,6 +549,8 @@ class Operation(BaseClass):
                         CREATE TABLE wfm_raw (
                             ts BIGINT,
                             pnl DOUBLE,
+                            perc DOUBLE,
+                            margin_required DOUBLE,
                             lot_size DOUBLE,
                             mae DOUBLE,
                             mfe DOUBLE,
@@ -784,7 +786,7 @@ class Operation(BaseClass):
  
         # ── WFM: INSERT direto no DuckDB (Layout Vertical/Longo) ──────────
         if wfm_col and wfm_con:
-            # Note: wfm_col já vem no formato [ts, pnl, lot_size, mae, mfe, trade_id]
+            # Note: wfm_col já vem no formato [ts, pnl, perc, margin_required, lot_size, mae, mfe, trade_id]
             batch_df = pl.DataFrame(wfm_col) 
             wfm_con.execute("INSERT INTO wfm_raw SELECT * FROM batch_df")
 
@@ -822,7 +824,7 @@ class Operation(BaseClass):
         # Doesn't use pivot, it's extremely quickly and doesn't generate OOM
 
         df = wfm_con.execute("""
-            SELECT ts, pnl, lot_size, mae, mfe, trade_id
+            SELECT ts, pnl, perc, margin_required, lot_size, mae, mfe, trade_id
             FROM wfm_raw
             ORDER BY ts
         """).pl()
@@ -1346,14 +1348,14 @@ class Operation(BaseClass):
                         print(f"   < [Operation._run_walkforward]: No timeline data found.")
                         continue
 
-                    pnl_matrix = storage.load_wf_prep(timeline_df)
+                    wfm_engine = s_obj.operation
+                    pnl_matrix = storage.load_wf_prep(timeline_df, price=wfm_engine.price)
 
                     if pnl_matrix is None or pnl_matrix.is_empty():
                         print(f"   < [Operation._run_walkforward]: Failed to extract PnL matrix.")
                         continue
 
                     # ── RUN WF ─────────────────────────────────────
-                    wfm_engine = s_obj.operation
                     wfm_engine.matrix = pnl_matrix
                     wf_results = wfm_engine.analyze()
 
@@ -1819,7 +1821,7 @@ if __name__ == "__main__":
             operation=Walkforward(
                 wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
                 wfm_is_always_higher_or_equal_to_oos=True,
-                matrix_resolution='weekly', time_mode = 'calendar_days',
+                price="perc", matrix_resolution='weekly', time_mode = 'calendar_days',
                 is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
                 wf_selection_metric='wfe', wf_selection_analysis_radius_n=1,
                 wf_selection_logic='highest_stable', wf_returns_mode='selected'

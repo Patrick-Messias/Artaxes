@@ -104,8 +104,10 @@ struct MMContext {
 };
 
 struct DailyResult {
-    long long ts; // Format int 'YYYYMMDDHHMMSS', ex "2023-10-25 14:30:00" -> 20231025143000
-    double pnl; // Raw pct_change returns from asset
+    long long ts;   // Format int 'YYYYMMDDHHMMSS', ex "2023-10-25 14:30:00" -> 20231025143000
+    double pnl;     // Financial return of update
+    double perc;    // Percentage return of update
+    double margin_required;
     double lot_size; 
     double mae;
     double mfe;
@@ -113,12 +115,14 @@ struct DailyResult {
 };
 
 inline void to_json(nlohmann::json& j, const DailyResult& res) {
-    j = nlohmann::json{{"ts", res.ts}, {"pnl", res.pnl}, {"lot_size", res.lot_size}, {"mae", res.mae}, {"mfe", res.mfe}, {"id", res.trade_id}};
+    j = nlohmann::json{{"ts", res.ts}, {"pnl", res.pnl}, {"perc", res.perc}, {"margin_required", res.margin_required}, {"lot_size", res.lot_size}, {"mae", res.mae}, {"mfe", res.mfe}, {"id", res.trade_id}};
 }
 
 inline void from_json(const nlohmann::json& j, DailyResult& res) {
     j.at("ts").get_to(res.ts);
     j.at("pnl").get_to(res.pnl);
+    j.at("perc").get_to(res.perc);
+    j.at("margin_required").get_to(res.margin_required);
     j.at("lot_size").get_to(res.lot_size);
     j.at("mae").get_to(res.mae);
     j.at("mfe").get_to(res.mfe);

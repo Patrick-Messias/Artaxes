@@ -81,6 +81,23 @@ class HURST(Indicator):
                 except:
                     return float('nan')
 
+        # WIP needs testing and implementation 
+        def vetorized_hurst(prices, lags):
+            returns = np.log(prices[1:] / prices[:-1])
+            rs_array = np.zeros(len(lags))
+
+            for i, lag in enumerate(lags):
+                split_ret = returns[:len(returns) // lag * lag].reshape(-1, lag)
+                Z = np.cumsum(split_ret - np.mean(split_ret, axis=1, keepdims=True), axis=1)
+                R = np.max(Z, axis=1) - np.min(Z, axis=1)
+                S = np.std(split_ret, axis=1)
+                rs_array[i] = np.mean(R / S)
+
+            H = np.polyfit(np.log(lags), np.log(rs_array), 1)[0]
+            return H
+
+        # NOTE CREATE SANITIZATION FOR HURST (FORWARD FILL)
+
         # 4. Aplicação Deslizante (Rolling Map)
         if calc_type == 'simple':
             hurst_series = s.rolling_map(simple_hurst, window_size=window)

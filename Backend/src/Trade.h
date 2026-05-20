@@ -12,6 +12,7 @@ struct Trade {
     double position_value = 0.0;
     double lot_size       = 0.0;
 
+    double capital_at_entry = 0.0; // Capital reference at the moment of opening the trade, used for PnL calculations in "neutral" method
     double scaling_factor = 0.0;
     double margin_required = 0.0;
 
@@ -26,8 +27,11 @@ struct Trade {
     double exit_price     = 0.0;
     long long exit_datetime = 0;
     std::string exit_reason;
-    double profit   = 0.0;
-    double profit_r = 0.0;
+
+    double profit = 0.0;
+
+    double pnl   = 0.0;
+    double perc = 0.0;
     int    bars_held = 0;
     bool   closed   = false;
 };

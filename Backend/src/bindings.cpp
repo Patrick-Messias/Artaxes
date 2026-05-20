@@ -43,20 +43,23 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     const size_t n_wfm  = res.wfm_data.size();
 
     // ── Trades columnar ───────────────────────────────────────────────────────
-    auto a_sim_offsets  = py::array_t<int32_t>(n_sims + 1);
-    auto a_entry_price  = py::array_t<double>(total_trades);
-    auto a_exit_price   = py::array_t<double>(total_trades);
-    auto a_lot_size     = py::array_t<double>(total_trades);
-    auto a_stop_loss    = py::array_t<double>(total_trades);
-    auto a_take_profit  = py::array_t<double>(total_trades);
-    auto a_profit       = py::array_t<double>(total_trades);
-    auto a_profit_r     = py::array_t<double>(total_trades);
-    auto a_mfe          = py::array_t<double>(total_trades);
-    auto a_mae          = py::array_t<double>(total_trades);
-    auto a_bars_held    = py::array_t<int32_t>(total_trades);
-    auto a_closed       = py::array_t<uint8_t>(total_trades);
-    auto a_entry_dt     = py::array_t<int64_t>(total_trades);
-    auto a_exit_dt      = py::array_t<int64_t>(total_trades);
+    auto a_sim_offsets      = py::array_t<int32_t>(n_sims + 1);
+    auto a_entry_price      = py::array_t<double>(total_trades);
+    auto a_exit_price       = py::array_t<double>(total_trades);
+    auto a_lot_size         = py::array_t<double>(total_trades);
+    auto a_capital_at_entry = py::array_t<double>(total_trades);
+    auto a_scaling_factor   = py::array_t<double>(total_trades);
+    auto a_margin_required  = py::array_t<double>(total_trades);
+    auto a_stop_loss        = py::array_t<double>(total_trades);
+    auto a_take_profit      = py::array_t<double>(total_trades);
+    auto a_pnl              = py::array_t<double>(total_trades);
+    auto a_perc             = py::array_t<double>(total_trades);
+    auto a_mfe              = py::array_t<double>(total_trades);
+    auto a_mae              = py::array_t<double>(total_trades);
+    auto a_bars_held        = py::array_t<int32_t>(total_trades);
+    auto a_closed           = py::array_t<uint8_t>(total_trades);
+    auto a_entry_dt         = py::array_t<int64_t>(total_trades);
+    auto a_exit_dt          = py::array_t<int64_t>(total_trades);
 
     py::list l_trade_id(total_trades);
     py::list l_exit_reason(total_trades);
@@ -66,10 +69,13 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto* p_entry_price = a_entry_price.mutable_data();
     auto* p_exit_price  = a_exit_price.mutable_data();
     auto* p_lot_size    = a_lot_size.mutable_data();
+    auto* p_capital_at_entry = a_capital_at_entry.mutable_data();
+    auto* p_scaling_factor   = a_scaling_factor.mutable_data();
+    auto* p_margin_required  = a_margin_required.mutable_data();
     auto* p_stop_loss   = a_stop_loss.mutable_data();
     auto* p_take_profit = a_take_profit.mutable_data();
-    auto* p_profit      = a_profit.mutable_data();
-    auto* p_profit_r    = a_profit_r.mutable_data();
+    auto* p_pnl         = a_pnl.mutable_data();
+    auto* p_perc        = a_perc.mutable_data();
     auto* p_mfe         = a_mfe.mutable_data();
     auto* p_mae         = a_mae.mutable_data();
     auto* p_bars_held   = a_bars_held.mutable_data();
@@ -84,10 +90,13 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
             p_entry_price[idx] = t.entry_price;
             p_exit_price[idx]  = t.exit_price;
             p_lot_size[idx]    = t.lot_size;
+            p_capital_at_entry[idx] = t.capital_at_entry;
+            p_scaling_factor[idx]   = t.scaling_factor;
+            p_margin_required[idx]  = t.margin_required;
             p_stop_loss[idx]   = t.stop_loss;
             p_take_profit[idx] = t.take_profit;
-            p_profit[idx]      = t.profit;
-            p_profit_r[idx]    = t.profit_r;
+            p_pnl[idx]         = t.pnl;
+            p_perc[idx]        = t.perc;
             p_mfe[idx]         = t.mfe;
             p_mae[idx]         = t.mae;
             p_bars_held[idx]   = t.bars_held;
@@ -109,10 +118,13 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     trades_col["entry_price"]    = a_entry_price;
     trades_col["exit_price"]     = a_exit_price;
     trades_col["lot_size"]       = a_lot_size;
+    trades_col["capital_at_entry"] = a_capital_at_entry;
+    trades_col["scaling_factor"]   = a_scaling_factor;
+    trades_col["margin_required"]  = a_margin_required;
     trades_col["stop_loss"]      = a_stop_loss;
     trades_col["take_profit"]    = a_take_profit;
-    trades_col["profit"]         = a_profit;
-    trades_col["profit_r"]       = a_profit_r;
+    trades_col["pnl"]            = a_pnl;
+    trades_col["perc"]           = a_perc;
     trades_col["mfe"]            = a_mfe;
     trades_col["mae"]            = a_mae;
     trades_col["bars_held"]      = a_bars_held;
@@ -126,30 +138,36 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     // ── WFM columnar ──────────────────────────────────────────────────────────
     //const size_t n_wfm = res.wfm_data.size();
 
-    auto a_wfm_ts    = py::array_t<int64_t>(n_wfm);
-    auto a_wfm_pnl   = py::array_t<double>(n_wfm);
-    auto a_wfm_lot_size = py::array_t<double>(n_wfm);
-    auto a_wfm_mae = py::array_t<double>(n_wfm);
-    auto a_wfm_mfe = py::array_t<double>(n_wfm);
+    auto a_wfm_ts               = py::array_t<int64_t>(n_wfm);
+    auto a_wfm_pnl              = py::array_t<double>(n_wfm);
+    auto a_wfm_perc             = py::array_t<double>(n_wfm);
+    auto a_wfm_margin_required  = py::array_t<double>(n_wfm);
+    auto a_wfm_lot_size         = py::array_t<double>(n_wfm);
+    auto a_wfm_mae              = py::array_t<double>(n_wfm);
+    auto a_wfm_mfe              = py::array_t<double>(n_wfm);
     //auto a_wfm_trade_id = py::array_t<str>(n_wfm);
 
     py::list l_wfm_trade_id(n_wfm);
 
-    auto* p_ts    = a_wfm_ts.mutable_data();
-    auto* p_pnl   = a_wfm_pnl.mutable_data();
-    auto* p_wfm_lot_size = a_wfm_lot_size.mutable_data();
-    auto* p_wfm_mae = a_wfm_mae.mutable_data();
-    auto* p_wfm_mfe = a_wfm_mfe.mutable_data();
+    auto* p_ts                  = a_wfm_ts.mutable_data();
+    auto* p_wfm_pnl                 = a_wfm_pnl.mutable_data();
+    auto* p_wfm_perc                = a_wfm_perc.mutable_data();
+    auto* p_wfm_margin_required = a_wfm_margin_required.mutable_data();
+    auto* p_wfm_lot_size        = a_wfm_lot_size.mutable_data();
+    auto* p_wfm_mae             = a_wfm_mae.mutable_data();
+    auto* p_wfm_mfe             = a_wfm_mfe.mutable_data();
     //auto* p_trade_id = a_wfm_trade_id.mutable_data();
 
     for (size_t i = 0; i < n_wfm; ++i) {
         const auto& data = res.wfm_data[i];
 
-        p_ts[i]    = res.wfm_data[i].ts;
-        p_pnl[i]   = res.wfm_data[i].pnl;
-        p_wfm_lot_size[i] = res.wfm_data[i].lot_size;
-        p_wfm_mae[i] = res.wfm_data[i].mae;
-        p_wfm_mfe[i] = res.wfm_data[i].mfe;
+        p_ts[i]                     = res.wfm_data[i].ts;
+        p_wfm_pnl[i]                = res.wfm_data[i].pnl;
+        p_wfm_perc[i]               = res.wfm_data[i].perc;
+        p_wfm_margin_required[i]    = res.wfm_data[i].margin_required;
+        p_wfm_lot_size[i]           = res.wfm_data[i].lot_size;
+        p_wfm_mae[i]                = res.wfm_data[i].mae;
+        p_wfm_mfe[i]                = res.wfm_data[i].mfe;
         
         //p_trade_id[i] = res.wfm_data[i].trade_id;
         l_wfm_trade_id[i] = py::cast(data.trade_id);
@@ -157,6 +175,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     py::dict wfm_col;
     wfm_col["ts"]    = a_wfm_ts;
     wfm_col["pnl"]   = a_wfm_pnl;
+    wfm_col["perc"]   = a_wfm_perc;
+    wfm_col["margin_required"]   = a_wfm_margin_required;
     wfm_col["lot_size"] = a_wfm_lot_size;
     wfm_col["mae"] = a_wfm_mae;
     wfm_col["mfe"] = a_wfm_mfe;

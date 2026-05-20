@@ -48,14 +48,13 @@ public:
         const std::vector<double>&                              trade_profits,
         double                                                  cumulative_profit
     );
-
-private:
     static double apply_capital_method(MMContext mm_context,
                                        AssetContext asset_context,
                                        size_t bar_idx,
                                        double cumulative_profit,
                                        const std::unordered_map<std::string, const double*>& fast_pool);
 
+private:
     static double resolve_dist(MMContext mm_context, AssetContext asset_context, double price, double sl_price,
                                size_t bar_idx,
                                const std::unordered_map<std::string, const double*>& fast_pool);
