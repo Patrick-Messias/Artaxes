@@ -337,7 +337,7 @@ class Storage:
         df_entries = trades_df.select([
             cast_datetime("entry_datetime"),
             pl.col("trade_id").cast(pl.Utf8),
-            pl.lit(0.0).alias("pnl"),
+            pl.lit(0.0).alias("perc"),
             pl.col("lot_size"),
             pl.lit("entry").alias("event")
         ])
@@ -346,7 +346,7 @@ class Storage:
         df_exits = trades_df.select([
             cast_datetime("exit_datetime"),
             pl.col("trade_id").cast(pl.Utf8),
-            pl.col("profit").alias("pnl"),
+            pl.col("perc"),
             pl.col("lot_size"),
             pl.lit("exit").alias("event")
         ])
@@ -358,7 +358,7 @@ class Storage:
             df_intra = matrix_df.select([
                 cast_datetime("ts"),
                 pl.col("trade_id").cast(pl.Utf8),
-                pl.col("pnl"),
+                pl.col("perc"),
                 pl.col("lot_size"),
                 pl.lit("update").alias("event")
             ])

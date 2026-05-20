@@ -29,8 +29,8 @@ double MoneyManager::pool_val(
 // "compound" → capital + profit_usd × fract
 //              fract: escalar mm["compound_fract"] ou série fast_pool["compound_fract"]
 double MoneyManager::apply_capital_method(
-    MMContext mm_context,
-    AssetContext asset_context,
+    MMContext                                               mm_context,
+    AssetContext                                            asset_context,
     size_t                                                  bar_idx,
     double                                                  cumulative_profit,
     const std::unordered_map<std::string, const double*>&   fast_pool)
@@ -38,7 +38,7 @@ double MoneyManager::apply_capital_method(
     double capital = mm_context.capital;
     const std::string capital_coin = asset_context.capital_coin;
     const std::string cm = mm_context.capital_method;
-    double fract = mm_context.compound_fract.value_or(1.0);
+    double fract = mm_context.compound_fract.value_or(1.0); // fractal default is 1.0
 
     if (cm == "fixed") return capital;
 
@@ -57,8 +57,8 @@ double MoneyManager::apply_capital_method(
 // ── resolve_dist ──────────────────────────────────────────────────────────────
 // Prioridade: fast_pool["dist_ref"] → abs(entry - sl) → dist_fixed → tick
 double MoneyManager::resolve_dist(
-    MMContext mm_context, 
-    AssetContext asset_context,
+    MMContext                                               mm_context, 
+    AssetContext                                            asset_context,
     double                                                  price,
     double                                                  sl_price,
     size_t                                                  bar_idx,
@@ -100,8 +100,11 @@ double MoneyManager::apply_lot_constraints(AssetContext asset_context, double lo
 }
 
 // ── calc_kelly ────────────────────────────────────────────────────────────────
-double MoneyManager::calc_kelly(MMContext mm_context, double capital, double price, double tick_fin_val,
-                                const std::vector<double>& profits)
+double MoneyManager::calc_kelly(MMContext                                               mm_context,
+                                double                                                  capital,
+                                double                                                  price,
+                                double                                                  tick_fin_val,
+                                const std::vector<double>&                              profits)
 {
     int min_trades = mm_context.min_trades.value_or(0);
     if ((int)profits.size() < min_trades) return 1.0;
@@ -127,8 +130,11 @@ double MoneyManager::calc_kelly(MMContext mm_context, double capital, double pri
 }
 
 // ── calc_var ──────────────────────────────────────────────────────────────────
-double MoneyManager::calc_var(MMContext mm_context, double capital, double price, double tick_fin_val,
-                              const std::vector<double>& profits)
+double MoneyManager::calc_var(MMContext                                               mm_context, 
+                              double                                                  capital, 
+                              double                                                  price, 
+                              double                                                  tick_fin_val,
+                              const std::vector<double>&                              profits)
 {
     int min_trades = mm_context.min_trades.value_or(0);
     if ((int)profits.size() < min_trades) return 1.0;
