@@ -1338,6 +1338,7 @@ class Operation(BaseClass):
                     print(f"\n>>> WF: {m_name} | {s_name} | {a_name}")
                     
                     # ── Data  ─────────────────────────────
+   
                     if load_from_storage:
                         data = storage.load(self.name, m_name, s_name, a_name)
                         timeline_df = data.get("timeline")
@@ -1348,7 +1349,7 @@ class Operation(BaseClass):
                     if timeline_df is None or timeline_df.is_empty():
                         print(f"   < [Operation._run_walkforward]: No timeline data found.")
                         continue
-
+       
                     wfm_engine = s_obj.operation
                     pnl_matrix = storage.load_wf_prep(timeline_df, price=wfm_engine.price)
 
@@ -1359,7 +1360,7 @@ class Operation(BaseClass):
                     # ── RUN WF ─────────────────────────────────────
                     wfm_engine.matrix = pnl_matrix
                     wf_results = wfm_engine.analyze()
-
+    
                     if not wf_results:
                         print(f"   < [Operation._run_walkforward]: WF Analysis returned no results")
                         continue
@@ -1875,7 +1876,7 @@ if __name__ == "__main__":
             name="AT30",
             operation=Walkforward(
                 wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
-                wfm_is_always_higher_or_equal_to_oos=True,
+                wfm_is_always_higher_or_equal_to_oos=True, add_trades_matrix_updates=True,
                 matrix_resolution='weekly', time_mode = 'calendar_days',
                 is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
                 wf_selection_metric='wfe', wf_selection_analysis_radius_n=1,

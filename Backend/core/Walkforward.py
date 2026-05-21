@@ -12,6 +12,7 @@ class Walkforward:
         matrix: pl.DataFrame=None,
         wfm_configs: List[List[int]]=[[12, 4, 4]], # [[IS, OS, STEP], ...]
         wfm_is_always_higher_or_equal_to_oos: bool=True,
+        add_trades_matrix_updates: bool=True,
         
         price: Literal['pnl', 'perc'] = "perc",
         matrix_resolution: Literal['daily', 'weekly', 'monthly'] = 'weekly',
@@ -33,6 +34,9 @@ class Walkforward:
         self.matrix = matrix 
         self.wfm_configs = wfm_configs
         self.wfm_is_always_higher_or_equal_to_oos = wfm_is_always_higher_or_equal_to_oos
+        self.add_trades_matrix_updates = add_trades_matrix_updates
+
+        self.price = price
         self.matrix_resolution = matrix_resolution
         self.time_mode = time_mode
 
@@ -165,7 +169,7 @@ class Walkforward:
             start_idx          += step_periods
             current_is_end_idx += step_periods
             if start_idx + is_periods > total_rows: break
- 
+
         return {"windows": runs, "cumulative_oos": np.cumsum(all_oos_returns).tolist()}
 
 

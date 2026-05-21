@@ -291,17 +291,14 @@ class Storage:
 
 
     # For Operation.py use
-    def load_wf_prep(self, timeline_df: pl.DataFrame, price: str="pnl") -> pl.DataFrame:
+    def load_wf_prep(self, timeline_df: pl.DataFrame, price: str = "pnl", events_to_include: list = ["entry", "exit", "update"]) -> pl.DataFrame:
         if timeline_df is None or timeline_df.is_empty():
             print(f"   < [Storage.load_wf_prep] timeline_df is None or empty")
             return None
 
-        # Certifique-se que a coluna de tempo é temporal antes de qualquer operação
-        target = "update" if (timeline_df["event"] == "update").any() else "exit"
-
         return (
             timeline_df
-            .filter(pl.col("event") == target)
+            .filter(pl.col("event").is_in(events_to_include))
             .group_by(["datetime", "ps_id"])
             .agg(pl.col(price).sum())
             .pivot(values=price, index="datetime", columns="ps_id")
@@ -310,10 +307,93 @@ class Storage:
             .sort("ts")
         )
 
+    # def load_wf_prep(self, timeline_df: pl.DataFrame, price: str="pnl") -> pl.DataFrame:
+    #     if timeline_df is None or timeline_df.is_empty():
+    #         print(f"   < [Storage.load_wf_prep] timeline_df is None or empty")
+    #         return None
+
+    #     # Certifique-se que a coluna de tempo é temporal antes de qualquer operação
+    #     target = "update" if (timeline_df["event"] == "update").any() else "exit"
+
+    #     return (
+    #         timeline_df
+    #         .filter(pl.col("event") == target)
+    #         .group_by(["datetime", "ps_id"])
+    #         .agg(pl.col(price).sum())
+    #         .pivot(values=price, index="datetime", columns="ps_id")
+    #         .rename({"datetime": "ts"}) 
+    #         .fill_null(0.0)
+    #         .sort("ts")
+    #     )
+
     # ─────────────────────────────────────────────────────────────────────────
     # Internos
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame, fmt: str= "%Y%m%d%H%M%S") -> pl.DataFrame:
+        if trades_df is None or trades_df.is_empty():
+            return pl.DataFrame()
+        
+        # Formato numérico exato vindo do C++ (ex: 20210412013000)
+        def cast_datetime(column_name, df_source, alias="datetime"):
+            col = pl.col(column_name).replace(0, None)
+            
+            # Se o tipo da coluna no schema já for Datetime/Date, apenas renomeia
+            if df_source.schema.get(column_name) in [pl.Datetime, pl.Date]:
+                return col.alias(alias)
+                
+            # Caso contrário, tenta string formatada do C++ e dá fallback para Epoch/Int
+            return pl.coalesce([
+                col.cast(pl.Utf8).str.to_datetime(fmt, strict=False),
+                col.cast(pl.Int64).cast(pl.Datetime("us"))
+            ]).alias(alias)
+
+        # 1. ENTRIES
+        entries_df = trades_df.select([
+            cast_datetime("entry_datetime", trades_df),
+            pl.col("trade_id").cast(pl.Utf8).alias("ps_id"),
+            pl.lit(0.0).alias('pnl'),
+            pl.lit(0.0).alias('perc'),
+            pl.col("lot_size"),
+            pl.lit(0.0).alias('margin_required'),
+            pl.lit(0.0).alias('mae'),
+            pl.lit(0.0).alias('mfe'),
+            pl.lit("entry").alias("event")
+        ])
+            
+        # 2. EXITS
+        exits_df = trades_df.select([
+            cast_datetime("exit_datetime", trades_df),
+            pl.col("trade_id").cast(pl.Utf8).alias("ps_id"), # trade_id
+            pl.col("pnl"),
+            pl.col('perc'),
+            pl.col("lot_size"),
+            pl.col('margin_required'),
+            pl.col('mae'),
+            pl.col('mfe'),
+            pl.lit("exit").alias("event")
+        ])
+
+        dfs_to_concat = [entries_df, exits_df]
+
+        # 3. Trade Updates (MATRIX)
+        if matrix_df is not None and not matrix_df.is_empty():
+            updates_df = matrix_df.select([
+                cast_datetime("ts", matrix_df),
+                pl.col("trade_id").cast(pl.Utf8).alias("ps_id"),
+                pl.col("pnl"),
+                pl.col("perc"),
+                pl.col("lot_size"),
+                pl.col("margin_required"),
+                pl.col("mae"),
+                pl.col("mfe"),
+                pl.lit("update").alias("event")
+            ])
+            dfs_to_concat.append(updates_df)
+
+        return pl.concat(dfs_to_concat).sort("datetime")
+    
+    """
     def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame) -> pl.DataFrame:
         if trades_df is None or trades_df.is_empty():
             return pl.DataFrame()
@@ -381,7 +461,9 @@ class Storage:
         ).sort("datetime")
 
         return timeline_df
-    
+    """
+
+
 
     def _save_meta(self, op_path: Path, operation_name: str, meta: dict):
         meta_path = op_path / "meta"
