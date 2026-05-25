@@ -210,7 +210,12 @@ def CorrelationClusteringMC(
 
 # ||=============================================================|| Tests ||=============================================================||
 
+
+
+
 # 1. Market Regime Test - Classify market in regimes with diferent methods and tests on all methods
+# - If Strat only makes money Long on Long Regimes then it has more BETA than ALPHA?
+
 
 # 2. Volatility Regime Test - Classify market in vol regimes with diferent methods and tests on all methods
 
@@ -218,7 +223,6 @@ def CorrelationClusteringMC(
 # 3. Monte Carlo Parameter Sensibility Test - Takes each parset from an optimization with deviation (ex: +-5 ticks) from each parameter, runs monte carlo, takes n=3 monte carlo lines closest to mean and adds all to one graph 
 """
 """
-
 
 # 4. Permutation Test - How my model compares to random data sample from a synthetic data set?
 """ - Take OHLC add and subtract random ammounts of volatility from it, creating thousands of synthetic data series
@@ -230,6 +234,11 @@ def CorrelationClusteringMC(
 """ - Analises metrics form Strat and creates random entry rules strategy, keeps all other rules, backtests on same data-set, optimize real strategy and optimize all others
     - P-Value is defined by how many random curves are worst than my strategy, p_var = 0.95
 """ 
+
+# 6. Strat Filter Component Test - How much each component of my strategy contributes to the final result?
+""" - Split data into 2+ sets, if filter improves on all sets then it's probably adding value
+    - If doesn't improve on any set then it's probably just overfitting and better to remove
+"""
 
 # In Sample - Out Sample Test
 def ISOS_TEST(data: pl.DataFrame, os_start_datetime=None, os_end_datetime=None, metrics: list=['pnl', 'dd', 'pnl_dd'], mc_runs: int=1000, mc_shuffle: bool=True, mc_col: str='wfm_matrix_data', datetime_format: str="%Y-%m-%d %H:%M:%S"):

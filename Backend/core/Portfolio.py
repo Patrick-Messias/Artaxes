@@ -131,17 +131,61 @@ class Portfolio(BaseClass, BaseManager):
             for idf, pos_info in self.hierarchy.items():
                 if portfolio_simulation_with_backtest_results: pass
                     
-                    # B.1. Calculates All SM and MM for each item in hierarchy
-
-                    # B.2. Checks for open positions that can be accomodated in active_positions with current margin and capital
-   
-                # SSM/SMM -> MSM/MMM -> PSM/PMM
-
                 # -> NOTE Para System e Money M colocar opção de seprar long (lot_size > 0) de short
-            
-                # Must recalculate position sizes if the rules call for it, else use E defined
+                # 1. Add long_active e short_active ao invés de só active, padrão ambos true
+                # 2. Iterares hierarchy, checks all parsets that are active (NOTE WF must activate only the current parset in SMM)
+                # 3. Creates temporary portfolio arrangements with current assets + new positions, finds best portfolio arrangement and calculates positions sizes
                 # First-Come First-Served - Allocates 10% until 100% is hit, following hierarchy
-                # Static Hierarchy - Limits to how much each level can use margin/capital
+
+
+                
+                # https://www.youtube.com/watch?v=-99_Cn1qzak
+                # Risk Parity & Volatility Targeting in Trend Following Portfolios
+
+                # Size i = Target Risk / α i * Price i
+
+                # Ajustar para usar o fator de multiplicação do asset
+                def apply_correlation_discount(weights, returns_df, lookback=252):
+                    # Compute rolling correlation matrix
+                    corr_matrix = returns_df.rolling(window=lookback).corr().iloc[-1]
+
+                    # Calculate Portfolio Variance scalar (w^T * Sigma * w)
+                    port_variance = np.dot(weights.T, np.dot(corr_matrix, weights))
+
+                    # Derive Diversification Multiplier
+                    div_multiplier = 1.0 / np.sqrt(port_variance)
+
+                    # Scale position sizes down dynamically
+                    adjust_weights = weights * div_multiplier
+                    return adjust_weights
+
+                from scipy.optimize import minimize
+                def risk_parity_objective(weights, cov_matrix):
+                    # Marginal risk contribution of each asset
+                    port_variance = np.dot(weights.T, np.dot(cov_matrix, weights))
+                    marginal_contrib = np.dot(cov_matrix, weights)
+                    risk_contrib = weights * marginal_contrib / port_variance
+
+                    # Target equal risk distribution (1/N)
+                    target_risk = 1.0 / len(weights)
+
+                    # Return sum of squared penalties
+                    return np.sum((risk_contrib - target_risk)**2)
+
+                result = minimize(risk_parity_objective, initial_weights, args=(cov_matrix,), method='SLSQP')
+
+                def apply_regime_filter(optimal_weights, prices_df, sma_window=252):
+                    # Calculate long term macro trend
+                    sma = prices_df.rolling(window=sma_window).mean()
+
+                    # Generate binary regime mask (1.0 if bullish, 0.0 if bearish)
+                    # Element wise comparison across all assets
+                    regime_mask = np.where(prices_df > sma, 1.0, 0.0)
+
+                    # Final Portfolio Weights overlay
+                    final_weights = optimal_weights * regime_mask
+
+                    return final_weights
 
             #||=====================================================================================||#
             

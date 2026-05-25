@@ -839,7 +839,6 @@ class Operation(BaseClass):
     #-> trades and trades_matrix have different ts type, needs to change all to be the same
 
 
-
     # Batch System Defs
     def _estimate_paramset_size_mb(self, df: pl.DataFrame):
         return df.estimated_size() / (1024 ** 2) # No Polars, estimated_size() retorna o tamanho em bytes
@@ -1280,6 +1279,8 @@ class Operation(BaseClass):
                 for a_name in m_obj.assets:
                     if asset and a_name != asset: continue
  
+                    ERRRO AQUI, TENTANDO ACESSAR RESULTADOS DA INSTANCIA QUE ESTÀ MUDANDO
+
                     wfm_engine = s_obj.operation
                     all_wf = wfm_engine.all_wf_results
  
@@ -1338,26 +1339,28 @@ class Operation(BaseClass):
                     print(f"\n>>> WF: {m_name} | {s_name} | {a_name}")
                     
                     # ── Data  ─────────────────────────────
-   
+                
                     if load_from_storage:
                         data = storage.load(self.name, m_name, s_name, a_name)
                         timeline_df = data.get("timeline")
                     else:
                         asset_map = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
                         timeline_df = asset_map.get("timeline")
-
+         
                     if timeline_df is None or timeline_df.is_empty():
                         print(f"   < [Operation._run_walkforward]: No timeline data found.")
                         continue
        
                     wfm_engine = s_obj.operation
                     pnl_matrix = storage.load_wf_prep(timeline_df, price=wfm_engine.price)
+           
 
                     if pnl_matrix is None or pnl_matrix.is_empty():
                         print(f"   < [Operation._run_walkforward]: Failed to extract PnL matrix.")
                         continue
 
                     # ── RUN WF ─────────────────────────────────────
+
                     wfm_engine.matrix = pnl_matrix
                     wf_results = wfm_engine.analyze()
     
@@ -1381,7 +1384,7 @@ class Operation(BaseClass):
                             all_runs=runs
                         )
 
-                    print(f"   < [Operation._run_walkforward]: WF results saved to disk.")
+                    print(f"   > [WFM] Results saved to disk.")
                     wfm_engine.matrix = None
                     
         return True
@@ -1409,20 +1412,24 @@ class Operation(BaseClass):
         ])
 
     # || ======================================================================================================================================================================= ||
-                        
+
+    1. Walkforward parece correto agora, está salvando corretamente
+    2. plot_wfm deve usar o load_walkforward_matrix para puxar os resultado e plotar
+    3. Talvez adicionar os resultados wfm para memória com mesmo formato
+
     def run(self):
         # I - Init and Validation of Operation
         print(f"\n>>> I - Init and Validating Operation <<<")
         self._validate_operation()
-        #self._init_data()
+        self._init_data()
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        self._operation()
+        #self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
         print(f"\n>>> III - Pos-Processing, Saving and Cleaning <<<")
-        self._save_and_clean()
+        #self._save_and_clean()
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
@@ -1848,7 +1855,7 @@ if __name__ == "__main__":
         StratParams(
             name="AT20",
             operation=Walkforward(
-                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([4, 12, 16, 24, 36, 48], [4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
                 wfm_is_always_higher_or_equal_to_oos=True,
                 matrix_resolution='weekly', time_mode = 'calendar_days',
                 is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
@@ -1902,7 +1909,7 @@ if __name__ == "__main__":
     model_1 = Model(
         ModelParams(
             name='FX MA Trend Following',
-            assets=['EURUSD', "GBPUSD", "USDJPY"], # CURR_ASSET refers to this one in strat_support_assets
+            assets=['EURUSD', 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT15': AT15},
             execution_timeframe=AT15_model_execution_tf,
             model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_1_mm")),
@@ -1933,7 +1940,7 @@ if __name__ == "__main__":
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_3], #model_1, model_2, 
+            data=[model_1, model_3], # model_2, model_3
             assets=global_assets,
             #operation_timeframe=AT15_model_execution_tf, # NOTE maybe unnecessary, remove later
             date_start=None, #'2020-01-01',

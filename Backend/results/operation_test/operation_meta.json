@@ -2,6 +2,19 @@
     "date_start": null,
     "date_end": null,
     "models": {
+        "FX MA Trend Following": {
+            "execution_timeframe": "M15",
+            "date_start": null,
+            "date_end": null,
+            "strats": {
+                "AT15": {
+                    "assets": [
+                        "EURUSD",
+                        "USDJPY"
+                    ]
+                }
+            }
+        },
         "Futures Mean Reversion": {
             "execution_timeframe": "M10",
             "date_start": null,

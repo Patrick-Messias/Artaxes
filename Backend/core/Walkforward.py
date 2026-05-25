@@ -104,73 +104,197 @@ class Walkforward:
         
         return top_ps_list[0]
 
-    def run_wf(self, is_periods: int, os_periods: int, step_periods: int = None):
-        if step_periods is None: step_periods = os_periods
-        df = self._temp_df          # colunas: ts (período agregado) | ts_orig_min | ts_orig_max | ps_...
-        total_rows = len(df)
+    # def run_wf(self, is_periods: int, os_periods: int, step_periods: int = None):
+    #     if step_periods is None: step_periods = os_periods
+    #     df = self._temp_df          # colunas: ts (período agregado) | ts_orig_min | ts_orig_max | ps_...
+    #     total_rows = len(df)
+    #     runs = []
+    #     all_oos_returns = []
+ 
+    #     start_idx        = 0
+    #     current_is_end_idx = is_periods
+ 
+    #     _WFE_MIN_DENOMINATOR = 1e-4
+ 
+    #     while current_is_end_idx < total_rows:
+    #         current_oos_end_idx = min(current_is_end_idx + os_periods, total_rows)
+    #         os_len = current_oos_end_idx - current_is_end_idx
+ 
+    #         is_data = df.slice(start_idx, is_periods)
+    #         os_data = df.slice(current_is_end_idx, os_len)
+ 
+    #         if is_data.is_empty() or os_data.is_empty(): break
+ 
+    #         best_ps_id = self._find_best_parameter(is_data)
+    #         if best_ps_id is not None:
+    #             os_returns = os_data[best_ps_id].to_numpy()
+    #             all_oos_returns.extend(os_returns.tolist())
+ 
+    #             # WFE
+    #             is_total_pnl = float(is_data[best_ps_id].sum())
+    #             os_total_pnl = float(os_returns.sum())
+ 
+    #             if abs(is_total_pnl) < _WFE_MIN_DENOMINATOR:
+    #                 wfe = float('nan')
+    #             elif is_total_pnl < 0:
+    #                 wfe = 0.0
+    #             else:
+    #                 is_avg = is_total_pnl / is_periods
+    #                 os_avg = os_total_pnl / os_len
+    #                 wfe = float(np.clip(os_avg / is_avg, -2.0, 2.0))
+ 
+    #             # Sharpe OOS
+    #             std_val    = os_returns.std()
+    #             os_avg_pnl = os_returns.mean()
+    #             os_sharpe  = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252)
+ 
+    #             # ── os_curve usa ts_orig_min para preservar o datetime completo ──
+    #             # ts_orig_min = primeiro datetime real dentro de cada período agregado
+    #             os_curve = os_data.select([
+    #                 pl.col("ts_orig_min").alias("ts"),   # datetime completo (ex: 2024-03-15 09:30:00)
+    #                 pl.col(best_ps_id).alias("pnl"),
+    #             ]).with_columns(pl.lit(best_ps_id).alias("best_param"))
+ 
+    #             runs.append({
+    #                 "is_df":     is_data,
+    #                 "os_curve":  os_curve,
+    #                 "best_param": best_ps_id,
+    #                 "wfe":       wfe if not np.isnan(wfe) else float('nan'),
+    #                 "metrics":   {
+    #                     "os_sharpe":      float(os_sharpe),
+    #                     "is_metric_val":  float(is_data[best_ps_id].sum()),
+    #                 }
+    #             })
+ 
+    #         start_idx          += step_periods
+    #         current_is_end_idx += step_periods
+    #         if start_idx + is_periods > total_rows: break
+
+    #     return {"windows": runs, "cumulative_oos": np.cumsum(all_oos_returns).tolist()}
+
+    def run_wf(self, is_l: int, os_l: int, stp: int) -> Dict:
+        df = self._temp_df
+        if df is None or df.is_empty():
+            return {}
+
+        ts_col = "ts_orig_min" if "ts_orig_min" in df.columns else "ts"
+        timestamps = df[ts_col].to_list()
+        ps_ids = [c for c in df.columns if c not in {"ts", "ts_orig_min", "ts_orig_max"}]
+        
+        # 2. Matriz NumPy para vetorização ultra rápida
+        matrix_np = df.select(ps_ids).to_numpy()
+        total_bars = matrix_np.shape[0]
+
         runs = []
         all_oos_returns = []
- 
-        start_idx        = 0
-        current_is_end_idx = is_periods
- 
+        
+        idx = 0
         _WFE_MIN_DENOMINATOR = 1e-4
- 
-        while current_is_end_idx < total_rows:
-            current_oos_end_idx = min(current_is_end_idx + os_periods, total_rows)
-            os_len = current_oos_end_idx - current_is_end_idx
- 
-            is_data = df.slice(start_idx, is_periods)
-            os_data = df.slice(current_is_end_idx, os_len)
- 
-            if is_data.is_empty() or os_data.is_empty(): break
- 
-            best_ps_id = self._find_best_parameter(is_data)
-            if best_ps_id is not None:
-                os_returns = os_data[best_ps_id].to_numpy()
-                all_oos_returns.extend(os_returns.tolist())
- 
-                # WFE
-                is_total_pnl = float(is_data[best_ps_id].sum())
-                os_total_pnl = float(os_returns.sum())
- 
-                if abs(is_total_pnl) < _WFE_MIN_DENOMINATOR:
-                    wfe = float('nan')
-                elif is_total_pnl < 0:
-                    wfe = 0.0
-                else:
-                    is_avg = is_total_pnl / is_periods
-                    os_avg = os_total_pnl / os_len
-                    wfe = float(np.clip(os_avg / is_avg, -2.0, 2.0))
- 
-                # Sharpe OOS
-                std_val    = os_returns.std()
-                os_avg_pnl = os_returns.mean()
-                os_sharpe  = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252)
- 
-                # ── os_curve usa ts_orig_min para preservar o datetime completo ──
-                # ts_orig_min = primeiro datetime real dentro de cada período agregado
-                os_curve = os_data.select([
-                    pl.col("ts_orig_min").alias("ts"),   # datetime completo (ex: 2024-03-15 09:30:00)
-                    pl.col(best_ps_id).alias("pnl"),
-                ]).with_columns(pl.lit(best_ps_id).alias("best_param"))
- 
-                runs.append({
-                    "is_df":     is_data,
-                    "os_curve":  os_curve,
-                    "best_param": best_ps_id,
-                    "wfe":       wfe if not np.isnan(wfe) else float('nan'),
-                    "metrics":   {
-                        "os_sharpe":      float(os_sharpe),
-                        "is_metric_val":  float(is_data[best_ps_id].sum()),
-                    }
-                })
- 
-            start_idx          += step_periods
-            current_is_end_idx += step_periods
-            if start_idx + is_periods > total_rows: break
 
-        return {"windows": runs, "cumulative_oos": np.cumsum(all_oos_returns).tolist()}
+        while idx + is_l + os_l <= total_bars:
+            # Slices de treino (In-Sample)
+            train_slice = matrix_np[idx : idx + is_l, :]          
+            
+            # 3. Identifica o melhor ps_id
+            if self.is_metric == "sharpe":
+                means = train_slice.mean(axis=0)
+                stds = train_slice.std(axis=0)
+                metric_vals = means / (stds + 1e-9)
+            elif self.is_metric == "pnl_dd":
+                pnl_sums = train_slice.sum(axis=0)
+                cum_sums = np.cumsum(train_slice, axis=0)
+                max_vals = cum_sums.max(axis=0)
+                min_vals = cum_sums.min(axis=0)
+                metric_vals = pnl_sums / (max_vals - min_vals + 1e-6)
+            else: # Default is PnL
+                metric_vals = train_slice.sum(axis=0) 
+
+            # Applies order and top N selection
+            if self.is_order == 'asc':
+                top_indices = np.argsort(metric_vals)[:self.is_top_n]
+            else:
+                top_indices = np.argsort(metric_vals)[::-1][:self.is_top_n]
+            top_ps_list = [ps_ids[i] for i in top_indices]
+
+            # Applies selection logic
+            if self.is_logic in ('mode', 'moda') and len(top_ps_list) > 1:
+                param_counts = {}
+                for ps_id in top_ps_list:
+                    params = tuple(ps_id.replace("ps_param_set-", "").replace("ps_", "").split("-"))
+                    param_counts[params] = param_counts.get(params, 0) + 1
+                best_params_tuple = max(param_counts, key=param_counts.get)
+            
+                best_ps_id = top_ps_list[0]
+                for ps_id in top_ps_list:
+                    if tuple(ps_id.replace("ps_param_set-", "").replace("ps_", "").split("-")) == best_params_tuple:
+                        best_ps_id = ps_id
+                        break
+                best_param_idx = ps_ids.index(best_ps_id)
+            else:
+                best_ps_id = top_ps_list[0]
+                best_param_idx = top_indices[0]
+
+            # 4. Slices de teste (Out-of-Sample)
+            train_timestamps = timestamps[idx : idx + is_l]
+            oos_timestamps = timestamps[idx + is_l : idx + is_l + os_l]
+            os_returns = matrix_np[idx + is_l : idx + is_l + os_l, best_param_idx]
+            
+            # Alimenta o array global para a curva acumulada global
+            all_oos_returns.extend(os_returns.tolist())
+
+            # 5. Cálculo do WFE (Walkforward Efficiency) antigo baseado em médias por período
+            is_total_pnl = float(train_slice[:, best_param_idx].sum())
+            os_total_pnl = float(os_returns.sum())
+            os_len = len(os_returns)
+
+            if abs(is_total_pnl) < _WFE_MIN_DENOMINATOR:
+                wfe = float('nan')
+            elif is_total_pnl < 0:
+                wfe = 0.0
+            else:
+                is_avg = is_total_pnl / is_l
+                os_avg = os_total_pnl / os_len
+                wfe = float(np.clip(os_avg / is_avg, -2.0, 2.0))
+
+            # 6. Cálculo do Sharpe OOS antigo
+            std_val = os_returns.std()
+            os_avg_pnl = os_returns.mean()
+            os_sharpe = (os_avg_pnl / (std_val + 1e-9)) * np.sqrt(252)
+
+            # 7. Montagem do DataFrame os_curve com a coluna best_param extra
+            os_curve_df = pl.DataFrame({
+                "ts": oos_timestamps,
+                "ts_orig_min": oos_timestamps,
+                "pnl": os_returns,
+            }).with_columns(pl.lit(best_ps_id).alias("best_param"))
+
+            # 8. Cria o dataframe mínimo de In-Sample para o analyze extrair min/max da coluna 'ts'
+            is_df_light = pl.DataFrame({
+                "ts": train_timestamps,
+                "ts_orig_min": train_timestamps
+            })
+
+            # 9. Append run structure for this window
+            runs.append({
+                "is_df": is_df_light, 
+                "os_curve": os_curve_df,
+                "best_param": best_ps_id,
+                "wfe": wfe if not np.isnan(wfe) else float('nan'),
+                "metrics": {
+                    "os_sharpe": float(os_sharpe),
+                    "is_metric_val": is_total_pnl,
+                }
+            })
+            idx += stp
+
+        return {
+            "config": [is_l, os_l, stp],
+            "windows": runs,
+            "cumulative_oos": np.cumsum(all_oos_returns).tolist(),
+            "total_pnl": float(np.sum(all_oos_returns)) if all_oos_returns else 0.0
+        }
+
+
 
 
     def analyze(self, is_always_higher_or_equal_to_oos=True):
@@ -201,7 +325,7 @@ class Walkforward:
                      pl.col("ts").max().alias("ts_orig_max")]   # último datetime real do dia
                 )
             )
-
+            
             # 2. Upsample: preenche fins de semana/feriados
             #    fill_null(0) APENAS nas colunas PnL — ts_orig fica null nesses dias (intencional)
             ps_cols_only = [c for c in working_df.columns
@@ -257,6 +381,8 @@ class Walkforward:
             wf_key  = f"{is_l}_{os_l}_{stp}"
             wf_data = self.run_wf(is_l, os_l, stp)
 
+            print(f"Total PnL for WF {wf_key}: {wf_data.get('total_pnl', 0.0):.2f}")
+        
             if not wf_data or not wf_data["windows"]: continue
             runs = wf_data["windows"]
 
