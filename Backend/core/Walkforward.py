@@ -518,15 +518,90 @@ class Walkforward:
 
 
     # Plotting
+    def _ensure_results(self):
+        """
+        Garante a padronização dos dados internos. Se 'self.all_wf_results' for 
+        um DataFrame do Polars (ou se 'self.matrix' estiver configurado), converte 
+        automaticamente para o formato estruturado clássico esperado pelos gráficos.
+        """
+        import polars as pl
+        import pandas as pd
+        import numpy as np
+
+        # Caso o DataFrame tenha sido injetado diretamente em all_wf_results
+        if isinstance(self.all_wf_results, pl.DataFrame):
+            self.matrix = self.all_wf_results
+            self.all_wf_results = {}
+
+        # Se já estiver no formato clássico populado, não faz nada
+        if isinstance(self.all_wf_results, dict) and len(self.all_wf_results) > 0:
+            return
+
+        # Se possuir a matriz consolidada do Polars, reconstrói o dicionário de métricas
+        if self.matrix is not None and isinstance(self.matrix, pl.DataFrame):
+            self.all_wf_results = {}
+            
+            # Filtra colunas de parametrização (ex: "48_48_48", "4_4_4") desconsiderando o tempo
+            wf_cols = [c for c in self.matrix.columns if c != "datetime"]
+            
+            df_pd = self.matrix.to_pandas()
+            if "datetime" in df_pd.columns:
+                df_pd["datetime"] = pd.to_datetime(df_pd["datetime"])
+                df_pd = df_pd.sort_values("datetime").reset_index(drop=True)
+
+            for col in wf_cols:
+                # Extrai a tupla de configurações IS, OS, STEP a partir do nome da coluna
+                parts = col.split('_')
+                try:
+                    is_val = int(parts[0]) if len(parts) > 0 else 0
+                    os_val = int(parts[1]) if len(parts) > 1 else 0
+                    step_val = int(parts[2]) if len(parts) > 2 else os_val
+                except ValueError:
+                    is_val, os_val, step_val = 0, 0, 0
+
+                series = df_pd[col].fillna(0.0)
+                equity_series = series.cumsum()
+
+                total_pnl = float(equity_series.iloc[-1]) if not equity_series.empty else 0.0
+                
+                # Cálculo de Drawdown Máximo Nominal
+                peak = equity_series.cummax()
+                dd = peak - equity_series
+                max_dd = float(dd.max()) if not dd.empty else 0.0
+
+                # Cálculo de Sharpe Ratio do período analisado
+                std_val = series.std()
+                pnl_sharpe = (series.mean() / std_val * np.sqrt(52)) if std_val > 0 else 0.0
+
+                # Injeta na árvore de dicionários simulando a estrutura nativa
+                # 'wfe' assume o total_pnl como fallback para não quebrar chamadas legadas
+                self.all_wf_results[col] = {
+                    "config": [is_val, os_val, step_val],
+                    "total_pnl": total_pnl,
+                    "max_dd": max_dd,
+                    "pnl_sharpe": pnl_sharpe,
+                    "wfe": total_pnl,        
+                    "wfe_sharpe": pnl_sharpe,
+                    "equity": equity_series.values,
+                    "runs": [] # Matrizes planas consolidadas não possuem chunks de treino isolados
+                }
+
+    # ── APENAS MÉTODOS DE PLOTAGEM (VISUAL REFINADO/PREMIUM) ──────────────────
+
     def plot_heatmap(self, metric='wfe'):
-        plt.style.use('dark_background')
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import seaborn as sns
         
+        #self._ensure_results()
+        plt.style.use('dark_background')
+  
         data = []
         for res in self.all_wf_results.values():
             data.append({
                 "IS": res['config'][0], 
                 "OS": res['config'][1], 
-                "Val": res[metric]
+                "Val": res.get(metric, res.get('total_pnl', 0.0))
             })
 
         if not data:
@@ -534,22 +609,21 @@ class Walkforward:
             return
 
         df_plot = pd.DataFrame(data).pivot(index="IS", columns="OS", values="Val")
-        # Garantir que o eixo IS fique em ordem decrescente
         df_plot = df_plot.sort_index(ascending=False)
 
         plt.figure(figsize=(12, 8))
         sns.set_theme(style="darkgrid", rc={"axes.facecolor": "#0a0a0a", "figure.facecolor": "#0a0a0a"})
 
-        # mask detecta onde os dados são nulos (combinações IS < OS filtradas)
         mask = df_plot.isnull()
+        cmap = "RdYlGn_r" if metric == 'max_dd' else "RdYlGn"
 
         ax = sns.heatmap(
             df_plot, 
             annot=True, 
             fmt=".2f", 
-            cmap="RdYlGn", 
+            cmap=cmap, 
             center=0 if metric != 'max_dd' else None,
-            mask=mask, # Isso mantém a parte filtrada escura/vazia
+            mask=mask, 
             annot_kws={"size": 10, "weight": "bold"},
             linewidths=.5, 
             linecolor='#333333',
@@ -564,19 +638,23 @@ class Walkforward:
         plt.show()
 
     def plot_advanced_heatmap(self, metric: Literal['total_pnl', 'max_dd', 'pnl_sharpe', 'wfe_sharpe'] = 'total_pnl'):
-        # 1. Aplicar o estilo escuro
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        
+        #self._ensure_results()
         plt.style.use('dark_background')
         sns.set_theme(style="darkgrid", rc={"axes.facecolor": "#121212", "figure.facecolor": "#121212"})
-        
-        data = [{"IS": r['config'][0], "OS": r['config'][1], "Val": r[metric]} for r in self.all_wf_results.values()]
+        data = [{"IS": r['config'][0], "OS": r['config'][1], "Val": r.get(metric, r.get('total_pnl', 0.0))} for r in self.all_wf_results.values()]
+        if not data:
+            print("      > [Error] No data to plot advanced heatmap.")
+            return
+            
         df_plot = pd.DataFrame(data).pivot(index="IS", columns="OS", values="Val").sort_index(ascending=False)
-
+   
         plt.figure(figsize=(12, 8))
-        
-        # Inverter cores se a métrica for Drawdown (Menor queda é melhor -> Verde)
         cmap = "RdYlGn_r" if metric == 'max_dd' else "RdYlGn"
         
-        # 2. Gerar o heatmap com os mesmos parâmetros visuais do plot_heatmap
         ax = sns.heatmap(
             df_plot, 
             annot=True, 
@@ -588,26 +666,33 @@ class Walkforward:
             linecolor='#333333'
         )
 
-        # 3. Adicionar labels e estilização dos eixos (X e Y)
         plt.title(f"WFM Matrix - {metric.upper()} (Dark Theme)", color='white', fontsize=15)
         plt.xlabel("Out-of-Sample Size (OS)", color='white')
         plt.ylabel("In-Sample Size (IS)", color='white')
-        
-        # Garantir que os números nos eixos fiquem brancos
         plt.xticks(color='white')
         plt.yticks(color='white')
-
         plt.show()
-        
-        # Resetar para o padrão
         plt.style.use('default')
 
-    def plot_wfe_analysis(self): # Plots WFE Efficiency timeline
+    def plot_wfe_analysis(self): 
+        import matplotlib.pyplot as plt
+        #self._ensure_results()
+        
         plt.figure(figsize=(12, 6))
+        
+        has_runs = False
         for wf_key, res in self.all_wf_results.items():
+            if not res.get('runs'): 
+                continue
             wfes = [r['wfe'] for r in res['runs']]
             dates = [r['ts']['datetime'].min() for r in res['runs']]
             plt.plot(dates, wfes, label=f"{wf_key} (Avg: {res['wfe']:.2f})")
+            has_runs = True
+        
+        if not has_runs:
+            print("      > [WFM Plot] Mapeamento de sub-janelas (runs) indisponível para o formato de matriz plana.")
+            plt.close()
+            return
         
         plt.axhline(y=1.0, color='r', linestyle='--', label='Perfect Efficiency (1.0)')
         plt.axhline(y=0.5, color='gray', linestyle=':', label='Minimum Threshold (0.5)')
@@ -615,35 +700,24 @@ class Walkforward:
         plt.legend()
         plt.show()
 
-    def get_summary(self): # Returns statistical summary of all WFs tested
-        summary = []
-        for key, res in self.all_wf_results.items():
-            valid_wfes = [r['wfe'] for r in res['runs'] if not np.isnan(r['wfe'])]
-            summary.append({
-                "WF_Config": key,
-                "Total_PnL": res['total_pnl'],
-                'Avg_WFE': res['wfe'],
-                "Consistency": np.std(valid_wfes) if valid_wfes else 0.0
-            })
-        return pl.DataFrame(summary).sort("Total_PnL", descending=True)
-        
-    def plot_timeline(self, wf_result: Dict, show_is=True, show_os=True, show_metrics=True):
+    def plot_timeline(self, wf_result: Dict = None, show_is=True, show_os=True, show_metrics=True):
+        #self._ensure_results()
         if not wf_result or 'windows' not in wf_result or not wf_result['windows']:
             print("      > [Error] No windows data to plot timeline.")
             return
+            
+        import matplotlib.dates as mdates
+        from matplotlib.patches import Patch
+        import matplotlib.pyplot as plt
+        from datetime import datetime as dt
         
         if "windows" in wf_result:
-            from datetime import datetime as dt
             for win in wf_result["windows"]:
                 for k in ("is_start", "is_end", "os_start", "os_end"):
                     if k in win and isinstance(win[k], str):
-                        try:
-                            win[k] = dt.fromisoformat(win[k])
+                        try: win[k] = dt.fromisoformat(win[k])
                         except: pass
 
-        import matplotlib.dates as mdates
-        from matplotlib.patches import Patch
-        
         plt.style.use('dark_background')
         windows = wf_result['windows']
         config = wf_result['config']
@@ -651,71 +725,40 @@ class Walkforward:
         color_is = '#004d4d' # Azul Petróleo
         color_os = '#4169E1' # Azul Royal
         
-        # Aumenta a altura proporcionalmente ao número de janelas
         fig, ax = plt.subplots(figsize=(14, len(windows) * 0.4 + 2))
         fig.patch.set_facecolor('#0a0a0a')
         ax.set_facecolor('#0a0a0a')
 
-        use_index = self.time_mode == 'trade_days'
-        
-        # Rastreadores para garantir que o eixo X cubra tudo
-        x_min = float('inf')
-        x_max = float('-inf')
+        time_mode_str = getattr(self, 'time_mode', 'calendar_days')
+        use_index = time_mode_str == 'trade_days'
+        x_min, x_max = float('inf'), float('-inf')
 
         for i, win in enumerate(windows):
             if use_index:
-                # Lógica para TRADE_DAYS (Índices sequenciais)
                 is_start_val = i * config[2]
                 is_width = config[0]
                 os_start_val = is_start_val + is_width
                 os_width = config[1]
-                
-                current_end = os_start_val + os_width
-                current_start = is_start_val
+                current_start, current_end = is_start_val, os_start_val + os_width
             else:
-                # Lógica para CALENDAR_DAYS (Datas reais)
                 is_start_val = mdates.date2num(win['is_start'])
                 is_end_val = mdates.date2num(win['is_end'])
                 os_start_val = mdates.date2num(win['os_start'])
                 os_end_val = mdates.date2num(win['os_end'])
-                
-                is_width = is_end_val - is_start_val
-                os_width = os_end_val - os_start_val
+                is_width, os_width = max(is_end_val - is_start_val, 0.1), max(os_end_val - os_start_val, 0.1)
+                current_start, current_end = is_start_val, os_end_val
 
-                # Correção para garantir visibilidade mínima
-                is_width = max(is_width, 0.1)
-                os_width = max(os_width, 0.1)
-                
-                current_start = is_start_val
-                current_end = os_end_val
+            x_min, x_max = min(x_min, current_start), max(x_max, current_end)
 
-            # Atualiza os limites globais do gráfico
-            x_min = min(x_min, current_start)
-            x_max = max(x_max, current_end)
-
-            # Plotagem das barras In-Sample
             if show_is:
-                ax.broken_barh([(is_start_val, is_width)], (i - 0.4, 0.8), 
-                               facecolors=color_is, alpha=0.5, edgecolor='#1a1a1a', linewidth=0.5)
-            
-            # Plotagem das barras Out-of-Sample
+                ax.broken_barh([(is_start_val, is_width)], (i - 0.4, 0.8), facecolors=color_is, alpha=0.5, edgecolor='#1a1a1a', linewidth=0.5)
             if show_os:
-                ax.broken_barh([(os_start_val, os_width)], (i - 0.4, 0.8), 
-                               facecolors=color_os, alpha=1.0, edgecolor='white', linewidth=1.0)
-
-            # Métricas ao lado de cada janela
+                ax.broken_barh([(os_start_val, os_width)], (i - 0.4, 0.8), facecolors=color_os, alpha=1.0, edgecolor='white', linewidth=1.0)
             if show_metrics:
-                text_x = os_start_val + os_width
-                ax.text(text_x, i, f"  {win['best_param']} ({win['metric_val']:.2f})", 
-                        va='center', color='white', fontsize=8, alpha=0.8)
+                ax.text(os_start_val + os_width, i, f"  {win['best_param']} ({win['metric_val']:.2f})", va='center', color='white', fontsize=8, alpha=0.8)
 
-        # --- AJUSTE DOS LIMITES E FORMATAÇÃO ---
-        
-        # Adiciona 10% de margem à direita para o texto das métricas não ser cortado
         margin = (x_max - x_min) * 0.10
         ax.set_xlim(x_min, x_max + margin)
-        
-        # Garante que o eixo Y mostre todas as janelas (incluindo a última no topo)
         ax.set_ylim(-1, len(windows))
 
         if not use_index:
@@ -729,23 +772,20 @@ class Walkforward:
         ax.set_yticks(range(len(windows)))
         ax.set_yticklabels([f"W {i+1}" for i in range(len(windows))], color='#888888')
         
-        title_str = f"Walkforward Timeline | {self.time_mode.upper()} | IS:{config[0]} OS:{config[1]} ST:{config[2]}"
+        title_str = f"Walkforward Timeline | {time_mode_str.upper()} | IS:{config[0]} OS:{config[1]} ST:{config[2]}"
         ax.set_title(title_str, color='white', loc='left', pad=25, fontsize=12)
-        
         ax.grid(True, axis='x', linestyle='--', alpha=0.1)
         
-        # Legenda
-        legend_elements = [
-            Patch(facecolor=color_is, label='In-Sample (Train)'), 
-            Patch(facecolor=color_os, label='Out-of-Sample (Live)')
-        ]
-        ax.legend(handles=legend_elements, loc='upper right', frameon=False, 
-                  bbox_to_anchor=(1, 1.12), ncol=2, fontsize=9)
-
+        legend_elements = [Patch(facecolor=color_is, label='In-Sample (Train)'), Patch(facecolor=color_os, label='Out-of-Sample (Live)')]
+        ax.legend(handles=legend_elements, loc='upper right', frameon=False, bbox_to_anchor=(1, 1.12), ncol=2, fontsize=9)
         plt.tight_layout()
         plt.show()
 
     def plot_oos_curves(self, wf_result: Dict = None):
+        import pandas as pd
+        import matplotlib.pyplot as plt
+        #self._ensure_results()
+        
         if not self.all_wf_results:
             print("      > [Error] No results found.")
             return
@@ -755,23 +795,288 @@ class Walkforward:
         fig.patch.set_facecolor('#0a0a0a')
         ax.set_facecolor('#0a0a0a')
 
-        # Se wf_result foi passado (da Operation.py), tentamos extrair a chave dele
-        selected_key = None
         if wf_result and 'config' in wf_result:
             c = wf_result['config']
             selected_key = f"{c[0]}_{c[1]}_{c[2]}"
         else:
             selected_key = max(self.all_wf_results, key=lambda k: self.all_wf_results[k]['total_pnl'])
 
+        has_time = self.matrix is not None and "datetime" in self.matrix.columns
+        time_axis = pd.to_datetime(self.matrix["datetime"].to_pandas()) if has_time else None
+
         for wf_key, data in self.all_wf_results.items():
+            equity = data['equity']
+            x_axis = time_axis if (has_time and len(equity) == len(time_axis)) else range(len(equity))
+            
             if wf_key == selected_key:
-                ax.plot(data['equity'], color='#4169E1', lw=2.5, label=f"Selected: {wf_key}", zorder=10)
+                ax.plot(x_axis, equity, color='#4169E1', lw=2.5, label=f"Selected: {wf_key}", zorder=10)
             else:
-                ax.plot(data['equity'], color='#C3C3C3', lw=1, alpha=0.2, zorder=1)
+                ax.plot(x_axis, equity, color='#C3C3C3', lw=1, alpha=0.2, zorder=1)
 
         ax.set_title("Walkforward Matrix Evolution", color='white', loc='left')
         ax.legend(frameon=False, fontsize='small')
+        
+        if has_time and len(equity) == len(time_axis):
+            plt.xticks(rotation=45, ha='right', color='#888888')
+        plt.tight_layout()
         plt.show()
+
+
+
+    # def plot_heatmap(self, metric='wfe'):
+    #     plt.style.use('dark_background')
+        
+    #     data = []
+    #     for res in self.all_wf_results.values():
+    #         data.append({
+    #             "IS": res['config'][0], 
+    #             "OS": res['config'][1], 
+    #             "Val": res[metric]
+    #         })
+
+    #     if not data:
+    #         print("      > [Error] No data to plot heatmap.")
+    #         return
+
+    #     df_plot = pd.DataFrame(data).pivot(index="IS", columns="OS", values="Val")
+    #     # Garantir que o eixo IS fique em ordem decrescente
+    #     df_plot = df_plot.sort_index(ascending=False)
+
+    #     plt.figure(figsize=(12, 8))
+    #     sns.set_theme(style="darkgrid", rc={"axes.facecolor": "#0a0a0a", "figure.facecolor": "#0a0a0a"})
+
+    #     # mask detecta onde os dados são nulos (combinações IS < OS filtradas)
+    #     mask = df_plot.isnull()
+
+    #     ax = sns.heatmap(
+    #         df_plot, 
+    #         annot=True, 
+    #         fmt=".2f", 
+    #         cmap="RdYlGn", 
+    #         center=0 if metric != 'max_dd' else None,
+    #         mask=mask, # Isso mantém a parte filtrada escura/vazia
+    #         annot_kws={"size": 10, "weight": "bold"},
+    #         linewidths=.5, 
+    #         linecolor='#333333',
+    #         cbar_kws={'label': metric.upper()}
+    #     )
+
+    #     plt.title(f"WFM Matrix - {metric.upper()} Analysis", color='white', fontsize=14, pad=20)
+    #     plt.xlabel("Out-of-Sample (OS)", color='white')
+    #     plt.ylabel("In-Sample (IS)", color='white')
+    #     plt.xticks(color='white')
+    #     plt.yticks(color='white')
+    #     plt.show()
+
+    # def plot_advanced_heatmap(self, metric: Literal['total_pnl', 'max_dd', 'pnl_sharpe', 'wfe_sharpe'] = 'total_pnl'):
+    #     # 1. Aplicar o estilo escuro
+    #     plt.style.use('dark_background')
+    #     sns.set_theme(style="darkgrid", rc={"axes.facecolor": "#121212", "figure.facecolor": "#121212"})
+        
+    #     data = [{"IS": r['config'][0], "OS": r['config'][1], "Val": r[metric]} for r in self.all_wf_results.values()]
+    #     df_plot = pd.DataFrame(data).pivot(index="IS", columns="OS", values="Val").sort_index(ascending=False)
+
+    #     plt.figure(figsize=(12, 8))
+        
+    #     # Inverter cores se a métrica for Drawdown (Menor queda é melhor -> Verde)
+    #     cmap = "RdYlGn_r" if metric == 'max_dd' else "RdYlGn"
+        
+    #     # 2. Gerar o heatmap com os mesmos parâmetros visuais do plot_heatmap
+    #     ax = sns.heatmap(
+    #         df_plot, 
+    #         annot=True, 
+    #         fmt=".3f", 
+    #         cmap=cmap, 
+    #         center=0 if metric != 'max_dd' else None,
+    #         annot_kws={"size": 10, "weight": "bold"},
+    #         linewidths=.5, 
+    #         linecolor='#333333'
+    #     )
+
+    #     # 3. Adicionar labels e estilização dos eixos (X e Y)
+    #     plt.title(f"WFM Matrix - {metric.upper()} (Dark Theme)", color='white', fontsize=15)
+    #     plt.xlabel("Out-of-Sample Size (OS)", color='white')
+    #     plt.ylabel("In-Sample Size (IS)", color='white')
+        
+    #     # Garantir que os números nos eixos fiquem brancos
+    #     plt.xticks(color='white')
+    #     plt.yticks(color='white')
+
+    #     plt.show()
+        
+    #     # Resetar para o padrão
+    #     plt.style.use('default')
+
+    # def plot_wfe_analysis(self): # Plots WFE Efficiency timeline
+    #     plt.figure(figsize=(12, 6))
+    #     for wf_key, res in self.all_wf_results.items():
+    #         wfes = [r['wfe'] for r in res['runs']]
+    #         dates = [r['ts']['datetime'].min() for r in res['runs']]
+    #         plt.plot(dates, wfes, label=f"{wf_key} (Avg: {res['wfe']:.2f})")
+        
+    #     plt.axhline(y=1.0, color='r', linestyle='--', label='Perfect Efficiency (1.0)')
+    #     plt.axhline(y=0.5, color='gray', linestyle=':', label='Minimum Threshold (0.5)')
+    #     plt.title("Walkforward Efficiency (WFE) Evolution")
+    #     plt.legend()
+    #     plt.show()
+
+    # def get_summary(self): # Returns statistical summary of all WFs tested
+    #     summary = []
+    #     for key, res in self.all_wf_results.items():
+    #         valid_wfes = [r['wfe'] for r in res['runs'] if not np.isnan(r['wfe'])]
+    #         summary.append({
+    #             "WF_Config": key,
+    #             "Total_PnL": res['total_pnl'],
+    #             'Avg_WFE': res['wfe'],
+    #             "Consistency": np.std(valid_wfes) if valid_wfes else 0.0
+    #         })
+    #     return pl.DataFrame(summary).sort("Total_PnL", descending=True)
+        
+    # def plot_timeline(self, wf_result: Dict, show_is=True, show_os=True, show_metrics=True):
+    #     if not wf_result or 'windows' not in wf_result or not wf_result['windows']:
+    #         print("      > [Error] No windows data to plot timeline.")
+    #         return
+        
+    #     if "windows" in wf_result:
+    #         from datetime import datetime as dt
+    #         for win in wf_result["windows"]:
+    #             for k in ("is_start", "is_end", "os_start", "os_end"):
+    #                 if k in win and isinstance(win[k], str):
+    #                     try:
+    #                         win[k] = dt.fromisoformat(win[k])
+    #                     except: pass
+
+    #     import matplotlib.dates as mdates
+    #     from matplotlib.patches import Patch
+        
+    #     plt.style.use('dark_background')
+    #     windows = wf_result['windows']
+    #     config = wf_result['config']
+        
+    #     color_is = '#004d4d' # Azul Petróleo
+    #     color_os = '#4169E1' # Azul Royal
+        
+    #     # Aumenta a altura proporcionalmente ao número de janelas
+    #     fig, ax = plt.subplots(figsize=(14, len(windows) * 0.4 + 2))
+    #     fig.patch.set_facecolor('#0a0a0a')
+    #     ax.set_facecolor('#0a0a0a')
+
+    #     use_index = self.time_mode == 'trade_days'
+        
+    #     # Rastreadores para garantir que o eixo X cubra tudo
+    #     x_min = float('inf')
+    #     x_max = float('-inf')
+
+    #     for i, win in enumerate(windows):
+    #         if use_index:
+    #             # Lógica para TRADE_DAYS (Índices sequenciais)
+    #             is_start_val = i * config[2]
+    #             is_width = config[0]
+    #             os_start_val = is_start_val + is_width
+    #             os_width = config[1]
+                
+    #             current_end = os_start_val + os_width
+    #             current_start = is_start_val
+    #         else:
+    #             # Lógica para CALENDAR_DAYS (Datas reais)
+    #             is_start_val = mdates.date2num(win['is_start'])
+    #             is_end_val = mdates.date2num(win['is_end'])
+    #             os_start_val = mdates.date2num(win['os_start'])
+    #             os_end_val = mdates.date2num(win['os_end'])
+                
+    #             is_width = is_end_val - is_start_val
+    #             os_width = os_end_val - os_start_val
+
+    #             # Correção para garantir visibilidade mínima
+    #             is_width = max(is_width, 0.1)
+    #             os_width = max(os_width, 0.1)
+                
+    #             current_start = is_start_val
+    #             current_end = os_end_val
+
+    #         # Atualiza os limites globais do gráfico
+    #         x_min = min(x_min, current_start)
+    #         x_max = max(x_max, current_end)
+
+    #         # Plotagem das barras In-Sample
+    #         if show_is:
+    #             ax.broken_barh([(is_start_val, is_width)], (i - 0.4, 0.8), 
+    #                            facecolors=color_is, alpha=0.5, edgecolor='#1a1a1a', linewidth=0.5)
+            
+    #         # Plotagem das barras Out-of-Sample
+    #         if show_os:
+    #             ax.broken_barh([(os_start_val, os_width)], (i - 0.4, 0.8), 
+    #                            facecolors=color_os, alpha=1.0, edgecolor='white', linewidth=1.0)
+
+    #         # Métricas ao lado de cada janela
+    #         if show_metrics:
+    #             text_x = os_start_val + os_width
+    #             ax.text(text_x, i, f"  {win['best_param']} ({win['metric_val']:.2f})", 
+    #                     va='center', color='white', fontsize=8, alpha=0.8)
+
+    #     # --- AJUSTE DOS LIMITES E FORMATAÇÃO ---
+        
+    #     # Adiciona 10% de margem à direita para o texto das métricas não ser cortado
+    #     margin = (x_max - x_min) * 0.10
+    #     ax.set_xlim(x_min, x_max + margin)
+        
+    #     # Garante que o eixo Y mostre todas as janelas (incluindo a última no topo)
+    #     ax.set_ylim(-1, len(windows))
+
+    #     if not use_index:
+    #         ax.xaxis_date()
+    #         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    #         ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+    #         plt.xticks(rotation=45, ha='right', color='#888888')
+    #     else:
+    #         ax.set_xlabel("Sequential Periods / Trades", color='#888888')
+
+    #     ax.set_yticks(range(len(windows)))
+    #     ax.set_yticklabels([f"W {i+1}" for i in range(len(windows))], color='#888888')
+        
+    #     title_str = f"Walkforward Timeline | {self.time_mode.upper()} | IS:{config[0]} OS:{config[1]} ST:{config[2]}"
+    #     ax.set_title(title_str, color='white', loc='left', pad=25, fontsize=12)
+        
+    #     ax.grid(True, axis='x', linestyle='--', alpha=0.1)
+        
+    #     # Legenda
+    #     legend_elements = [
+    #         Patch(facecolor=color_is, label='In-Sample (Train)'), 
+    #         Patch(facecolor=color_os, label='Out-of-Sample (Live)')
+    #     ]
+    #     ax.legend(handles=legend_elements, loc='upper right', frameon=False, 
+    #               bbox_to_anchor=(1, 1.12), ncol=2, fontsize=9)
+
+    #     plt.tight_layout()
+    #     plt.show()
+
+    # def plot_oos_curves(self, wf_result: Dict = None):
+    #     if not self.all_wf_results:
+    #         print("      > [Error] No results found.")
+    #         return
+
+    #     plt.style.use('dark_background')
+    #     fig, ax = plt.subplots(figsize=(12, 6))
+    #     fig.patch.set_facecolor('#0a0a0a')
+    #     ax.set_facecolor('#0a0a0a')
+
+    #     # Se wf_result foi passado (da Operation.py), tentamos extrair a chave dele
+    #     selected_key = None
+    #     if wf_result and 'config' in wf_result:
+    #         c = wf_result['config']
+    #         selected_key = f"{c[0]}_{c[1]}_{c[2]}"
+    #     else:
+    #         selected_key = max(self.all_wf_results, key=lambda k: self.all_wf_results[k]['total_pnl'])
+
+    #     for wf_key, data in self.all_wf_results.items():
+    #         if wf_key == selected_key:
+    #             ax.plot(data['equity'], color='#4169E1', lw=2.5, label=f"Selected: {wf_key}", zorder=10)
+    #         else:
+    #             ax.plot(data['equity'], color='#C3C3C3', lw=1, alpha=0.2, zorder=1)
+
+    #     ax.set_title("Walkforward Matrix Evolution", color='white', loc='left')
+    #     ax.legend(frameon=False, fontsize='small')
+    #     plt.show()
 
 
 

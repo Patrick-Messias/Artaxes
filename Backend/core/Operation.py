@@ -116,10 +116,10 @@ class Operation(BaseClass):
     def _init_data(self):
         from Storage import Storage
         storage = Storage(base_path="Backend/results")
-        meta = storage.load_meta(self.name)
+        meta = storage.load_operation_meta(self.name)
 
         if meta:
-            print(f"   > Found saved results for '{self.name}' — building timeline...")
+            print(f"   > Found saved results for '{self.name}', loading data...")
             self._results_map[self.name] = {"models": {}}
 
             for model_name, model_data in meta.get("models", {}).items():
@@ -132,7 +132,6 @@ class Operation(BaseClass):
 
                     for asset_name in assets_list:
                         asset_data = storage.load(self.name, model_name, strat_name, asset_name)
-                        
                         self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name] = {
                             "timeline": asset_data.get("timeline"),
                             "trades": asset_data.get("trades"), # Apenas o DF de trades
@@ -902,39 +901,6 @@ class Operation(BaseClass):
             return all_models
         else: return {}
 
-
-    
-    # def _calculate_param_combinations(self, param_dict, prefix="param_set"): # Recebe um dict de parâmetros e gera todas as combinações possíveis. Retorna um dict estruturado.
-    #     # Separa parâmetros que variam e parâmetros fixos
-    #     varying = {}
-    #     fixed = {}
-        
-    #     for key, val in param_dict.items(): # Considera 'valor único' se não for iterável útil (range, list, tuple)
-    #         if isinstance(val, (list, tuple, range)):
-    #             varying[key] = list(val)
-    #         else:
-    #             fixed[key] = val
-
-    #     # Se não houver parâmetros variados, apenas retorna o original
-    #     if not varying:
-    #         name = f"{prefix}_{'-'.join(str(v) for v in fixed.values())}"
-    #         return {name: param_dict}
-
-    #     # Gera combinações
-    #     keys = list(varying.keys())
-    #     values = [varying[k] for k in keys]
-
-    #     result = {}
-
-    #     for combo in product(*values):
-    #         combo_dict = dict(zip(keys, combo)) | fixed # monta dict final
-    #         combo_name = f"{prefix}-" + "-".join(str(combo_dict[k]) for k in combo_dict) # cria nome único
-    #         result[combo_name] = combo_dict # add
-
-    #     return result
-
-
-   
     def transfer_htf_columns(self, ltf_df, htf_df, ind_name):
         
         # Alinha dados de ativos diferentes ou timeframes diferentes.
@@ -1260,64 +1226,107 @@ class Operation(BaseClass):
 
     def _plot_wfm(
         self,
-        model:             Optional[str] = None,
-        strat:             Optional[str] = None,
-        asset:             Optional[str] = None,
+        m_name:             Optional[str] = None,
+        s_name:             Optional[str] = None,
+        a_name:             Optional[str] = None,
+        wf_results:         Optional[Union[dict, pl.DataFrame]] = None,
     ):
         """
-        Plota resultados do Walkforward DIRETAMENTE da memória.
-        Deve ser chamado imediatamente após o _run_walkforward.
+        Gera os gráficos do Walkforward de forma automatizada ou direcionada.
+        Se os nomes de modelo, estratégia e ativo forem informados, executa apenas para ele.
+        Caso contrário, realiza a varredura completa usando o metadado da operação.
         """
-        models_dict = self._get_all_models()
- 
-        for m_name, m_obj in models_dict.items():
-            if model and m_name != model: continue
- 
-            for s_name, s_obj in m_obj.strat.items():
-                if strat and s_name != strat: continue
- 
-                for a_name in m_obj.assets:
-                    if asset and a_name != asset: continue
- 
-                    ERRRO AQUI, TENTANDO ACESSAR RESULTADOS DA INSTANCIA QUE ESTÀ MUDANDO
+        import polars as pl
+        from pathlib import Path
+        from Walkforward import Walkforward
+        from Storage import Storage
 
-                    wfm_engine = s_obj.operation
-                    all_wf = wfm_engine.all_wf_results
- 
-                    # Se não houver dados em memória, avisa e pula
-                    if not all_wf:
-                        print(f"   > [Skip] No Walkforward data in memory to plot for {a_name}.")
-                        continue
- 
-                    print(f"   > Plotting Walkforward: {m_name} | {s_name} | {a_name}")
- 
-                    # Determina a métrica e o melhor resultado para servir de base para a Timeline
-                    try:
-                        metric = str(wfm_engine.wf_selection_metric)
+        # Instancia o storage no escopo principal para reaproveitamento nas funções internas
+        storage = Storage(base_path="Backend/results")
 
-                        res_key = 'total_pnl' if metric == 'pnl' else metric
+        # ── CASO 1: SE OS RESULTADOS JÁ VIERAM DIRETAMENTE DA MEMÓRIA ─────────
+        if wf_results is not None:
+            print(f"      > [WFM Plot] Plotando resultados fornecidos diretamente da memória...")
+            wfm_engine = Walkforward()
+            
+            # Aloca dinamicamente dependendo do tipo recebido da memória
+            if isinstance(wf_results, pl.DataFrame):
+                wfm_engine.matrix = wf_results
+            else:
+                wfm_engine.all_wf_results = wf_results
+            
+            # Executa a suíte padronizada de plots (o _ensure_results interno cuida do parse)
+            wfm_engine._ensure_results()
+            wfm_engine.plot_oos_curves()
+            wfm_engine.plot_advanced_heatmap(metric='total_pnl')
+            wfm_engine.plot_advanced_heatmap(metric='max_dd')
+            
+            # Se for o dicionário clássico contendo metadados de janelas, renderiza a timeline
+            if isinstance(wf_results, dict) and wf_results:
+                best_key = max(wf_results.keys(), key=lambda k: wf_results[k].get('total_pnl', 0.0))
+                if 'windows' in wf_results[best_key]:
+                    wfm_engine.plot_timeline(wf_result=wf_results[best_key])
+            return
 
-                        valid_wf = [
-                            v for k, v in all_wf.items()
-                            if k != "__meta__" and isinstance(v, dict)
-                        ]
+        # ── FUNÇÃO INTERNA PARA PROCESSAMENTO VIA DISCO (CASOS 2 E 3) ─────────
+        def _generate_and_plot_asset(model: str, strat: str, asset: str):
+            asset_dir = Path("Backend/results") / self.name / model / strat / asset
+            if not asset_dir.exists():
+                return
 
-                        if not valid_wf:
-                            print("   > No valid WF results")
-                            continue
+            print(f"      > [WFM Plot] Processando Walkforward Matrix para: {model} -> {strat} -> {asset}")
 
-                        wf_result = max(
-                            valid_wf,
-                            key=lambda r: r.get(res_key, -float('inf'))
-                        )
-                    except:
-                        wf_result = next(iter(all_wf.values()))
- 
-                    # Dispara os plots usando a engine do Walkforward
-                    wfm_engine.plot_oos_curves(wf_result=wf_result)
-                    wfm_engine.plot_timeline(wf_result=wf_result)
-                    if res_key:
-                        wfm_engine.plot_advanced_heatmap(metric=res_key)
+            key = (self.name, model, strat, asset)
+            
+            try:
+                # Tenta utilizar o carregador v2; se não disponível, aplica fallback para load_pnl_matrix
+                #if hasattr(storage, 'load_walkforward_matrix_v2'):
+                data = storage.load_walkforward_matrix_v2(key)
+                #else:
+                #    res_dict = storage.load_pnl_matrix(self.name, model, strat, asset, kind="pnl")
+                #    data = res_dict.get(f"{model}/{strat}/{asset}", None)
+            except Exception as e:
+                print(f"      > [WFM Plot] Erro ao carregar dados do disco para {asset}: {e}")
+                return
+
+            if data is None or (isinstance(data, pl.DataFrame) and data.is_empty()):
+                print(f"      > [WFM Plot] Matriz vazia ou não encontrada para o ativo: {asset}")
+                return
+
+            # Inicializa a engine e repassa a matriz carregada
+            wfm_engine = Walkforward()
+            if isinstance(data, pl.DataFrame):
+                wfm_engine.matrix = data
+                # Configura modo temporal se a coluna datetime estiver presente no Polars
+                if "datetime" in data.columns:
+                    wfm_engine.time_mode = 'calendar_days'
+            else:
+                wfm_engine.all_wf_results = data
+
+            # Chamadas limpas das novas Defs padronizadas
+            print(data)
+            print()
+            wfm_engine._ensure_results()
+            wfm_engine.plot_oos_curves()
+            wfm_engine.plot_advanced_heatmap(metric='total_pnl')
+            wfm_engine.plot_advanced_heatmap(metric='max_dd')
+
+        # ── CASO 2: SE PARÂMETROS INDIVIDUAIS FOREM INFORMADOS ────────────────
+        if m_name and s_name and a_name:
+            _generate_and_plot_asset(m_name, s_name, a_name)
+            return
+
+        # ── CASO 3: TODOS PARAMS NONE -> VARREDURA VIA OPERAÇÃO METADATA ─────
+        meta = storage.load_operation_meta(self.name)
+        
+        if not meta or 'models' not in meta:
+            print(f"      > [WFM Plot] Metadado indisponível para a operação: {self.name}")
+            return
+
+        for m_key, m_data in meta['models'].items():
+            for s_key, s_data in m_data.get('strats', {}).items():
+                for a_key in s_data.get('assets', []):
+                    _generate_and_plot_asset(m_key, s_key, a_key)
 
     # || ===================================================================== || Walkforward || ===================================================================== ||
 
@@ -1413,15 +1422,11 @@ class Operation(BaseClass):
 
     # || ======================================================================================================================================================================= ||
 
-    1. Walkforward parece correto agora, está salvando corretamente
-    2. plot_wfm deve usar o load_walkforward_matrix para puxar os resultado e plotar
-    3. Talvez adicionar os resultados wfm para memória com mesmo formato
-
     def run(self):
         # I - Init and Validation of Operation
         print(f"\n>>> I - Init and Validating Operation <<<")
         self._validate_operation()
-        self._init_data()
+        #self._init_data()
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
@@ -1433,7 +1438,7 @@ class Operation(BaseClass):
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        self._run_walkforward(True)
+        #self._run_walkforward(True)
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()

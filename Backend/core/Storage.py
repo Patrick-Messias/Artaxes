@@ -1,3 +1,5 @@
+from asyncio import tasks
+
 import polars as pl, json
 from pathlib import Path
 from typing import Optional, Union
@@ -73,7 +75,7 @@ class Storage:
 
                 df = df.with_columns([
                     pl.lit(run.get("best_param", "")).alias("best_param"),
-                    pl.lit(wf_id).alias("wf_id")   # 🔥 chave
+                    pl.lit(wf_id).alias("wf_id")  
                 ])
                 frames.append(df)
 
@@ -87,11 +89,6 @@ class Storage:
             new_df = pl.concat([old, new_df])
             
         new_df.sort("datetime").write_parquet(file_path)
-
-    # def save_operation_meta(self, op_name: str, meta_dict: dict):
-    #     path = self.base_path / op_name / "operation_meta.json"
-    #     with open(path, "w") as f:
-    #         json.dump(meta_dict, f, indent=4)
 
     def save_operation_meta(self, op_name: str, meta_dict: dict):
         # Define o caminho da pasta da operação
@@ -115,12 +112,12 @@ class Storage:
                 return json.load(f)
         return {}
 
-    def load_meta(self, operation_name: str) -> dict:
-        meta_file = self.base_path / operation_name / "operation_meta.json"
-        if not meta_file.exists():
-            return {}
-        with open(meta_file, "r") as f:
-            return json.load(f)
+    # def load_meta(self, operation_name: str) -> dict:
+    #     meta_file = self.base_path / operation_name / "operation_meta.json"
+    #     if not meta_file.exists():
+    #         return {}
+    #     with open(meta_file, "r") as f:
+    #         return json.load(f)
 
     def list_operations(self) -> list:
         """Lista todas as operations salvas."""
@@ -188,7 +185,15 @@ class Storage:
 
         return asset_data
 
-    
+
+
+    # || Operation.py Use || # 
+
+    def _load_matrix_only(self, op, model, strat, asset):
+        path = self.base_path / op / model / strat / asset / "matrix" / "pnl_matrix.parquet"
+        if path.exists():
+            return pl.read_parquet(path)
+        return None
     def load_walkforward_matrix(self, 
                                 key, 
                                 side_val: str="BOTH", 
@@ -315,7 +320,107 @@ class Storage:
             print(f"    < [Storage.] Error: {e}")
             return None
 
+    def load_walkforward_matrix_v2(self,
+                                   key, # tuple (op, model, strat, asset) or 4 individual strings
+                                   res_price: str="perc",
+                                   side_val: str="BOTH",
+                                   wf_ids: Optional[Union[str, list]] = None,
+                                   start_dt: str=None,
+                                   end_dt: str=None) -> Optional[pl.DataFrame]:
+        
+        # Loads and validates data
+        asset_data = self.load(key)
+        timeline_df = asset_data.get("timeline")
+        wf_map = asset_data.get("wf")
 
+        if timeline_df is None or wf_map is None: 
+            print(f"    < [Storage.load_walkforward_matrix] timeline_df or wf_map None")
+            return None
+        
+        #try:
+        # Normalizes Walkforward parameter mapping columns
+        if "best_param" in wf_map.columns and "ps_id" not in wf_map.columns:
+            wf_map = wf_map.rename({"best_param": "ps_id"})
+
+        # Applies cronological filters
+        if start_dt:
+            wf_map = wf_map.filter(pl.col("datetime") >= start_dt)
+        if end_dt:
+            wf_map = wf_map.filter(pl.col("datetime") <= end_dt)
+        
+        # Optional wf_id filtering
+        if wf_ids is not None:
+            search_ids = [str(wf_ids)] if isinstance(wf_ids, str) else [str(i) for i in wf_ids]
+            wf_map = wf_map.filter(pl.col("wf_id").cast(pl.Utf8).is_in(search_ids))
+
+        # Lazy historical and temporal preparation and optimization
+        timeline_lazy = timeline_df.lazy()
+        
+        if start_dt:
+            timeline_lazy = timeline_lazy.filter(pl.col("datetime") >= start_dt)
+        if end_dt:
+            timeline_lazy = timeline_lazy.filter(pl.col("datetime") <= end_dt)
+
+        # Optional filters by trade direction
+        if side_val.upper() != "BOTH":
+            s_filter = side_val.upper()
+            lot_col = pl.col("lot_size") if "lot_size" in timeline_df.columns else "lot"
+
+            if lot_col in timeline_df.columns:
+                if s_filter == "LONG":
+                    timeline_lazy = timeline_lazy.filter(lot_col > 0)
+                elif s_filter == "SHORT":
+                    timeline_lazy = timeline_lazy.filter(lot_col < 0)
+
+        # Identifies which walkforward windows/config needs to be processed
+        unique_wfs = wf_map.get_column("wf_id").unique().to_list()
+
+        # Parallel task generation in lazy format, one per walkforward ID
+        tasks = []
+        for wid in unique_wfs:
+            wf_map_lazy = wf_map.filter(pl.col("wf_id") == wid).select([
+                pl.col("datetime").alias("map_dt"),
+                pl.col("ps_id").alias("active_ps")
+            ]).lazy().sort("map_dt")
+
+            # Retroactive join_asof
+            plan = timeline_lazy.join_asof(
+                wf_map_lazy,
+                left_on="datetime",
+                right_on="map_dt",
+                strategy="backward"
+            ).filter(
+                pl.col("ps_id") == pl.col("active_ps")  
+            ).select([
+                "datetime",
+                pl.col(res_price).alias(res_price),  
+                pl.lit(str(wid)).alias("wf_id")
+            ])
+            tasks.append(plan)
+            
+        if not tasks:
+            print(f"    < [Storage.load_walkforward_matrix_clean] No tasks generated.")
+            return None
+        
+        # Multi-threaded execution with polars
+        results = pl.collect_all(tasks)
+        if not results or all(r.is_empty() for r in results):
+            print(f"    < [Storage.load_walkforward_matrix_clean] No trade corresponded with OOS mapping.")
+            return None
+        
+        # Vertical concatenation and pivoting to generate final matrix
+        return pl.concat(results).pivot(
+            index="datetime",
+            on="wf_id",
+            values=res_price,
+            aggregate_function="sum"
+        ).fill_null(0.0).sort("datetime")
+    
+        #except Exception as e:
+        #    print(f"    < [Storage.load_walkforward_matrix_clean] Critical error in construction: {e}")
+        #    return None
+    
+    
     # For Operation.py use
     def load_wf_prep(self, timeline_df: pl.DataFrame, price: str = "pnl", events_to_include: list = ["entry", "exit", "update"]) -> pl.DataFrame:
         if timeline_df is None or timeline_df.is_empty():
@@ -562,11 +667,7 @@ class Storage:
         return pl.concat(dfs, how="diagonal_relaxed") if dfs else pl.DataFrame()
 
 
-    def load_matrix_only(self, op, model, strat, asset):
-        path = self.base_path / op / model / strat / asset / "matrix" / "pnl_matrix.parquet"
-        if path.exists():
-            return pl.read_parquet(path)
-        return None
+
 
     # For local Walkforward use
     def load_pnl_matrix(

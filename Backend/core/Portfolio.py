@@ -39,18 +39,18 @@ class PortfolioParams():
     # XXX - Gerar mais estratégias mockup para testar
     
 
-                                                                                              I M P O R T A N T E   L E R
+#                                                                                               I M P O R T A N T E   L E R
     
-    - No backtest de Operation para cada Asset-Strat calcular o capital para lot_min com leverage mínimo aproximando de 100k, add para ledger: pnl (agora é o pnl $ final de 1 lot), perc (% final de 1 lot), raw_perc (% final de 1 lot)
-add para matrix: lot (agora é asset.lot_min ao invés de 1), required_capital_unit (capital mínimo necessário para lot_min e leverage min), pnl (resultado $ para dt atual), perc (resultado % para dt atual), raw_perc (var % do asset mesmo)
-Assim posso ter o menor lot dentro de 100k e depois, na hora de fazer o aggr usar o fator de multiplicação para igualar todos mais próximo de 100k possível
-apenas diferenciar margin, capital, etc. para isso vai precisar reimplementar o sistema de gestão financeira básica, usando tudo no mínimo. NOTE Permitido fator de multiplicação < 1 para casos onde a margem > capital minimo
+#     - No backtest de Operation para cada Asset-Strat calcular o capital para lot_min com leverage mínimo aproximando de 100k, add para ledger: pnl (agora é o pnl $ final de 1 lot), perc (% final de 1 lot), raw_perc (% final de 1 lot)
+# add para matrix: lot (agora é asset.lot_min ao invés de 1), required_capital_unit (capital mínimo necessário para lot_min e leverage min), pnl (resultado $ para dt atual), perc (resultado % para dt atual), raw_perc (var % do asset mesmo)
+# Assim posso ter o menor lot dentro de 100k e depois, na hora de fazer o aggr usar o fator de multiplicação para igualar todos mais próximo de 100k possível
+# apenas diferenciar margin, capital, etc. para isso vai precisar reimplementar o sistema de gestão financeira básica, usando tudo no mínimo. NOTE Permitido fator de multiplicação < 1 para casos onde a margem > capital minimo
 
-Em resumo:
-- Backtest calcular os resultados com lot minimo dentro de 100k
-- Na hora de calcular o aggr, fazer 100k/required_capital_unit para calcular para ter o fator de multiplicação para * os resultados e "igualar" ao máximo os resultados diferentes
-- Em Portfolio posso apenas usar esses dados para encontrar a posição ideal para o capital alocado ao Model-Strat-Asset
-- ELIMINAR lot_value de asset
+# Em resumo:
+# - Backtest calcular os resultados com lot minimo dentro de 100k
+# - Na hora de calcular o aggr, fazer 100k/required_capital_unit para calcular para ter o fator de multiplicação para * os resultados e "igualar" ao máximo os resultados diferentes
+# - Em Portfolio posso apenas usar esses dados para encontrar a posição ideal para o capital alocado ao Model-Strat-Asset
+# - ELIMINAR lot_value de asset
 
 #    - Ler metadados dos resultados para ter acesso aos assets dos models
 
