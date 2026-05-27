@@ -1229,8 +1229,7 @@ class Operation(BaseClass):
         m_name:             Optional[str] = None,
         s_name:             Optional[str] = None,
         a_name:             Optional[str] = None,
-        wf_results:         Optional[Union[dict, pl.DataFrame]] = None,
-    ):
+        wf_results:         Optional[Union[dict, pl.DataFrame]] = None,):
         """
         Gera os gráficos do Walkforward de forma automatizada ou direcionada.
         Se os nomes de modelo, estratégia e ativo forem informados, executa apenas para ele.
@@ -1304,8 +1303,6 @@ class Operation(BaseClass):
                 wfm_engine.all_wf_results = data
 
             # Chamadas limpas das novas Defs padronizadas
-            print(data)
-            print()
             wfm_engine._ensure_results()
             wfm_engine.plot_oos_curves()
             wfm_engine.plot_advanced_heatmap(metric='total_pnl')
@@ -1390,7 +1387,7 @@ class Operation(BaseClass):
                             strat=s_name, 
                             asset=a_name,
                             wf_id=config_key, 
-                            all_runs=runs
+                            config_data=config_data
                         )
 
                     print(f"   > [WFM] Results saved to disk.")
@@ -1422,11 +1419,22 @@ class Operation(BaseClass):
 
     # || ======================================================================================================================================================================= ||
 
+
+
+    # - Corrigir bugs no Walkforward (GEMINI)
+    # - Criar novo método validado em Metrics.py para calcular para um DataFrame de uso
+    # - Modificar o _ensure_results para usar esse método (acima)
+    # - Adicionar cache em Portfolio para manter o timeline_df, wf_map e wf_results caso não tenha
+    # - Deixar plots do jeito atual, depois de desenvolver Portfolio fazer plots unicos que funcionem independente se resultado de Operation ou Portfolio ou qualquer outro
+    # - XXX Configurar load_walkforward_matrix_v2 para receber opcionalmente o dataframe com dados já processados
+    
+
+
     def run(self):
         # I - Init and Validation of Operation
         print(f"\n>>> I - Init and Validating Operation <<<")
         self._validate_operation()
-        #self._init_data()
+        self._init_data()
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
@@ -1438,7 +1446,7 @@ class Operation(BaseClass):
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        #self._run_walkforward(True)
+        self._run_walkforward(True)
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()

@@ -57,10 +57,39 @@ class Storage:
         )
         print(f"      > [Storage] Saved {len(df_all_trades)} trades to {file_path}")
 
-    def save_walkforward(self, op, model, strat, asset, wf_id, all_runs):
+    def save_walkforward(self, op, model, strat, asset, wf_id, config_data):
         path = self._asset_path(op, model, strat, asset) / "wfm"
         path.mkdir(parents=True, exist_ok=True)
 
+        # Resgata o DataFrame básico gerado no analyze()
+        new_df = config_data.get("oos_df")
+        if new_df is None or new_df.is_empty():
+            return
+
+        file_path = path / "wf.parquet"
+        
+        if file_path.exists():
+            old = pl.read_parquet(file_path)
+            
+            # Limpa o wf_id antigo do arquivo (proteção contra duplicados)
+            if "wf_id" in old.columns:
+                old = old.filter(pl.col("wf_id") != wf_id)
+            
+            new_df = pl.concat([old, new_df], how="diagonal_relaxed")
+            
+        if "datetime" in new_df.columns:
+            new_df = new_df.sort("datetime")
+
+        if "ts_orig_min" in new_df.columns:
+            new_df = new_df.drop("ts_orig_min")
+            
+        new_df.write_parquet(file_path)
+    '''
+    def save_walkforward(self, op, model, strat, asset, wf_id, config_data):
+        path = self._asset_path(op, model, strat, asset) / "wfm"
+        path.mkdir(parents=True, exist_ok=True)
+
+        all_runs = config_data.get("runs", [])
         frames = []
 
         for run in all_runs:
@@ -89,7 +118,7 @@ class Storage:
             new_df = pl.concat([old, new_df])
             
         new_df.sort("datetime").write_parquet(file_path)
-
+    '''
     def save_operation_meta(self, op_name: str, meta_dict: dict):
         # Define o caminho da pasta da operação
         folder_path = Path(self.base_path) / op_name
@@ -320,18 +349,24 @@ class Storage:
             print(f"    < [Storage.] Error: {e}")
             return None
 
+    # Retorna um DataFrame com colunas datetime e wf_id com res_price de cada walkforward 
     def load_walkforward_matrix_v2(self,
                                    key, # tuple (op, model, strat, asset) or 4 individual strings
                                    res_price: str="perc",
                                    side_val: str="BOTH",
                                    wf_ids: Optional[Union[str, list]] = None,
+                                   timeline_df: Optional[pl.DataFrame] = None, # Permite passar a timeline já processada para evitar recálculos
+                                   wf_map: Optional[pl.DataFrame] = None, # Permite passar o mapa do walkforward já processado para evitar recálculos
                                    start_dt: str=None,
                                    end_dt: str=None) -> Optional[pl.DataFrame]:
         
         # Loads and validates data
-        asset_data = self.load(key)
-        timeline_df = asset_data.get("timeline")
-        wf_map = asset_data.get("wf")
+        if timeline_df is None or wf_map is None:
+            asset_data = self.load(key)
+            if timeline_df is None:
+                timeline_df = asset_data.get("timeline")
+            if wf_map is None:
+                wf_map = asset_data.get("wf")
 
         if timeline_df is None or wf_map is None: 
             print(f"    < [Storage.load_walkforward_matrix] timeline_df or wf_map None")

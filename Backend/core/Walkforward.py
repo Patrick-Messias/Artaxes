@@ -295,8 +295,124 @@ class Walkforward:
         }
 
 
+    def analyze(self, is_always_higher_or_equal_to_oos=True):
+        if self.matrix is None or self.matrix.is_empty():
+            print("      > [Error] Matrix is empty")
+            return None
 
+        self.all_wf_results = {}
+        working_df = self.matrix.clone()
 
+        # ── Garante coluna ts como Datetime ──────────────────────────────────
+        if working_df["ts"].dtype == pl.Date:
+            working_df = working_df.with_columns(pl.col("ts").cast(pl.Datetime))
+
+        # ── ps_cols = todas as colunas menos ts ──────────────────────────────
+        ps_cols = [c for c in working_df.columns if c != "ts"]
+
+        # ── Agregação e resolução ─────────────────────────────────────────────
+        if self.time_mode == 'calendar_days':
+            # 1. Agrega M15 → daily
+            working_df = (
+                working_df.sort("ts")
+                .group_by_dynamic("ts", every="1d", closed="left")
+                .agg(
+                    [pl.col(c).sum() for c in ps_cols] +
+                    [pl.col("ts").min().alias("ts_orig_min"),
+                     pl.col("ts").max().alias("ts_orig_max")]
+                )
+            )
+            
+            # 2. Upsample para cobrir finais de semana/feriados
+            ps_cols_only = [c for c in working_df.columns
+                            if c not in {"ts", "ts_orig_min", "ts_orig_max"}]
+
+            working_df = working_df.sort("ts").upsample(time_column="ts", every="1d")
+            working_df = working_df.with_columns(
+                [pl.col(c).fill_null(0) for c in ps_cols_only]
+            )
+
+            # 3. Agrega para a resolução selecionada
+            if self.matrix_resolution == 'weekly':
+                working_df = (
+                    working_df.sort("ts")
+                    .group_by_dynamic("ts", every="1w", closed="left")
+                    .agg(
+                        [pl.col(c).sum() for c in ps_cols_only] +
+                        [pl.col("ts_orig_min").drop_nulls().min().alias("ts_orig_min"),
+                         pl.col("ts_orig_max").drop_nulls().max().alias("ts_orig_max")]
+                    )
+                )
+            elif self.matrix_resolution == 'monthly':
+                working_df = (
+                    working_df.sort("ts")
+                    .group_by_dynamic("ts", every="1mo", closed="left")
+                    .agg(
+                        [pl.col(c).sum() for c in ps_cols_only] +
+                        [pl.col("ts_orig_min").drop_nulls().min().alias("ts_orig_min"),
+                         pl.col("ts_orig_max").drop_nulls().max().alias("ts_orig_max")]
+                    )
+                )
+        else:  # trade_days
+            working_df = working_df.with_columns([
+                pl.col("ts").alias("ts_orig_min"),
+                pl.col("ts").alias("ts_orig_max"),
+            ])
+
+        self._temp_df = working_df.sort("ts")
+        total_rows    = len(self._temp_df)
+
+        # ── Filtro de robustez IS >= OS ───────────────────────────────────────
+        configs_to_run = self.wfm_configs
+        if is_always_higher_or_equal_to_oos:
+            configs_to_run = [c for c in self.wfm_configs if c[0] >= c[1]]
+            print(f"      > [WFM] Running {len(configs_to_run)} robust configurations (IS >= OS).")
+
+        for config in configs_to_run:
+            is_l, os_l, stp = config
+            if is_l + os_l > total_rows: continue
+
+            wf_key  = f"{is_l}_{os_l}_{stp}"
+            wf_data = self.run_wf(is_l, os_l, stp)
+        
+            if not wf_data or not wf_data["windows"]: continue
+            runs = wf_data["windows"]
+
+            # Junta e ordena todas as janelas Out-of-Sample em uma única curva
+            full_oos_curve = pl.concat([r["os_curve"] for r in runs]).sort("ts")
+            equity_curve   = full_oos_curve["pnl"].cum_sum()
+
+            # Métricas rápidas necessárias apenas para o Grid de seleção do _finalize
+            total_pnl = float(full_oos_curve["pnl"].sum() or 0.0)
+            max_dd    = float((equity_curve.cum_max() - equity_curve).max() or 0.0)
+            pnl_dd    = float(total_pnl / (max_dd + 1e-9) or 0.0)
+            pnl_sharpe = float(np.mean([r['metrics']['os_sharpe'] for r in runs]))
+
+            raw_wfes   = [r['wfe'] for r in runs]
+            valid_wfes = [v for v in raw_wfes if not np.isnan(v)]
+            avg_wfe    = float(np.mean(valid_wfes)) if valid_wfes else 0.0
+
+            # ── A MÁGICA ACONTECE AQUI: Criamos o DataFrame básico mastigado
+            oos_df = full_oos_curve.select([
+                pl.col("ts").alias("datetime"),
+                pl.lit(wf_key).alias("wf_id"),
+                pl.col("best_param")
+            ])
+
+            # Salva o estado limpo na memória
+            self.all_wf_results[wf_key] = {
+                "config":     config,
+                "total_pnl":  total_pnl,
+                "max_dd":     max_dd,
+                "pnl_dd":     pnl_dd,
+                "pnl_sharpe": pnl_sharpe,
+                "wfe":        avg_wfe,
+                "oos_df":     oos_df,  # Apenas o DataFrame pronto contendo o básico
+            }
+
+        return self._finalize()
+    
+    '''
     def analyze(self, is_always_higher_or_equal_to_oos=True):
         if self.matrix is None or self.matrix.is_empty():
             print("      > [Error] Matrix is empty")
@@ -441,7 +557,7 @@ class Walkforward:
             }
 
         return self._finalize()
-
+    '''
     def _finalize(self):
         if not self.all_wf_results:
             print("      > [Warning] No Walkforward results to finalize")
@@ -507,14 +623,16 @@ class Walkforward:
             elif self.wf_selection_logic == 'highest_stable':
                 penalty = (avg_neighbor / (abs(avg_neighbor) + 1e-9))
                 final_scores[key] = current_val * penalty if current_val > 0 else current_val
+    
+        for k in self.all_wf_results:
+            self.all_wf_results[k]['stability_score'] = float(final_scores.get(k, 0.0))
 
-        if self.wf_returns_mode == 'selected': # Returns walkforward with highest metric from all wfm
+        if self.wf_returns_mode == 'selected':
             best_key = max(final_scores, key=final_scores.get)
             return self.all_wf_results[best_key]
-        if self.wf_returns_mode == 'all':
-            for k in self.all_wf_results:
-                self.all_wf_results[k]['stability_score'] = final_scores.get(k, 0)
+        
         return self.all_wf_results
+
 
 
     # Plotting
@@ -585,8 +703,6 @@ class Walkforward:
                     "equity": equity_series.values,
                     "runs": [] # Matrizes planas consolidadas não possuem chunks de treino isolados
                 }
-
-    # ── APENAS MÉTODOS DE PLOTAGEM (VISUAL REFINADO/PREMIUM) ──────────────────
 
     def plot_heatmap(self, metric='wfe'):
         import pandas as pd
