@@ -399,13 +399,13 @@ class Storage:
         # Optional filters by trade direction
         if side_val.upper() != "BOTH":
             s_filter = side_val.upper()
-            lot_col = pl.col("lot_size") if "lot_size" in timeline_df.columns else "lot"
+            lot_col_name = "lot_size" if "lot_size" in timeline_df.columns else "lot"
 
-            if lot_col in timeline_df.columns:
+            if lot_col_name in timeline_df.columns:
                 if s_filter == "LONG":
-                    timeline_lazy = timeline_lazy.filter(lot_col > 0)
+                    timeline_lazy = timeline_lazy.filter(pl.col(lot_col_name) > 0)
                 elif s_filter == "SHORT":
-                    timeline_lazy = timeline_lazy.filter(lot_col < 0)
+                    timeline_lazy = timeline_lazy.filter(pl.col(lot_col_name) < 0)
 
         # Identifies which walkforward windows/config needs to be processed
         unique_wfs = wf_map.get_column("wf_id").unique().to_list()
@@ -434,13 +434,13 @@ class Storage:
             tasks.append(plan)
             
         if not tasks:
-            print(f"    < [Storage.load_walkforward_matrix_clean] No tasks generated.")
+            print(f"    < [Storage.load_walkforward_matrix] No tasks generated.")
             return None
         
         # Multi-threaded execution with polars
         results = pl.collect_all(tasks)
         if not results or all(r.is_empty() for r in results):
-            print(f"    < [Storage.load_walkforward_matrix_clean] No trade corresponded with OOS mapping.")
+            print(f"    < [Storage.load_walkforward_matrix] No trade corresponded with OOS mapping.")
             return None
         
         # Vertical concatenation and pivoting to generate final matrix
@@ -452,7 +452,7 @@ class Storage:
         ).fill_null(0.0).sort("datetime")
     
         #except Exception as e:
-        #    print(f"    < [Storage.load_walkforward_matrix_clean] Critical error in construction: {e}")
+        #    print(f"    < [Storage.load_walkforward_matrix] Critical error in construction: {e}")
         #    return None
     
     

@@ -363,9 +363,9 @@ class Portfolio(BaseClass, BaseManager):
                 else:
                     end_dt_val = self.datetime_timeline[i]
 
-                wfm_df = self.storage.load_walkforward_matrix(
-                    key=key, side_val=side, wf_ids=psid_or_wfid, 
-                    start_dt=start_dt_val, end_dt=end_dt_val
+                wfm_df = self.storage.load_walkforward_matrix_v2(
+                    key=key, res_price="perc", side_val=side, wf_ids=psid_or_wfid, 
+                    timeline_df=None, wf_map=None, start_dt=start_dt_val, end_dt=end_dt_val
                 )
                 
                 if wfm_df is None or wfm_df.is_empty():
@@ -434,7 +434,7 @@ class Portfolio(BaseClass, BaseManager):
 
                 # Source B: Walkforward
                 if calculate_on_data in ["all", "wf"]:
-                    wfm_wide = storage.load_walkforward_matrix(a_key, side_val=side_val)
+                    wfm_wide = storage.load_walkforward_matrix_v2(a_key, side_val=side_val)
                     if wfm_wide is not None and not wfm_wide.is_empty():
                         wf_cols = [c for c in wfm_wide.columns if c != "datetime"]
                         
