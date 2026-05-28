@@ -11,10 +11,13 @@ struct Trade {
     double entry_price    = 0.0;
     double position_value = 0.0;
     double lot_size       = 0.0;
+    double exit_lot_size = 0.0; // User may partially exit a position in future WIP
 
     double capital_at_entry = 0.0; // Capital reference at the moment of opening the trade, used for PnL calculations in "neutral" method
     double scaling_factor = 0.0;
+
     double margin_required = 0.0;
+    double exit_margin = 0.0;
 
     double stop_loss      = 0.0;
     double take_profit    = 0.0;

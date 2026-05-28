@@ -1378,16 +1378,19 @@ class Operation(BaseClass):
                     for config_key, config_data in wfm_engine.all_wf_results.items():
                         if config_key == "__meta__": continue
                         
-                        runs = config_data.get("runs", [])
-                        if not runs: continue
-
+                        # ── NOVA VALIDAÇÃO: Alinhada com o analyze() enxuto ──────────────────
+                        oos_df = config_data.get("oos_df")
+                        if oos_df is None or oos_df.is_empty(): 
+                            print(f"   < [Operation._run_walkforward]: No OOS data found in config {config_key}, skipping save.")
+                            continue
+                        
                         storage.save_walkforward(
                             op=self.name, 
                             model=m_name, 
                             strat=s_name, 
                             asset=a_name,
                             wf_id=config_key, 
-                            config_data=config_data
+                            config_data=config_data # Passa o dicionário contendo o "oos_df"
                         )
 
                     print(f"   > [WFM] Results saved to disk.")
@@ -1434,7 +1437,7 @@ class Operation(BaseClass):
         # I - Init and Validation of Operation
         print(f"\n>>> I - Init and Validating Operation <<<")
         self._validate_operation()
-        self._init_data()
+        #self._init_data()
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
@@ -1450,7 +1453,7 @@ class Operation(BaseClass):
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()
-        self._plot_wfm()
+        #self._plot_wfm()
 
         # V - Portfolio Simulation
         print(f"\n>>> V - Portfolio Simulation <<<")

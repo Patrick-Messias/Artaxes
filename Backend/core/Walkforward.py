@@ -558,6 +558,8 @@ class Walkforward:
 
         return self._finalize()
     '''
+    
+    
     def _finalize(self):
         if not self.all_wf_results:
             print("      > [Warning] No Walkforward results to finalize")

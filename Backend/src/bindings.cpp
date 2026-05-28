@@ -60,6 +60,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto a_closed           = py::array_t<uint8_t>(total_trades);
     auto a_entry_dt         = py::array_t<int64_t>(total_trades);
     auto a_exit_dt          = py::array_t<int64_t>(total_trades);
+    auto a_exit_margin      = py::array_t<double>(total_trades);
+    auto a_exit_lot_size      = py::array_t<double>(total_trades);
 
     py::list l_trade_id(total_trades);
     py::list l_exit_reason(total_trades);
@@ -82,6 +84,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     auto* p_closed      = a_closed.mutable_data();
     auto* p_entry_dt    = a_entry_dt.mutable_data();
     auto* p_exit_dt    = a_exit_dt.mutable_data();
+    auto* p_exit_margin = a_exit_margin.mutable_data();
+    auto* p_exit_lot_size = a_exit_lot_size.mutable_data();    
 
     size_t idx = 0;
     for (size_t si = 0; si < n_sims; ++si) {
@@ -103,6 +107,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
             p_closed[idx]      = t.closed ? 1 : 0;
             p_entry_dt[idx]    = t.entry_datetime;
             p_exit_dt[idx]     = t.closed ? t.exit_datetime : 0;
+            p_exit_margin[idx] = t.closed ? t.exit_margin : 0.0;
+            p_exit_lot_size[idx] = t.closed ? t.exit_lot_size : 0.0;
 
             l_trade_id[idx]    = py::str(t.trade_id);
             l_exit_reason[idx] = t.closed ? py::object(py::str(t.exit_reason))   : py::none();
@@ -134,6 +140,8 @@ static py::dict engine_result_to_pydict(const EngineResult& res) {
     trades_col["trade_id"]       = l_trade_id;
     trades_col["exit_reason"]    = l_exit_reason;
     trades_col["status"]         = l_status;
+    trades_col["exit_margin"]    = a_exit_margin;
+    trades_col["exit_lot_size"]  = a_exit_lot_size;
 
     // ── WFM columnar ──────────────────────────────────────────────────────────
     //const size_t n_wfm = res.wfm_data.size();

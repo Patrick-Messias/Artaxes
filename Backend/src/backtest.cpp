@@ -388,6 +388,8 @@ SimulationOutput Backtest::run_simulation(
             t.exit_price = exit_price;
             t.exit_datetime = format_datetime_to_int_from_parts(bar_dates[bar_idx], bar_times[bar_idx]);
             t.exit_reason = reason;
+            t.exit_margin = t.margin_required;
+            t.exit_lot_size = t.lot_size;
             t.status = "closed";
             t.closed = true;
 
@@ -815,6 +817,9 @@ SimulationOutput Backtest::run_simulation(
                     } else {
                         current_margin = cap_ref;
                     }
+
+                    // Saves latest margin update  to trade for exit_margin as final margin req
+                    trade.exit_margin = current_margin; 
 
                     // Saves update to structure
                     daily_results_matrix.push_back({

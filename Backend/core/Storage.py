@@ -80,8 +80,8 @@ class Storage:
         if "datetime" in new_df.columns:
             new_df = new_df.sort("datetime")
 
-        if "ts_orig_min" in new_df.columns:
-            new_df = new_df.drop("ts_orig_min")
+        # if "ts_orig_min" in new_df.columns:
+        #     new_df = new_df.drop("ts_orig_min")
             
         new_df.write_parquet(file_path)
     '''
@@ -500,17 +500,18 @@ class Storage:
             ]).alias(alias)
         
         # Gets original relation between trade_id and ps_id
-        trade_to_ps = trades_df.select(["trade_id", "ps_id"]).unique()
+        trade_to_ps = trades_df.select(["trade_id", "ps_id", "asset"]).unique()
 
         # 1. ENTRIES
         entries_df = trades_df.select([
             cast_datetime("entry_datetime", trades_df),
+            pl.col("asset"),
             pl.col("trade_id").cast(pl.Utf8),
             pl.col("ps_id").cast(pl.Utf8),
             pl.lit(0.0).alias('pnl'),
             pl.lit(0.0).alias('perc'),
             pl.col("lot_size"),
-            pl.lit(0.0).alias('margin_required'),
+            pl.col('margin_required'),
             pl.lit(0.0).alias('mae'),
             pl.lit(0.0).alias('mfe'),
             pl.lit("entry").alias("event")
@@ -519,12 +520,13 @@ class Storage:
         # 2. EXITS
         exits_df = trades_df.select([
             cast_datetime("exit_datetime", trades_df),
+            pl.col("asset"),
             pl.col("trade_id").cast(pl.Utf8), 
             pl.col("ps_id").cast(pl.Utf8),
             pl.col("pnl"),
             pl.col('perc'),
-            pl.col("lot_size"),
-            pl.col('margin_required'),
+            pl.col("exit_lot_size").alias("lot_size"),
+            pl.col('exit_margin').alias("margin_required"),
             pl.col('mae'),
             pl.col('mfe'),
             pl.lit("exit").alias("event")
@@ -536,6 +538,7 @@ class Storage:
         if matrix_df is not None and not matrix_df.is_empty():
             updates_df = matrix_df.join(trade_to_ps, on="trade_id", how="left").select([
                 cast_datetime("ts", matrix_df),
+                pl.col("asset"),
                 pl.col("trade_id").cast(pl.Utf8),
                 pl.col("ps_id").cast(pl.Utf8),
                 pl.col("pnl"),
