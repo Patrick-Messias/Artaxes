@@ -10,6 +10,21 @@
                 "AT15": {
                     "assets": [
                         "EURUSD",
+                        "GBPUSD",
+                        "USDJPY"
+                    ]
+                }
+            }
+        },
+        "FX Mean Reversion": {
+            "execution_timeframe": "M15",
+            "date_start": null,
+            "date_end": null,
+            "strats": {
+                "AT30": {
+                    "assets": [
+                        "EURUSD",
+                        "GBPUSD",
                         "USDJPY"
                     ]
                 }

@@ -136,7 +136,7 @@ class Portfolio(BaseClass, BaseManager):
                 # 2. Iterares hierarchy, checks all parsets that are active (NOTE WF must activate only the current parset in SMM)
                 # 3. Creates temporary portfolio arrangements with current assets + new positions, finds best portfolio arrangement and calculates positions sizes
                 # First-Come First-Served - Allocates 10% until 100% is hit, following hierarchy
-                
+
             #||=====================================================================================||#
             
             # Updates PnL of open positions at [i] ends in previous step
@@ -998,15 +998,30 @@ if __name__ == "__main__":
                         "analise_long_short_separate": True, 
                         "calculate_on_data": "wf",
                     },
+                    "USDJPY": {
+                        "side": "both",
+                        "analise_long_short_separate": True, 
+                        "calculate_on_data": "wf",
+                    },
                 }
             },
             "FX Mean Reversion": {
                 "AT30": {
-                    "USDJPY": {
+                    "EURUSD": {
                         "side": "both",
                         "analise_long_short_separate": True,
                         "calculate_on_data": "wf",
-                    }
+                    },
+                    "GBPUSD": {
+                        "side": "both",
+                        "analise_long_short_separate": True, 
+                        "calculate_on_data": "wf",
+                    },
+                    "USDJPY": {
+                        "side": "both",
+                        "analise_long_short_separate": True, 
+                        "calculate_on_data": "wf",
+                    },
                 }
             },
             "Futures Mean Reversion": {

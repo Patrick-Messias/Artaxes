@@ -1354,7 +1354,7 @@ class Operation(BaseClass):
                         timeline_df = asset_map.get("timeline")
          
                     if timeline_df is None or timeline_df.is_empty():
-                        print(f"   < [Operation._run_walkforward]: No timeline data found.")
+                        print(f"      < [Operation._run_walkforward]: No timeline data found.")
                         continue
        
                     wfm_engine = s_obj.operation
@@ -1362,7 +1362,7 @@ class Operation(BaseClass):
            
 
                     if pnl_matrix is None or pnl_matrix.is_empty():
-                        print(f"   < [Operation._run_walkforward]: Failed to extract PnL matrix.")
+                        print(f"      < [Operation._run_walkforward]: Failed to extract PnL matrix.")
                         continue
 
                     # ── RUN WF ─────────────────────────────────────
@@ -1381,7 +1381,7 @@ class Operation(BaseClass):
                         # ── NOVA VALIDAÇÃO: Alinhada com o analyze() enxuto ──────────────────
                         oos_df = config_data.get("oos_df")
                         if oos_df is None or oos_df.is_empty(): 
-                            print(f"   < [Operation._run_walkforward]: No OOS data found in config {config_key}, skipping save.")
+                            print(f"      < [Operation._run_walkforward]: No OOS data found in config {config_key}, skipping save.")
                             continue
                         
                         storage.save_walkforward(
@@ -1393,7 +1393,7 @@ class Operation(BaseClass):
                             config_data=config_data # Passa o dicionário contendo o "oos_df"
                         )
 
-                    print(f"   > [WFM] Results saved to disk.")
+                    print(f"      > [WFM] Results saved to disk.")
                     wfm_engine.matrix = None
                     
         return True
@@ -1449,7 +1449,7 @@ class Operation(BaseClass):
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        self._run_walkforward(True)
+        #self._run_walkforward(True)
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()
@@ -1925,7 +1925,7 @@ if __name__ == "__main__":
     model_1 = Model(
         ModelParams(
             name='FX MA Trend Following',
-            assets=['EURUSD', 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
+            assets=['EURUSD', "GBPUSD", 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT15': AT15},
             execution_timeframe=AT15_model_execution_tf,
             model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_1_mm")),
@@ -1956,7 +1956,7 @@ if __name__ == "__main__":
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_1, model_3], # model_2, model_3
+            data=[model_1, model_2, model_3], # model_2, model_3
             assets=global_assets,
             #operation_timeframe=AT15_model_execution_tf, # NOTE maybe unnecessary, remove later
             date_start=None, #'2020-01-01',
