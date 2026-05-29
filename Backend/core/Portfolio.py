@@ -154,13 +154,13 @@ class Portfolio(BaseClass, BaseManager):
             import polars as pl
             import matplotlib as mpl # Import para colormaps novos
 
-            if i == int(len(self.datetime_timeline)-4):
-                print("\n" + "="*80)
-                print("      DEBUG SYSTEM: INDICATOR HIERARCHY & LOOKUP TEST")
-                print("="*80)
-                for i, k in enumerate(list(self.indicator_pool.keys())):
-                    print(f" Exemplo de Chave {i}: {k}")
-                print("="*80)
+            # if i == int(len(self.datetime_timeline)-4):
+            #     print("\n" + "="*80)
+            #     print("      DEBUG SYSTEM: INDICATOR HIERARCHY & LOOKUP TEST")
+            #     print("="*80)
+            #     for i, k in enumerate(list(self.indicator_pool.keys())):
+            #         print(f" Exemplo de Chave {i}: {k}")
+            #     print("="*80)
            
             if i < 3 or i > len(self.datetime_timeline)-4: 
                 print(f"> {step_dt} - Portfolio PnL: {self.sim_current_equity:.2f}")
@@ -381,6 +381,7 @@ class Portfolio(BaseClass, BaseManager):
         print(f"    < [Portfolio._populate_sim_data] data_type unknown")
         return None
 
+
     # Loads each results data, maps path and generates aggregated results, then clears memory one by one 
     def _load_selected_saved_returns_data(self): 
         storage = self.storage #Storage(base_path=self.data_storage_base_path)
@@ -398,6 +399,8 @@ class Portfolio(BaseClass, BaseManager):
         temp_asset_cache, strat_acc, model_acc, opera_acc, portf_acc = {}, {}, {}, {}, {} # { (op, m, s, a): { "both": df, "long": df... } }
         unique_dts = set()
 
+        REF_CAPITAL = self.portfolio_parameters.get("capital", 100000.0)
+
         # --- 1. COLETA DE DADOS E TIMELINE ---
         for op_n, _, m_n, _, s_n, _, a_n, _ in self._iter_portfolio_data():
             config = self.portfolio_data[op_n][m_n][s_n][a_n]
@@ -413,35 +416,35 @@ class Portfolio(BaseClass, BaseManager):
             timeline_df = asset_data.get("timeline")
             if timeline_df is None or timeline_df.is_empty(): continue
             
-            #unique_dts.update(timeline_df['datetime'].to_list())
-
             # Preparates direction
             vias = {"both": side_pref}
             if separate_ls:
                 vias.update({"long": "long", "short": "short"})
             asset_entry = {}
-            
 
             for dir_label, side_val in vias.items():
                 sources = []
 
                 # Source A: Parsets
                 if calculate_on_data in ["all", "parset"] and timeline_df is not None and not timeline_df.is_empty():
-                    p_aggr = self.get_aggr_pnl_by_side(timeline_df, side_val, a_n)
+                    p_aggr = self.get_aggr_pnl_by_side(timeline_df, side_val, a_n, metric_col="perc")
                     if p_aggr is not None and not p_aggr.is_empty():
                         val_col = [c for c in p_aggr.columns if c != "datetime"][0]
-                        sources.append(p_aggr.rename({val_col: "parset_pnl"}))
+                        normalized_parset = p_aggr.with_columns(
+                            (pl.col(val_col) * REF_CAPITAL).alias("parset_pnl")
+                        ).select(["datetime", "parset_pnl"])
+                        sources.append(normalized_parset)
 
                 # Source B: Walkforward
                 if calculate_on_data in ["all", "wf"]:
-                    wfm_wide = storage.load_walkforward_matrix_v2(a_key, side_val=side_val)
+                    wfm_wide = storage.load_walkforward_matrix_v2(a_key, side_val=side_val, res_price="perc")
                     if wfm_wide is not None and not wfm_wide.is_empty():
                         wf_cols = [c for c in wfm_wide.columns if c != "datetime"]
                         
                         if wf_cols:
                             wf_aggr = wfm_wide.select([
                                 pl.col("datetime"),
-                                pl.mean_horizontal(wf_cols).alias("wf_pnl")
+                                (pl.mean_horizontal(wf_cols) * REF_CAPITAL).alias("wf_pnl")
                             ])
                             sources.append(wf_aggr)
 
@@ -484,24 +487,44 @@ class Portfolio(BaseClass, BaseManager):
         self.datetime_timeline = sorted(unique_dts)
         timeline_global = pl.DataFrame({"datetime": self.datetime_timeline})
 
-        # A. Ativos -> Estratégias
-        for a_key, directions in temp_asset_cache.items():
-            op_n, m_n, s_n, a_n = a_key
-            s_key = (op_n, m_n, s_n)
-            
-            for d_name, pnl_df in directions.items():
-                # Alinha o PnL do ativo com a timeline global do portfólio
-                aligned = timeline_global.join(pnl_df, on="datetime", how="left").fill_null(0.0)
-                pnl_series = aligned.get_column(a_n)
-                
-                self.sim_data[a_key].setdefault(d_name, {})
-                self.sim_data[a_key][d_name] = {
-                    "data": pnl_series.to_numpy().reshape(-1, 1), 
-                    "cols": [a_n]
-                }
-                strat_acc.setdefault(s_key, {}).setdefault(d_name, {})[a_n] = pnl_series
+        # Serie of zeroes with exact size of timeline to fill missing long/short gaps
+        zeros_series = pl.Series("zeros", values=[0.0] * len(self.datetime_timeline))
+        all_directions = ["both", "long", "short"]
 
-        # B. Estratégias -> Modelos
+        # A. Ativos -> Estratégias
+        for op_n, op_obj in self.portfolio_data.items():
+            for m_n, m_obj in op_obj.items():
+                for s_n, s_obj in m_obj.items():
+                    s_key = (op_n, m_n, s_n)
+
+                    for d_name in all_directions:
+                        strat_assets_pnl = {}
+
+                        for a_n in s_obj.keys():
+                            a_key = (op_n, m_n, s_n, a_n)
+
+                            # Uses if asset has real data for this direction else fills with 0.0
+                            if a_key in temp_asset_cache and d_name in temp_asset_cache[a_key]:
+                                pnl_df = temp_asset_cache[a_key][d_name]
+                                aligned = timeline_global.join(pnl_df, on="datetime", how="left").fill_null(0.0)
+                                pnl_series = aligned.get_column(a_n)
+                            else:
+                                pnl_series = zeros_series.alias(a_n)
+
+                            # Allocates in sim_data asset only if asset's base knot exists
+                            if a_key in temp_asset_cache:
+                                self.sim_data[a_key].setdefault(d_name, {})
+                                self.sim_data[a_key][d_name] = {
+                                    "data": pnl_series.to_numpy().reshape(-1, 1),
+                                    "cols": [a_n]
+                                }
+
+                            strat_assets_pnl[a_n] = pnl_series
+
+                        # Now strat dict will always have all assets mapped
+                        strat_acc.setdefault(s_key, {})[d_name] = strat_assets_pnl
+
+        # B. Strat -> Model
         for s_key, directions in strat_acc.items():
             self.sim_data[s_key] = {"type": "aggr"}
             for d_name, assets in directions.items():
@@ -511,15 +534,16 @@ class Portfolio(BaseClass, BaseManager):
                 wide_df = wide_df.with_columns(s_avg)
 
                 self.sim_data[s_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
-                
-                m_series = wide_df.get_column("@total").alias(s_key[2])
+
+                m_series = wide_df.get_column("@total").alias(s_key[2]) # Renomeia a coluna de @total para o nome da strat para facilitar o próximo nível de agregação
                 model_acc.setdefault((s_key[0], s_key[1]), {}).setdefault(d_name, {})[s_key[2]] = m_series
 
-        # C. Modelos -> Portfólio
+        # C. Model -> Operation
         for m_key, directions in model_acc.items():
             self.sim_data[m_key] = {"type": "aggr"}
             for d_name, strats in directions.items():
                 wide_df = pl.DataFrame(strats)
+
                 m_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
                 wide_df = wide_df.with_columns(m_avg)
 
@@ -527,27 +551,37 @@ class Portfolio(BaseClass, BaseManager):
 
                 o_series = wide_df.get_column("@total").alias(m_key[1])
                 opera_acc.setdefault((m_key[0],), {}).setdefault(d_name, {})[m_key[1]] = o_series
-                
-                port_col = f"{m_key[0]}_{m_key[1]}"
-                portf_acc.setdefault((self.name,), {}).setdefault(d_name, {})[port_col] = o_series
 
-        # D. Operation
+        # D. Operation -> Portfolio
         for o_key, directions in opera_acc.items():
             self.sim_data[o_key] = {"type": "aggr"}
             for d_name, models in directions.items():
                 wide_df = pl.DataFrame(models)
-                self.sim_data[o_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
-                #print(f"Operation {o_key} - {d_name}:\n{wide_df.head()}")
+                
+                o_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
+                wide_df = wide_df.with_columns(o_avg)
 
-        # E. Portfólio
+                self.sim_data[o_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
+                
+                p_series = wide_df.get_column("@total").alias(o_key[0])
+                portf_acc.setdefault((self.name,), {}).setdefault(d_name, {})[o_key[0]] = p_series
+
+        # E. Portfólio (Global)
         for p_key, directions in portf_acc.items():
             self.sim_data[p_key] = {"type": "aggr"}
-            for d_name, components in directions.items():
-                wide_df = pl.DataFrame(components)
+            for d_name, operations in directions.items():
+                wide_df = pl.DataFrame(operations)
+                
+                p_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
+                wide_df = wide_df.with_columns(p_avg)
+
                 self.sim_data[p_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
-                #print(f"Portfolio {p_key} - {d_name}:\n{wide_df.head()}")
 
         return True
+
+
+
+
     
 
     def _init_hierarchy(self):
@@ -872,12 +906,87 @@ class Portfolio(BaseClass, BaseManager):
     # - Para cada trade em self.active_positions deve puxar os dados do trades_matrix, verificar se precisa atualizar o lot (diminuir ou aumentar, pode ser uma def enviada, default None, mantêm mesma coisa até saida) para saber o PnL * Lot atualizado
     # - Criando e enviando a imagem do datetime para self.portfolio_returns
 
+    # TEMP - DELETAR
+    def debug_model_aggregations(self):
+        """
+        Imprime e plota o PnL Acumulado dos Modelos separados por BOTH, LONG e SHORT.
+        Deve ser chamado após self._load_selected_saved_returns_data()
+        """
+        import matplotlib.pyplot as plt
+        import polars as pl
 
+        print("\n" + "═"*60)
+        print(" 🔍 DEBUG: AGREGAÇÃO HIERÁRQUICA DOS MODELOS (100k BASE)")
+        print("═"*60)
+
+        # 1. Filtra apenas as chaves referentes a Modelos no sim_data
+        # Modelos são guardados com chaves de tupla tamanho 2: (op_name, model_name)
+        model_keys = [k for k in self.sim_data.keys() if isinstance(k, tuple) and len(k) == 2]
+
+        if not model_keys:
+            print("      > Nenhum modelo agregado encontrado no sim_data.")
+            return
+
+        # 2. Configura o visual do plot (Mesmo estilo escuro original)
+        plt.style.use('dark_background')
+        fig, axes = plt.subplots(len(model_keys), 1, figsize=(14, 5 * len(model_keys)), squeeze=False)
+        fig.patch.set_facecolor('#0a0a0a')
+
+        colors = {"both": "#4169E1", "long": "#00FA9A", "short": "#FF6347"} # Azul, Verde, Vermelho
+
+        for i, m_key in enumerate(model_keys):
+            op_name, model_name = m_key
+            print(f"\n 📈 Modelo Identificado: [{op_name}] -> {model_name}")
+            
+            ax = axes[i, 0]
+            ax.set_facecolor('#0a0a0a')
+            ax.set_title(f"Model: {model_name} | Cumulative Normal PnL", color='white', loc='left', pad=15)
+            
+            # Vamos iterar exatamente na ordem que você pediu: both, long, short
+            for d_name in ["both", "long", "short"]:
+                if d_name in self.sim_data[m_key]:
+                    # Resgata a matriz bruta guardada no sim_data
+                    data_dict = self.sim_data[m_key][d_name]
+                    cols = data_dict["cols"]
+                    
+                    # Reconstrói temporariamente para extrair a coluna do modelo
+                    df = pl.DataFrame(data_dict["data"], schema=cols, orient="row")
+                    
+                    # O nome da coluna agregada do modelo final é o próprio m_key[1]
+                    if "@total" in df.columns:
+                        # Extrai a série e calcula a curva de capital acumulada
+                        pnl_series = df.get_column("@total")
+                        cum_pnl = pnl_series.cum_sum().to_list()
+                        
+                        total_pnl = cum_pnl[-1] if cum_pnl else 0.0
+                        total_bars = len(cum_pnl)
+                        
+                        # Print no console
+                        print(f"      > {d_name.upper():<5} | Barras: {total_bars:<5} | PnL Acumulado: $ {total_pnl:,.2f}")
+                        
+                        # Adiciona ao Plot
+                        c = colors.get(d_name, "white")
+                        alpha = 1.0 if d_name == "both" else 0.7 # Deixa o Both mais sólido
+                        ax.plot(cum_pnl, label=f"{d_name.upper()} (Total: ${total_pnl:,.0f})", color=c, lw=2, alpha=alpha)
+                    else:
+                        print(f"      > {d_name.upper():<5} | [Erro] Coluna @total não encontrada.")
+                else:
+                    print(f"      > {d_name.upper():<5} | Sem dados disponíveis para esta via.")
+            
+            # Estilização do eixo e legenda
+            ax.axhline(0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
+            ax.legend(frameon=False, fontsize=10, loc='upper left', ncol=3)
+            ax.grid(True, linestyle=':', alpha=0.15)
+            ax.tick_params(colors='#888888')
+
+        plt.tight_layout()
+        plt.show()
 
     def _run(self):
         # Data Init - Loads data, saves unique datetimes and generates aggr results
         print("     > Populating Portfolio Data from Database")
         self._load_selected_saved_returns_data()
+        #self.debug_model_aggregations()
         self._init_hierarchy()
 
         # Runs Portfolio Simulation
