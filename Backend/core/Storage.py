@@ -84,41 +84,7 @@ class Storage:
         #     new_df = new_df.drop("ts_orig_min")
             
         new_df.write_parquet(file_path)
-    '''
-    def save_walkforward(self, op, model, strat, asset, wf_id, config_data):
-        path = self._asset_path(op, model, strat, asset) / "wfm"
-        path.mkdir(parents=True, exist_ok=True)
-
-        all_runs = config_data.get("runs", [])
-        frames = []
-
-        for run in all_runs:
-            if "os_curve" in run and isinstance(run["os_curve"], pl.DataFrame):
-                df = run["os_curve"].clone()
-
-                # Drops PnL to save, use best_param and get data from trades by wf_id
-                df = df.drop("pnl")
-
-                if "ts" in df.columns:
-                    df = df.rename({"ts": "datetime"})
-
-                df = df.with_columns([
-                    pl.lit(run.get("best_param", "")).alias("best_param"),
-                    pl.lit(wf_id).alias("wf_id")  
-                ])
-                frames.append(df)
-
-        if not frames:
-            return
-
-        new_df = pl.concat(frames)
-        file_path = path / "wf.parquet"
-        if file_path.exists():
-            old = pl.read_parquet(file_path)
-            new_df = pl.concat([old, new_df])
-            
-        new_df.sort("datetime").write_parquet(file_path)
-    '''
+    
     def save_operation_meta(self, op_name: str, meta_dict: dict):
         # Define o caminho da pasta da operação
         folder_path = Path(self.base_path) / op_name
@@ -140,13 +106,6 @@ class Storage:
             with open(path, "r") as f:
                 return json.load(f)
         return {}
-
-    # def load_meta(self, operation_name: str) -> dict:
-    #     meta_file = self.base_path / operation_name / "operation_meta.json"
-    #     if not meta_file.exists():
-    #         return {}
-    #     with open(meta_file, "r") as f:
-    #         return json.load(f)
 
     def list_operations(self) -> list:
         """Lista todas as operations salvas."""
@@ -214,10 +173,402 @@ class Storage:
 
         return asset_data
 
-
-
     # || Operation.py Use || # 
 
+    # Retorna um DataFrame com colunas datetime e wf_id com res_price de cada walkforward 
+    def load_walkforward_matrix_v2(self,
+                                   key, # tuple (op, model, strat, asset) or 4 individual strings
+                                   res_price: str="perc",
+                                   side_val: str="BOTH",
+                                   wf_ids: Optional[Union[str, list]] = None,
+                                   timeline_df: Optional[pl.DataFrame] = None, # Permite passar a timeline já processada para evitar recálculos
+                                   wf_map: Optional[pl.DataFrame] = None, # Permite passar o mapa do walkforward já processado para evitar recálculos
+                                   start_dt: str=None,
+                                   end_dt: str=None) -> Optional[pl.DataFrame]:
+        
+        # Loads and validates data
+        if timeline_df is None or wf_map is None:
+            asset_data = self.load(key)
+            if timeline_df is None:
+                timeline_df = asset_data.get("timeline")
+            if wf_map is None:
+                wf_map = asset_data.get("wf")
+
+        if timeline_df is None or wf_map is None: 
+            print(f"    < [Storage.load_walkforward_matrix] timeline_df or wf_map None")
+            return None
+        
+        #try:
+        # Normalizes Walkforward parameter mapping columns
+        if "best_param" in wf_map.columns and "ps_id" not in wf_map.columns:
+            wf_map = wf_map.rename({"best_param": "ps_id"})
+
+        # Applies cronological filters
+        if start_dt:
+            wf_map = wf_map.filter(pl.col("datetime") >= start_dt)
+        if end_dt:
+            wf_map = wf_map.filter(pl.col("datetime") <= end_dt)
+        
+        # Optional wf_id filtering
+        if wf_ids is not None:
+            search_ids = [str(wf_ids)] if isinstance(wf_ids, str) else [str(i) for i in wf_ids]
+            wf_map = wf_map.filter(pl.col("wf_id").cast(pl.Utf8).is_in(search_ids))
+
+        # Lazy historical and temporal preparation and optimization
+        timeline_lazy = timeline_df.lazy()
+        
+        if start_dt:
+            timeline_lazy = timeline_lazy.filter(pl.col("datetime") >= start_dt)
+        if end_dt:
+            timeline_lazy = timeline_lazy.filter(pl.col("datetime") <= end_dt)
+
+        # Optional filters by trade direction
+        if side_val.upper() != "BOTH":
+            s_filter = side_val.upper()
+            lot_col_name = "lot_size" if "lot_size" in timeline_df.columns else "lot"
+
+            if lot_col_name in timeline_df.columns:
+                if s_filter == "LONG":
+                    timeline_lazy = timeline_lazy.filter(pl.col(lot_col_name) > 0)
+                elif s_filter == "SHORT":
+                    timeline_lazy = timeline_lazy.filter(pl.col(lot_col_name) < 0)
+
+        # Identifies which walkforward windows/config needs to be processed
+        unique_wfs = wf_map.get_column("wf_id").unique().to_list()
+
+        # Parallel task generation in lazy format, one per walkforward ID
+        tasks = []
+        for wid in unique_wfs:
+            wf_map_lazy = wf_map.filter(pl.col("wf_id") == wid).select([
+                pl.col("datetime").alias("map_dt"),
+                pl.col("ps_id").alias("active_ps")
+            ]).lazy().sort("map_dt")
+
+            # Retroactive join_asof
+            plan = timeline_lazy.join_asof(
+                wf_map_lazy,
+                left_on="datetime",
+                right_on="map_dt",
+                strategy="backward"
+            ).filter(
+                pl.col("ps_id") == pl.col("active_ps")  
+            ).select([
+                "datetime",
+                pl.col(res_price).alias(res_price),  
+                pl.lit(str(wid)).alias("wf_id")
+            ])
+            tasks.append(plan)
+            
+        if not tasks:
+            print(f"    < [Storage.load_walkforward_matrix] No tasks generated.")
+            return None
+        
+        # Multi-threaded execution with polars
+        results = pl.collect_all(tasks)
+        if not results or all(r.is_empty() for r in results):
+            print(f"    < [Storage.load_walkforward_matrix] No trade corresponded with OOS mapping.")
+            return None
+        
+        # Vertical concatenation and pivoting to generate final matrix
+        return pl.concat(results).pivot(
+            index="datetime",
+            on="wf_id",
+            values=res_price,
+            aggregate_function="sum"
+        ).fill_null(0.0).sort("datetime")
+    
+        #except Exception as e:
+        #    print(f"    < [Storage.load_walkforward_matrix] Critical error in construction: {e}")
+        #    return None
+    
+    # For Operation.py use
+    def load_wf_prep(self, timeline_df: pl.DataFrame, price: str = "pnl", events_to_include: list = ["entry", "exit", "update"]) -> pl.DataFrame:
+        if timeline_df is None or timeline_df.is_empty():
+            print(f"   < [Storage.load_wf_prep] timeline_df is None or empty")
+            return None
+
+        return (
+            timeline_df
+            .filter(pl.col("event").is_in(events_to_include))
+            .group_by(["datetime", "ps_id"])
+            .agg(pl.col(price).sum())
+            .pivot(values=price, index="datetime", columns="ps_id")
+            .rename({"datetime": "ts"}) 
+            .fill_null(0.0)
+            .sort("ts")
+        )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Internos
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _build_timeline(self, 
+                        trades_df: pl.DataFrame, 
+                        matrix_df: pl.DataFrame, 
+                        fmt: str= "%Y%m%d%H%M%S") -> pl.DataFrame:
+        
+        if trades_df is None or trades_df.is_empty():
+            return pl.DataFrame()
+        
+        # Formato numérico exato vindo do C++ (ex: 20210412013000)
+        def cast_datetime(column_name, df_source, alias="datetime"):
+            col = pl.col(column_name).replace(0, None)
+            
+            # Se o tipo da coluna no schema já for Datetime/Date, apenas renomeia
+            if df_source.schema.get(column_name) in [pl.Datetime, pl.Date]:
+                return col.alias(alias)
+                
+            # Caso contrário, tenta string formatada do C++ e dá fallback para Epoch/Int
+            return pl.coalesce([
+                col.cast(pl.Utf8).str.to_datetime(fmt, strict=False),
+                col.cast(pl.Int64).cast(pl.Datetime("us"))
+            ]).alias(alias)
+        
+        # Gets original relation between trade_id and ps_id
+        trade_to_ps = trades_df.select(["trade_id", "ps_id", "asset"]).unique()
+
+        # Trades that have entry and exit at same datetime, less granular data will have more flash trades
+        is_flash = pl.col("entry_datetime") == pl.col("exit_datetime")
+
+        # 0. FLASH TRADES
+        flash_df = trades_df.filter(is_flash).select([
+            cast_datetime("exit_datetime", trades_df),
+            pl.col("asset"),
+            pl.col("trade_id").cast(pl.Utf8),
+            pl.col("ps_id").cast(pl.Utf8),
+            pl.col("pnl"), # Takes final pnl
+            pl.col('perc'),
+            pl.col("exit_lot_size").alias("lot_size"),
+            pl.col('exit_margin').alias("margin_required"),
+            pl.col('mae'),
+            pl.col('mfe'),
+            pl.lit("flash_trade").alias("event")
+        ])
+
+        # 1. ENTRIES
+        entries_df = trades_df.filter(~is_flash).select([ # Excludes flash trades, accounted above
+            cast_datetime("entry_datetime", trades_df),
+            pl.col("asset"),
+            pl.col("trade_id").cast(pl.Utf8),
+            pl.col("ps_id").cast(pl.Utf8),
+            pl.lit(0.0).alias('pnl'),
+            pl.lit(0.0).alias('perc'),
+            pl.col("lot_size"),
+            pl.col('margin_required'),
+            pl.lit(0.0).alias('mae'),
+            pl.lit(0.0).alias('mfe'),
+            pl.lit("entry").alias("event")
+        ])
+            
+        # 2. EXITS
+        exits_df = trades_df.filter(~is_flash).select([ # Excludes flash trades, accounted above
+            cast_datetime("exit_datetime", trades_df), 
+            pl.col("asset"),
+            pl.col("trade_id").cast(pl.Utf8), 
+            pl.col("ps_id").cast(pl.Utf8),
+            pl.col("pnl"),
+            pl.col('perc'),
+            pl.col("exit_lot_size").alias("lot_size"),
+            pl.col('exit_margin').alias("margin_required"),
+            pl.col('mae'),
+            pl.col('mfe'),
+            pl.lit("exit").alias("event")
+        ])
+
+        dfs_to_concat = [flash_df, entries_df, exits_df]
+
+        # 3. Trade Updates (MATRIX)
+        if matrix_df is not None and not matrix_df.is_empty():
+            updates_df = matrix_df.join(trade_to_ps, on="trade_id", how="left").select([
+                cast_datetime("ts", matrix_df),
+                pl.col("asset"),
+                pl.col("trade_id").cast(pl.Utf8),
+                pl.col("ps_id").cast(pl.Utf8),
+                pl.col("pnl"),
+                pl.col("perc"),
+                pl.col("lot_size"),
+                pl.col("margin_required"),
+                pl.col("mae"),
+                pl.col("mfe"),
+                pl.lit("update").alias("event")
+            ])
+            dfs_to_concat.append(updates_df)  
+        timeline_df = pl.concat(dfs_to_concat)
+
+        # Conflict priority resolutions O(1)
+        priority_map = {
+            "flash_trade": 1,
+            "exit": 2,
+            "entry": 3,
+            "update": 4
+        }
+
+        timeline_df = (
+            timeline_df
+            .with_columns(
+                pl.col("event")
+                .replace(priority_map, default=5)
+                .cast(pl.Int32)
+                .alias("priority")
+            )
+            .sort(["datetime", "ps_id", "priority"]) # Orders by
+            .unique(subset=["datetime", "ps_id"], keep="first") # Keeps only first line
+            .drop("priority")
+            .sort("datetime")
+        )
+
+        return timeline_df
+    
+    def _save_meta(self, op_path: Path, operation_name: str, meta: dict):
+        meta_path = op_path / "meta"
+        meta_path.mkdir(parents=True, exist_ok=True)
+
+        full_meta = {
+            "operation_name": operation_name,
+            "saved_at":       datetime.now().isoformat(),
+            **meta,
+        }
+        with open(meta_path / "operation_meta.json", "w") as f:
+            json.dump(full_meta, f, indent=2, default=str)
+
+    def _find_parquet_files(
+        self,
+        root:    Path,
+        model:   Optional[str],
+        strat:   Optional[str],
+        asset:   Optional[str],
+        ps_name: Optional[str],
+    ) -> list:
+        """Encontra arquivos parquet respeitando os filtros."""
+        files = []
+        for f in sorted(root.rglob("*.parquet")):
+            parts = f.relative_to(root).parts  # (model, strat, asset, ps_name.parquet)
+            if len(parts) < 4: continue
+
+            m, s, a, fname = parts[0], parts[1], parts[2], parts[3]
+            if model   and m != model:              continue
+            if strat   and s != strat:              continue
+            if asset   and a != asset:              continue
+            if ps_name and f.stem != self._safe_filename(ps_name): continue
+
+            files.append(f)
+        return files
+
+    @staticmethod
+    def _safe_filename(name: str) -> str:
+        """Converte ps_name para filename seguro."""
+        return name.replace("/", "_").replace("\\", "_").replace(":", "_")[:200]
+    
+
+
+
+
+
+
+    '''
+    def save_walkforward(self, op, model, strat, asset, wf_id, config_data):
+        path = self._asset_path(op, model, strat, asset) / "wfm"
+        path.mkdir(parents=True, exist_ok=True)
+
+        all_runs = config_data.get("runs", [])
+        frames = []
+
+        for run in all_runs:
+            if "os_curve" in run and isinstance(run["os_curve"], pl.DataFrame):
+                df = run["os_curve"].clone()
+
+                # Drops PnL to save, use best_param and get data from trades by wf_id
+                df = df.drop("pnl")
+
+                if "ts" in df.columns:
+                    df = df.rename({"ts": "datetime"})
+
+                df = df.with_columns([
+                    pl.lit(run.get("best_param", "")).alias("best_param"),
+                    pl.lit(wf_id).alias("wf_id")  
+                ])
+                frames.append(df)
+
+        if not frames:
+            return
+
+        new_df = pl.concat(frames)
+        file_path = path / "wf.parquet"
+        if file_path.exists():
+            old = pl.read_parquet(file_path)
+            new_df = pl.concat([old, new_df])
+            
+        new_df.sort("datetime").write_parquet(file_path)
+    '''
+    
+    """
+        def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame, fmt: str= "%Y%m%d%H%M%S") -> pl.DataFrame:
+        if trades_df is None or trades_df.is_empty():
+            return pl.DataFrame()
+        
+        # Formato numérico exato vindo do C++ (ex: 20210412013000)
+        def cast_datetime(column_name, df_source, alias="datetime"):
+            col = pl.col(column_name).replace(0, None)
+            
+            # Se o tipo da coluna no schema já for Datetime/Date, apenas renomeia
+            if df_source.schema.get(column_name) in [pl.Datetime, pl.Date]:
+                return col.alias(alias)
+                
+            # Caso contrário, tenta string formatada do C++ e dá fallback para Epoch/Int
+            return pl.coalesce([
+                col.cast(pl.Utf8).str.to_datetime(fmt, strict=False),
+                col.cast(pl.Int64).cast(pl.Datetime("us"))
+            ]).alias(alias)
+
+        # 1. ENTRIES
+        entries_df = trades_df.select([
+            cast_datetime("entry_datetime", trades_df),
+            pl.col("trade_id").cast(pl.Utf8).alias("ps_id"),
+            pl.lit(0.0).alias('pnl'),
+            pl.lit(0.0).alias('perc'),
+            pl.col("lot_size"),
+            pl.lit(0.0).alias('margin_required'),
+            pl.lit(0.0).alias('mae'),
+            pl.lit(0.0).alias('mfe'),
+            pl.lit("entry").alias("event")
+        ])
+            
+        # 2. EXITS
+        exits_df = trades_df.select([
+            cast_datetime("exit_datetime", trades_df),
+            pl.col("trade_id").cast(pl.Utf8).alias("ps_id"), # trade_id
+            pl.col("pnl"),
+            pl.col('perc'),
+            pl.col("lot_size"),
+            pl.col('margin_required'),
+            pl.col('mae'),
+            pl.col('mfe'),
+            pl.lit("exit").alias("event")
+        ])
+
+        dfs_to_concat = [entries_df, exits_df]
+
+        # 3. Trade Updates (MATRIX)
+        if matrix_df is not None and not matrix_df.is_empty():
+            updates_df = matrix_df.select([
+                cast_datetime("ts", matrix_df),
+                pl.col("trade_id").cast(pl.Utf8).alias("ps_id"),
+                pl.col("pnl"),
+                pl.col("perc"),
+                pl.col("lot_size"),
+                pl.col("margin_required"),
+                pl.col("mae"),
+                pl.col("mfe"),
+                pl.lit("update").alias("event")
+            ])
+            dfs_to_concat.append(updates_df)
+        results = pl.concat(dfs_to_concat).sort("datetime")
+
+        return results
+    """
+
+
+'''
     def _load_matrix_only(self, op, model, strat, asset):
         path = self.base_path / op / model / strat / asset / "matrix" / "pnl_matrix.parquet"
         if path.exists():
@@ -349,322 +700,7 @@ class Storage:
             print(f"    < [Storage.] Error: {e}")
             return None
 
-    # Retorna um DataFrame com colunas datetime e wf_id com res_price de cada walkforward 
-    def load_walkforward_matrix_v2(self,
-                                   key, # tuple (op, model, strat, asset) or 4 individual strings
-                                   res_price: str="perc",
-                                   side_val: str="BOTH",
-                                   wf_ids: Optional[Union[str, list]] = None,
-                                   timeline_df: Optional[pl.DataFrame] = None, # Permite passar a timeline já processada para evitar recálculos
-                                   wf_map: Optional[pl.DataFrame] = None, # Permite passar o mapa do walkforward já processado para evitar recálculos
-                                   start_dt: str=None,
-                                   end_dt: str=None) -> Optional[pl.DataFrame]:
-        
-        # Loads and validates data
-        if timeline_df is None or wf_map is None:
-            asset_data = self.load(key)
-            if timeline_df is None:
-                timeline_df = asset_data.get("timeline")
-            if wf_map is None:
-                wf_map = asset_data.get("wf")
-
-        if timeline_df is None or wf_map is None: 
-            print(f"    < [Storage.load_walkforward_matrix] timeline_df or wf_map None")
-            return None
-        
-        #try:
-        # Normalizes Walkforward parameter mapping columns
-        if "best_param" in wf_map.columns and "ps_id" not in wf_map.columns:
-            wf_map = wf_map.rename({"best_param": "ps_id"})
-
-        # Applies cronological filters
-        if start_dt:
-            wf_map = wf_map.filter(pl.col("datetime") >= start_dt)
-        if end_dt:
-            wf_map = wf_map.filter(pl.col("datetime") <= end_dt)
-        
-        # Optional wf_id filtering
-        if wf_ids is not None:
-            search_ids = [str(wf_ids)] if isinstance(wf_ids, str) else [str(i) for i in wf_ids]
-            wf_map = wf_map.filter(pl.col("wf_id").cast(pl.Utf8).is_in(search_ids))
-
-        # Lazy historical and temporal preparation and optimization
-        timeline_lazy = timeline_df.lazy()
-        
-        if start_dt:
-            timeline_lazy = timeline_lazy.filter(pl.col("datetime") >= start_dt)
-        if end_dt:
-            timeline_lazy = timeline_lazy.filter(pl.col("datetime") <= end_dt)
-
-        # Optional filters by trade direction
-        if side_val.upper() != "BOTH":
-            s_filter = side_val.upper()
-            lot_col_name = "lot_size" if "lot_size" in timeline_df.columns else "lot"
-
-            if lot_col_name in timeline_df.columns:
-                if s_filter == "LONG":
-                    timeline_lazy = timeline_lazy.filter(pl.col(lot_col_name) > 0)
-                elif s_filter == "SHORT":
-                    timeline_lazy = timeline_lazy.filter(pl.col(lot_col_name) < 0)
-
-        # Identifies which walkforward windows/config needs to be processed
-        unique_wfs = wf_map.get_column("wf_id").unique().to_list()
-
-        # Parallel task generation in lazy format, one per walkforward ID
-        tasks = []
-        for wid in unique_wfs:
-            wf_map_lazy = wf_map.filter(pl.col("wf_id") == wid).select([
-                pl.col("datetime").alias("map_dt"),
-                pl.col("ps_id").alias("active_ps")
-            ]).lazy().sort("map_dt")
-
-            # Retroactive join_asof
-            plan = timeline_lazy.join_asof(
-                wf_map_lazy,
-                left_on="datetime",
-                right_on="map_dt",
-                strategy="backward"
-            ).filter(
-                pl.col("ps_id") == pl.col("active_ps")  
-            ).select([
-                "datetime",
-                pl.col(res_price).alias(res_price),  
-                pl.lit(str(wid)).alias("wf_id")
-            ])
-            tasks.append(plan)
             
-        if not tasks:
-            print(f"    < [Storage.load_walkforward_matrix] No tasks generated.")
-            return None
-        
-        # Multi-threaded execution with polars
-        results = pl.collect_all(tasks)
-        if not results or all(r.is_empty() for r in results):
-            print(f"    < [Storage.load_walkforward_matrix] No trade corresponded with OOS mapping.")
-            return None
-        
-        # Vertical concatenation and pivoting to generate final matrix
-        return pl.concat(results).pivot(
-            index="datetime",
-            on="wf_id",
-            values=res_price,
-            aggregate_function="sum"
-        ).fill_null(0.0).sort("datetime")
-    
-        #except Exception as e:
-        #    print(f"    < [Storage.load_walkforward_matrix] Critical error in construction: {e}")
-        #    return None
-    
-    
-    # For Operation.py use
-    def load_wf_prep(self, timeline_df: pl.DataFrame, price: str = "pnl", events_to_include: list = ["entry", "exit", "update"]) -> pl.DataFrame:
-        if timeline_df is None or timeline_df.is_empty():
-            print(f"   < [Storage.load_wf_prep] timeline_df is None or empty")
-            return None
-
-        return (
-            timeline_df
-            .filter(pl.col("event").is_in(events_to_include))
-            .group_by(["datetime", "ps_id"])
-            .agg(pl.col(price).sum())
-            .pivot(values=price, index="datetime", columns="ps_id")
-            .rename({"datetime": "ts"}) 
-            .fill_null(0.0)
-            .sort("ts")
-        )
-
-    # ─────────────────────────────────────────────────────────────────────────
-    # Internos
-    # ─────────────────────────────────────────────────────────────────────────
-
-    def _build_timeline(self, 
-                        trades_df: pl.DataFrame, 
-                        matrix_df: pl.DataFrame, 
-                        fmt: str= "%Y%m%d%H%M%S") -> pl.DataFrame:
-        
-        if trades_df is None or trades_df.is_empty():
-            return pl.DataFrame()
-        
-        # Formato numérico exato vindo do C++ (ex: 20210412013000)
-        def cast_datetime(column_name, df_source, alias="datetime"):
-            col = pl.col(column_name).replace(0, None)
-            
-            # Se o tipo da coluna no schema já for Datetime/Date, apenas renomeia
-            if df_source.schema.get(column_name) in [pl.Datetime, pl.Date]:
-                return col.alias(alias)
-                
-            # Caso contrário, tenta string formatada do C++ e dá fallback para Epoch/Int
-            return pl.coalesce([
-                col.cast(pl.Utf8).str.to_datetime(fmt, strict=False),
-                col.cast(pl.Int64).cast(pl.Datetime("us"))
-            ]).alias(alias)
-        
-        # Gets original relation between trade_id and ps_id
-        trade_to_ps = trades_df.select(["trade_id", "ps_id", "asset"]).unique()
-
-        # 1. ENTRIES
-        entries_df = trades_df.select([
-            cast_datetime("entry_datetime", trades_df),
-            pl.col("asset"),
-            pl.col("trade_id").cast(pl.Utf8),
-            pl.col("ps_id").cast(pl.Utf8),
-            pl.lit(0.0).alias('pnl'),
-            pl.lit(0.0).alias('perc'),
-            pl.col("lot_size"),
-            pl.col('margin_required'),
-            pl.lit(0.0).alias('mae'),
-            pl.lit(0.0).alias('mfe'),
-            pl.lit("entry").alias("event")
-        ])
-            
-        # 2. EXITS
-        exits_df = trades_df.select([
-            cast_datetime("exit_datetime", trades_df),
-            pl.col("asset"),
-            pl.col("trade_id").cast(pl.Utf8), 
-            pl.col("ps_id").cast(pl.Utf8),
-            pl.col("pnl"),
-            pl.col('perc'),
-            pl.col("exit_lot_size").alias("lot_size"),
-            pl.col('exit_margin').alias("margin_required"),
-            pl.col('mae'),
-            pl.col('mfe'),
-            pl.lit("exit").alias("event")
-        ])
-
-        dfs_to_concat = [entries_df, exits_df]
-
-        # 3. Trade Updates (MATRIX)
-        if matrix_df is not None and not matrix_df.is_empty():
-            updates_df = matrix_df.join(trade_to_ps, on="trade_id", how="left").select([
-                cast_datetime("ts", matrix_df),
-                pl.col("asset"),
-                pl.col("trade_id").cast(pl.Utf8),
-                pl.col("ps_id").cast(pl.Utf8),
-                pl.col("pnl"),
-                pl.col("perc"),
-                pl.col("lot_size"),
-                pl.col("margin_required"),
-                pl.col("mae"),
-                pl.col("mfe"),
-                pl.lit("update").alias("event")
-            ])
-            dfs_to_concat.append(updates_df)
-        timeline_df = pl.concat(dfs_to_concat).sort("datetime")
-
-        return timeline_df
-    
-    """
-        def _build_timeline(self, trades_df: pl.DataFrame, matrix_df: pl.DataFrame, fmt: str= "%Y%m%d%H%M%S") -> pl.DataFrame:
-        if trades_df is None or trades_df.is_empty():
-            return pl.DataFrame()
-        
-        # Formato numérico exato vindo do C++ (ex: 20210412013000)
-        def cast_datetime(column_name, df_source, alias="datetime"):
-            col = pl.col(column_name).replace(0, None)
-            
-            # Se o tipo da coluna no schema já for Datetime/Date, apenas renomeia
-            if df_source.schema.get(column_name) in [pl.Datetime, pl.Date]:
-                return col.alias(alias)
-                
-            # Caso contrário, tenta string formatada do C++ e dá fallback para Epoch/Int
-            return pl.coalesce([
-                col.cast(pl.Utf8).str.to_datetime(fmt, strict=False),
-                col.cast(pl.Int64).cast(pl.Datetime("us"))
-            ]).alias(alias)
-
-        # 1. ENTRIES
-        entries_df = trades_df.select([
-            cast_datetime("entry_datetime", trades_df),
-            pl.col("trade_id").cast(pl.Utf8).alias("ps_id"),
-            pl.lit(0.0).alias('pnl'),
-            pl.lit(0.0).alias('perc'),
-            pl.col("lot_size"),
-            pl.lit(0.0).alias('margin_required'),
-            pl.lit(0.0).alias('mae'),
-            pl.lit(0.0).alias('mfe'),
-            pl.lit("entry").alias("event")
-        ])
-            
-        # 2. EXITS
-        exits_df = trades_df.select([
-            cast_datetime("exit_datetime", trades_df),
-            pl.col("trade_id").cast(pl.Utf8).alias("ps_id"), # trade_id
-            pl.col("pnl"),
-            pl.col('perc'),
-            pl.col("lot_size"),
-            pl.col('margin_required'),
-            pl.col('mae'),
-            pl.col('mfe'),
-            pl.lit("exit").alias("event")
-        ])
-
-        dfs_to_concat = [entries_df, exits_df]
-
-        # 3. Trade Updates (MATRIX)
-        if matrix_df is not None and not matrix_df.is_empty():
-            updates_df = matrix_df.select([
-                cast_datetime("ts", matrix_df),
-                pl.col("trade_id").cast(pl.Utf8).alias("ps_id"),
-                pl.col("pnl"),
-                pl.col("perc"),
-                pl.col("lot_size"),
-                pl.col("margin_required"),
-                pl.col("mae"),
-                pl.col("mfe"),
-                pl.lit("update").alias("event")
-            ])
-            dfs_to_concat.append(updates_df)
-        results = pl.concat(dfs_to_concat).sort("datetime")
-
-        return results
-    """
-
-
-
-    def _save_meta(self, op_path: Path, operation_name: str, meta: dict):
-        meta_path = op_path / "meta"
-        meta_path.mkdir(parents=True, exist_ok=True)
-
-        full_meta = {
-            "operation_name": operation_name,
-            "saved_at":       datetime.now().isoformat(),
-            **meta,
-        }
-        with open(meta_path / "operation_meta.json", "w") as f:
-            json.dump(full_meta, f, indent=2, default=str)
-
-    def _find_parquet_files(
-        self,
-        root:    Path,
-        model:   Optional[str],
-        strat:   Optional[str],
-        asset:   Optional[str],
-        ps_name: Optional[str],
-    ) -> list:
-        """Encontra arquivos parquet respeitando os filtros."""
-        files = []
-        for f in sorted(root.rglob("*.parquet")):
-            parts = f.relative_to(root).parts  # (model, strat, asset, ps_name.parquet)
-            if len(parts) < 4: continue
-
-            m, s, a, fname = parts[0], parts[1], parts[2], parts[3]
-            if model   and m != model:              continue
-            if strat   and s != strat:              continue
-            if asset   and a != asset:              continue
-            if ps_name and f.stem != self._safe_filename(ps_name): continue
-
-            files.append(f)
-        return files
-
-    @staticmethod
-    def _safe_filename(name: str) -> str:
-        """Converte ps_name para filename seguro."""
-        return name.replace("/", "_").replace("\\", "_").replace(":", "_")[:200]
-    
-
-'''
-
     def load_trades(
         self,
         operation_name: str,

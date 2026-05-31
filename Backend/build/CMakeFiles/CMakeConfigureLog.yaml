@@ -61,7 +61,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
@@ -80,7 +79,7 @@ events:
       The output was:
       0
       Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-      Compila├º├úo de 27/05/2026 19:39:23 iniciada.
+      Compila├º├úo de 29/05/2026 08:16:25 iniciada.
       
       Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\4.2.1\\CompilerIdCXX\\CompilerIdCXX.vcxproj" no n├│ 1 (destinos padr├úo).
       PrepareForBuild:
@@ -118,7 +117,7 @@ events:
           0 Aviso(s)
           0 Erro(s)
       
-      Tempo Decorrido 00:00:02.58
+      Tempo Decorrido 00:00:02.89
       
       
       Compilation of the CXX compiler identification source "CMakeCXXCompilerId.cpp" produced "CompilerIdCXX.exe"
@@ -412,7 +411,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
@@ -773,7 +771,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
@@ -1058,7 +1055,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
@@ -1417,7 +1413,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
@@ -1702,7 +1697,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_FIND_ROOT_PATH: "C:/vcpkg/installed/x64-windows/debug;C:/vcpkg/installed/x64-windows"
   -
@@ -2328,7 +2322,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2346,8 +2339,8 @@ events:
     checks:
       - "Detecting CXX compiler ABI info"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6x87ao"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6x87ao"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-51144j"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-51144j"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -2361,39 +2354,39 @@ events:
       variable: "CMAKE_CXX_ABI_COMPILED"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6x87ao'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-51144j'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_4c2ef.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_76aef.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 27/05/2026 19:39:26 iniciada.
+        Compila├º├úo de 29/05/2026 08:16:29 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6x87ao\\cmTC_4c2ef.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-51144j\\cmTC_76aef.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6x87ao\\Debug\\".
-          Criando o diret├│rio "cmTC_4c2ef.dir\\Debug\\cmTC_4c2ef.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-51144j\\Debug\\".
+          Criando o diret├│rio "cmTC_76aef.dir\\Debug\\cmTC_76aef.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_4c2ef.dir\\Debug\\cmTC_4c2ef.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_4c2ef.dir\\Debug\\cmTC_4c2ef.tlog\\unsuccessfulbuild".
+          Criando "cmTC_76aef.dir\\Debug\\cmTC_76aef.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_76aef.dir\\Debug\\cmTC_76aef.tlog\\unsuccessfulbuild".
         ClCompile:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_4c2ef.dir\\Debug\\\\" /Fd"cmTC_4c2ef.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_76aef.dir\\Debug\\\\" /Fd"cmTC_76aef.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_4c2ef.dir\\Debug\\\\" /Fd"cmTC_4c2ef.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
+          cl /c /Zi /W1 /WX- /diagnostics:column /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /Fo"cmTC_76aef.dir\\Debug\\\\" /Fd"cmTC_76aef.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Program Files\\CMake\\share\\cmake-4.2\\Modules\\CMakeCXXCompilerABI.cpp"
           CMakeCXXCompilerABI.cpp
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6x87ao\\Debug\\cmTC_4c2ef.exe" /INCREMENTAL /ILK:"cmTC_4c2ef.dir\\Debug\\cmTC_4c2ef.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6x87ao/Debug/cmTC_4c2ef.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-6x87ao/Debug/cmTC_4c2ef.lib" /MACHINE:X64  /machine:x64 cmTC_4c2ef.dir\\Debug\\CMakeCXXCompilerABI.obj
-          cmTC_4c2ef.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6x87ao\\Debug\\cmTC_4c2ef.exe
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-51144j\\Debug\\cmTC_76aef.exe" /INCREMENTAL /ILK:"cmTC_76aef.dir\\Debug\\cmTC_76aef.ilk" /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-51144j/Debug/cmTC_76aef.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-51144j/Debug/cmTC_76aef.lib" /MACHINE:X64  /machine:x64 cmTC_76aef.dir\\Debug\\CMakeCXXCompilerABI.obj
+          cmTC_76aef.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-51144j\\Debug\\cmTC_76aef.exe
         FinalizeBuildStatus:
-          Excluindo o arquivo "cmTC_4c2ef.dir\\Debug\\cmTC_4c2ef.tlog\\unsuccessfulbuild".
-          Tocando "cmTC_4c2ef.dir\\Debug\\cmTC_4c2ef.tlog\\cmTC_4c2ef.lastbuildstate".
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-6x87ao\\cmTC_4c2ef.vcxproj" (destinos padr├úo).
+          Excluindo o arquivo "cmTC_76aef.dir\\Debug\\cmTC_76aef.tlog\\unsuccessfulbuild".
+          Tocando "cmTC_76aef.dir\\Debug\\cmTC_76aef.tlog\\cmTC_76aef.lastbuildstate".
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-51144j\\cmTC_76aef.vcxproj" (destinos padr├úo).
         
         Compila├º├úo com ├¬xito.
             0 Aviso(s)
             0 Erro(s)
         
-        Tempo Decorrido 00:00:00.85
+        Tempo Decorrido 00:00:00.70
         
       exitCode: 0
   -
@@ -2482,7 +2475,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2549,7 +2541,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2618,7 +2609,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -2718,7 +2708,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -3388,7 +3377,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -3894,7 +3882,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -3922,8 +3909,8 @@ events:
     checks:
       - "Performing Test HAS_MSVC_GL_LTCG"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yr4tm6"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yr4tm6"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-f9v710"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-f9v710"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -3936,62 +3923,62 @@ events:
       variable: "HAS_MSVC_GL_LTCG"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yr4tm6'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-f9v710'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_b1713.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_0c713.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 27/05/2026 19:39:42 iniciada.
+        Compila├º├úo de 29/05/2026 08:16:32 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\cmTC_b1713.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\cmTC_0c713.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\Debug\\".
-          Criando o diret├│rio "cmTC_b1713.dir\\Debug\\cmTC_b1713.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\Debug\\".
+          Criando o diret├│rio "cmTC_0c713.dir\\Debug\\cmTC_0c713.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_b1713.dir\\Debug\\cmTC_b1713.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_b1713.dir\\Debug\\cmTC_b1713.tlog\\unsuccessfulbuild".
+          Criando "cmTC_0c713.dir\\Debug\\cmTC_0c713.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_0c713.dir\\Debug\\cmTC_0c713.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\cmTC_b1713.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\cmTC_0c713.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_b1713.dir\\Debug\\cmTC_b1713_MD.tlog\\".
+          Criando o diret├│rio "cmTC_0c713.dir\\Debug\\cmTC_0c713_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b1713.dir\\Debug\\\\" /scanDependencies "cmTC_b1713.dir\\Debug\\\\" /Fo"cmTC_b1713.dir\\Debug\\\\" /Fd"cmTC_b1713.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c713.dir\\Debug\\\\" /scanDependencies "cmTC_0c713.dir\\Debug\\\\" /Fo"cmTC_0c713.dir\\Debug\\\\" /Fd"cmTC_0c713.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b1713.dir\\Debug\\\\" /scanDependencies "cmTC_b1713.dir\\Debug\\\\" /Fo"cmTC_b1713.dir\\Debug\\\\" /Fd"cmTC_b1713.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c713.dir\\Debug\\\\" /scanDependencies "cmTC_0c713.dir\\Debug\\\\" /Fo"cmTC_0c713.dir\\Debug\\\\" /Fd"cmTC_0c713.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\src.cxx"
           src.cxx
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b1713.dir\\Debug\\\\" /Fo"cmTC_b1713.dir\\Debug\\\\" /Fd"cmTC_b1713.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_b1713.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c713.dir\\Debug\\\\" /Fo"cmTC_0c713.dir\\Debug\\\\" /Fd"cmTC_0c713.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_0c713.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b1713.dir\\Debug\\\\" /Fo"cmTC_b1713.dir\\Debug\\\\" /Fd"cmTC_b1713.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_b1713.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /GL /D _MBCS /D WIN32 /D _WINDOWS /D HAS_MSVC_GL_LTCG /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_0c713.dir\\Debug\\\\" /Fo"cmTC_0c713.dir\\Debug\\\\" /Fd"cmTC_0c713.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_0c713.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\src.cxx"
           src.cxx
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\Debug\\cmTC_b1713.exe" /INCREMENTAL /ILK:"cmTC_b1713.dir\\Debug\\cmTC_b1713.ilk" /NOLOGO "-LTCG" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yr4tm6/Debug/cmTC_b1713.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yr4tm6/Debug/cmTC_b1713.lib" /MACHINE:X64  /machine:x64 cmTC_b1713.dir\\Debug\\src.obj
-        LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\cmTC_b1713.vcxproj]
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\Debug\\cmTC_0c713.exe" /INCREMENTAL /ILK:"cmTC_0c713.dir\\Debug\\cmTC_0c713.ilk" /NOLOGO "-LTCG" kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-f9v710/Debug/cmTC_0c713.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-f9v710/Debug/cmTC_0c713.lib" /MACHINE:X64  /machine:x64 cmTC_0c713.dir\\Debug\\src.obj
+        LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\cmTC_0c713.vcxproj]
           Gerando c├│digo
           Finalizada a gera├º├úo de c├│digo
-          cmTC_b1713.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\Debug\\cmTC_b1713.exe
+          cmTC_0c713.vcxproj -> C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\Debug\\cmTC_0c713.exe
         FinalizeBuildStatus:
-          Excluindo o arquivo "cmTC_b1713.dir\\Debug\\cmTC_b1713.tlog\\unsuccessfulbuild".
-          Tocando "cmTC_b1713.dir\\Debug\\cmTC_b1713.tlog\\cmTC_b1713.lastbuildstate".
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\cmTC_b1713.vcxproj" (destinos padr├úo).
+          Excluindo o arquivo "cmTC_0c713.dir\\Debug\\cmTC_0c713.tlog\\unsuccessfulbuild".
+          Tocando "cmTC_0c713.dir\\Debug\\cmTC_0c713.tlog\\cmTC_0c713.lastbuildstate".
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\cmTC_0c713.vcxproj" (destinos padr├úo).
         
         Compila├º├úo com ├¬xito.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\cmTC_b1713.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\cmTC_0c713.vcxproj" (destino padr├úo) (1) ->
         (Link destino) -> 
-          LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yr4tm6\\cmTC_b1713.vcxproj]
+          LINK : warning LNK4075: ignorando '/INCREMENTAL' devido a especifica├º├úo '/LTCG' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-f9v710\\cmTC_0c713.vcxproj]
         
             1 Aviso(s)
             0 Erro(s)
         
-        Tempo Decorrido 00:00:01.37
+        Tempo Decorrido 00:00:01.36
         
       exitCode: 0
   -
@@ -4086,7 +4073,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -4187,7 +4173,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -4212,8 +4197,8 @@ events:
     checks:
       - "Performing Test CMAKE_HAVE_LIBC_PTHREAD"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-mnicje"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-mnicje"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-g7e3yw"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-g7e3yw"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -4226,67 +4211,67 @@ events:
       variable: "CMAKE_HAVE_LIBC_PTHREAD"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-mnicje'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-g7e3yw'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_07128.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_42448.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 27/05/2026 19:39:44 iniciada.
+        Compila├º├úo de 29/05/2026 08:16:33 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\Debug\\".
-          Criando o diret├│rio "cmTC_07128.dir\\Debug\\cmTC_07128.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\Debug\\".
+          Criando o diret├│rio "cmTC_42448.dir\\Debug\\cmTC_42448.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_07128.dir\\Debug\\cmTC_07128.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_07128.dir\\Debug\\cmTC_07128.tlog\\unsuccessfulbuild".
+          Criando "cmTC_42448.dir\\Debug\\cmTC_42448.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_42448.dir\\Debug\\cmTC_42448.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_07128.dir\\Debug\\cmTC_07128_MD.tlog\\".
+          Criando o diret├│rio "cmTC_42448.dir\\Debug\\cmTC_42448_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_07128.dir\\Debug\\\\" /scanDependencies "cmTC_07128.dir\\Debug\\\\" /Fo"cmTC_07128.dir\\Debug\\\\" /Fd"cmTC_07128.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx"
-        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_42448.dir\\Debug\\\\" /scanDependencies "cmTC_42448.dir\\Debug\\\\" /Fo"cmTC_42448.dir\\Debug\\\\" /Fd"cmTC_42448.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx"
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_07128.dir\\Debug\\\\" /scanDependencies "cmTC_07128.dir\\Debug\\\\" /Fo"cmTC_07128.dir\\Debug\\\\" /Fd"cmTC_07128.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_42448.dir\\Debug\\\\" /scanDependencies "cmTC_42448.dir\\Debug\\\\" /Fo"cmTC_42448.dir\\Debug\\\\" /Fd"cmTC_42448.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx"
           src.cxx
-        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
-        C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_07128.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
+        C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_42448.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_07128.dir\\Debug\\\\" /Fo"cmTC_07128.dir\\Debug\\\\" /Fd"cmTC_07128.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_07128.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_42448.dir\\Debug\\\\" /Fo"cmTC_42448.dir\\Debug\\\\" /Fd"cmTC_42448.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_42448.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_07128.dir\\Debug\\\\" /Fo"cmTC_07128.dir\\Debug\\\\" /Fd"cmTC_07128.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_07128.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CMAKE_HAVE_LIBC_PTHREAD /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_42448.dir\\Debug\\\\" /Fo"cmTC_42448.dir\\Debug\\\\" /Fd"cmTC_42448.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_42448.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx"
           src.cxx
-        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj" (destinos padr├úo) -- FALHA.
+        C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj" (destinos padr├úo) -- FALHA.
         
         FALHA da compila├º├úo.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj" (destino padr├úo) (1) ->
         (SetModuleDependencies destino) -> 
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_07128.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\MSBuild\\Microsoft\\VC\\v180\\Microsoft.CppCommon.targets(533,5): warning MSB8074: Cannot read Module Dependencies file cmTC_42448.dir\\Debug\\src.cxx.module.json: Esperando elemento 'root' do namespace ''.. Encontrado 'None' com nome '', namespace ''.  The build order might be incorrect. [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
         
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj" (destino padr├úo) (1) ->
         (SetModuleDependencies destino) -> 
-          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
-          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx(1,10): fatal  error C1083: N├Æo ├Ü poss├Øvel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
         
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj" (destino padr├úo) (1) ->
         (ClCompile destino) -> 
-          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-mnicje\\cmTC_07128.vcxproj]
+          C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\src.cxx(1,10): error C1083: N├úo ├® poss├¡vel abrir arquivo incluir: 'pthread.h': No such file or directory [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-g7e3yw\\cmTC_42448.vcxproj]
         
             1 Aviso(s)
             3 Erro(s)
         
-        Tempo Decorrido 00:00:00.79
+        Tempo Decorrido 00:00:00.83
         
       exitCode: 1
   -
@@ -4304,8 +4289,8 @@ events:
     checks:
       - "Looking for pthread_create in pthreads"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3y87h2"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3y87h2"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-8o9mfc"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-8o9mfc"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -4318,56 +4303,56 @@ events:
       variable: "CMAKE_HAVE_PTHREADS_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3y87h2'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-8o9mfc'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_c7ae2.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_a4834.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 27/05/2026 19:39:45 iniciada.
+        Compila├º├úo de 29/05/2026 08:16:55 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\cmTC_c7ae2.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\cmTC_a4834.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\Debug\\".
-          Criando o diret├│rio "cmTC_c7ae2.dir\\Debug\\cmTC_c7ae2.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\Debug\\".
+          Criando o diret├│rio "cmTC_a4834.dir\\Debug\\cmTC_a4834.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_c7ae2.dir\\Debug\\cmTC_c7ae2.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_c7ae2.dir\\Debug\\cmTC_c7ae2.tlog\\unsuccessfulbuild".
+          Criando "cmTC_a4834.dir\\Debug\\cmTC_a4834.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_a4834.dir\\Debug\\cmTC_a4834.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\cmTC_c7ae2.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\cmTC_a4834.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_c7ae2.dir\\Debug\\cmTC_c7ae2_MD.tlog\\".
+          Criando o diret├│rio "cmTC_a4834.dir\\Debug\\cmTC_a4834_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_c7ae2.dir\\Debug\\\\" /scanDependencies "cmTC_c7ae2.dir\\Debug\\\\" /Fo"cmTC_c7ae2.dir\\Debug\\\\" /Fd"cmTC_c7ae2.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_a4834.dir\\Debug\\\\" /scanDependencies "cmTC_a4834.dir\\Debug\\\\" /Fo"cmTC_a4834.dir\\Debug\\\\" /Fd"cmTC_a4834.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_c7ae2.dir\\Debug\\\\" /scanDependencies "cmTC_c7ae2.dir\\Debug\\\\" /Fo"cmTC_c7ae2.dir\\Debug\\\\" /Fd"cmTC_c7ae2.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_a4834.dir\\Debug\\\\" /scanDependencies "cmTC_a4834.dir\\Debug\\\\" /Fo"cmTC_a4834.dir\\Debug\\\\" /Fd"cmTC_a4834.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_c7ae2.dir\\Debug\\\\" /Fo"cmTC_c7ae2.dir\\Debug\\\\" /Fd"cmTC_c7ae2.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_c7ae2.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_a4834.dir\\Debug\\\\" /Fo"cmTC_a4834.dir\\Debug\\\\" /Fd"cmTC_a4834.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_a4834.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_c7ae2.dir\\Debug\\\\" /Fo"cmTC_c7ae2.dir\\Debug\\\\" /Fd"cmTC_c7ae2.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_c7ae2.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_a4834.dir\\Debug\\\\" /Fo"cmTC_a4834.dir\\Debug\\\\" /Fd"cmTC_a4834.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_a4834.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\Debug\\cmTC_c7ae2.exe" /INCREMENTAL /ILK:"cmTC_c7ae2.dir\\Debug\\cmTC_c7ae2.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3y87h2/Debug/cmTC_c7ae2.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-3y87h2/Debug/cmTC_c7ae2.lib" /MACHINE:X64  /machine:x64 cmTC_c7ae2.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\cmTC_c7ae2.vcxproj]
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\cmTC_c7ae2.vcxproj" (destinos padr├úo) -- FALHA.
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\Debug\\cmTC_a4834.exe" /INCREMENTAL /ILK:"cmTC_a4834.dir\\Debug\\cmTC_a4834.ilk" /NOLOGO pthreads.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-8o9mfc/Debug/cmTC_a4834.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-8o9mfc/Debug/cmTC_a4834.lib" /MACHINE:X64  /machine:x64 cmTC_a4834.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\cmTC_a4834.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\cmTC_a4834.vcxproj" (destinos padr├úo) -- FALHA.
         
         FALHA da compila├º├úo.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\cmTC_c7ae2.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\cmTC_a4834.vcxproj" (destino padr├úo) (1) ->
         (Link destino) -> 
-          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-3y87h2\\cmTC_c7ae2.vcxproj]
+          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthreads.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-8o9mfc\\cmTC_a4834.vcxproj]
         
             0 Aviso(s)
             1 Erro(s)
         
-        Tempo Decorrido 00:00:00.79
+        Tempo Decorrido 00:00:00.77
         
       exitCode: 1
   -
@@ -4385,8 +4370,8 @@ events:
     checks:
       - "Looking for pthread_create in pthread"
     directories:
-      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-u4wa5e"
-      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-u4wa5e"
+      source: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzrg9r"
+      binary: "C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzrg9r"
     cmakeVariables:
       CMAKE_CXX_FLAGS: "/DWIN32 /D_WINDOWS /GR /EHsc"
       CMAKE_CXX_FLAGS_DEBUG: "/Zi /Ob0 /Od /RTC1"
@@ -4399,56 +4384,56 @@ events:
       variable: "CMAKE_HAVE_PTHREAD_CREATE"
       cached: true
       stdout: |
-        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-u4wa5e'
+        Change Dir: 'C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzrg9r'
         
-        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_b3a5f.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
+        Run Build Command(s): "C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Current/Bin/amd64/MSBuild.exe" cmTC_78525.vcxproj /p:Configuration=Debug /p:Platform=x64 /p:VisualStudioVersion=18.0 /v:n
         Vers├úo do MSBuild 18.0.5+e22287bf1 para .NET Framework
-        Compila├º├úo de 27/05/2026 19:39:46 iniciada.
+        Compila├º├úo de 29/05/2026 08:16:56 iniciada.
         
-        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\cmTC_b3a5f.vcxproj" no n├│ 1 (destinos padr├úo).
+        Projeto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\cmTC_78525.vcxproj" no n├│ 1 (destinos padr├úo).
         PrepareForBuild:
           Structured output is enabled. The formatting of compiler diagnostics will reflect the error hierarchy. See https://aka.ms/cpp/structured-output for more details.
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\Debug\\".
-          Criando o diret├│rio "cmTC_b3a5f.dir\\Debug\\cmTC_b3a5f.tlog\\".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\Debug\\".
+          Criando o diret├│rio "cmTC_78525.dir\\Debug\\cmTC_78525.tlog\\".
         InitializeBuildStatus:
-          Criando "cmTC_b3a5f.dir\\Debug\\cmTC_b3a5f.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
-          Tocando "cmTC_b3a5f.dir\\Debug\\cmTC_b3a5f.tlog\\unsuccessfulbuild".
+          Criando "cmTC_78525.dir\\Debug\\cmTC_78525.tlog\\unsuccessfulbuild" porque "AlwaysCreate" foi especificado.
+          Tocando "cmTC_78525.dir\\Debug\\cmTC_78525.tlog\\unsuccessfulbuild".
         ComputeStdModulesCompileInputs:
           Reading library manifest file 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\modules.json' which provides data for library 'microsoft/STL'.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.ixx' from library 'microsoft/STL' to be built with this project.
           Adding module source 'C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\modules\\std.compat.ixx' from library 'microsoft/STL' to be built with this project.
         MakeDirsForCl:
-          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\cmTC_b3a5f.dir\\Debug\\microsoft\\STL".
+          Criando o diret├│rio "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\cmTC_78525.dir\\Debug\\microsoft\\STL".
         SetModuleDependencies:
-          Criando o diret├│rio "cmTC_b3a5f.dir\\Debug\\cmTC_b3a5f_MD.tlog\\".
+          Criando o diret├│rio "cmTC_78525.dir\\Debug\\cmTC_78525_MD.tlog\\".
           Scanning sources for module dependencies...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b3a5f.dir\\Debug\\\\" /scanDependencies "cmTC_b3a5f.dir\\Debug\\\\" /Fo"cmTC_b3a5f.dir\\Debug\\\\" /Fd"cmTC_b3a5f.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_78525.dir\\Debug\\\\" /scanDependencies "cmTC_78525.dir\\Debug\\\\" /Fo"cmTC_78525.dir\\Debug\\\\" /Fd"cmTC_78525.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b3a5f.dir\\Debug\\\\" /scanDependencies "cmTC_b3a5f.dir\\Debug\\\\" /Fo"cmTC_b3a5f.dir\\Debug\\\\" /Fd"cmTC_b3a5f.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_78525.dir\\Debug\\\\" /scanDependencies "cmTC_78525.dir\\Debug\\\\" /Fo"cmTC_78525.dir\\Debug\\\\" /Fd"cmTC_78525.dir\\Debug\\vc145.pdb" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         ClCompile:
           Compiling...
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b3a5f.dir\\Debug\\\\" /Fo"cmTC_b3a5f.dir\\Debug\\\\" /Fd"cmTC_b3a5f.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_b3a5f.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\CheckFunctionExists.cxx"
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\CL.exe /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_78525.dir\\Debug\\\\" /Fo"cmTC_78525.dir\\Debug\\\\" /Fd"cmTC_78525.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_78525.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\CheckFunctionExists.cxx"
           Microsoft (R) C/C++ Optimizing Compiler Vers├úo 19.50.35723 para x64
           Copyright (C) Microsoft Corporation. Todos os direitos reservados.
-          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_b3a5f.dir\\Debug\\\\" /Fo"cmTC_b3a5f.dir\\Debug\\\\" /Fd"cmTC_b3a5f.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_b3a5f.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\CheckFunctionExists.cxx"
+          cl /c /Zi /W1 /WX- /diagnostics:column /FS /Od /Ob0 /D _MBCS /D WIN32 /D _WINDOWS /D CHECK_FUNCTION_EXISTS=pthread_create /D _MBCS /D "CMAKE_INTDIR=\\"Debug\\"" /EHsc /RTC1 /MDd /GR /std:c++20 /ifcOutput "cmTC_78525.dir\\Debug\\\\" /Fo"cmTC_78525.dir\\Debug\\\\" /Fd"cmTC_78525.dir\\Debug\\vc145.pdb" /sourceDependencies "cmTC_78525.dir\\Debug\\.d.json" /external:W1 /TP /errorReport:queue "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\CheckFunctionExists.cxx"
           CheckFunctionExists.cxx
         Link:
-          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\Debug\\cmTC_b3a5f.exe" /INCREMENTAL /ILK:"cmTC_b3a5f.dir\\Debug\\cmTC_b3a5f.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-u4wa5e/Debug/cmTC_b3a5f.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-u4wa5e/Debug/cmTC_b3a5f.lib" /MACHINE:X64  /machine:x64 cmTC_b3a5f.dir\\Debug\\CheckFunctionExists.obj
-        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\cmTC_b3a5f.vcxproj]
-        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\cmTC_b3a5f.vcxproj" (destinos padr├úo) -- FALHA.
+          C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Tools\\MSVC\\14.50.35717\\bin\\HostX64\\x64\\link.exe /OUT:"C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\Debug\\cmTC_78525.exe" /INCREMENTAL /ILK:"cmTC_78525.dir\\Debug\\cmTC_78525.ilk" /NOLOGO pthread.lib kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzrg9r/Debug/cmTC_78525.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /IMPLIB:"C:/Users/Patrick/Desktop/ART_Backtesting_Platform/Backend/build/CMakeFiles/CMakeScratch/TryCompile-yzrg9r/Debug/cmTC_78525.lib" /MACHINE:X64  /machine:x64 cmTC_78525.dir\\Debug\\CheckFunctionExists.obj
+        LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\cmTC_78525.vcxproj]
+        Projeto de compila├º├úo pronto "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\cmTC_78525.vcxproj" (destinos padr├úo) -- FALHA.
         
         FALHA da compila├º├úo.
         
-        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\cmTC_b3a5f.vcxproj" (destino padr├úo) (1) ->
+        "C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\cmTC_78525.vcxproj" (destino padr├úo) (1) ->
         (Link destino) -> 
-          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-u4wa5e\\cmTC_b3a5f.vcxproj]
+          LINK : fatal error LNK1104: n├úo ├® poss├¡vel abrir o arquivo 'pthread.lib' [C:\\Users\\Patrick\\Desktop\\ART_Backtesting_Platform\\Backend\\build\\CMakeFiles\\CMakeScratch\\TryCompile-yzrg9r\\cmTC_78525.vcxproj]
         
             0 Aviso(s)
             1 Erro(s)
         
-        Tempo Decorrido 00:00:00.81
+        Tempo Decorrido 00:00:00.76
         
       exitCode: 1
   -
@@ -4543,7 +4528,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -5162,7 +5146,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:
@@ -5704,7 +5687,6 @@ events:
         - "C:\\sqlite"
         - "C:\\Users\\Patrick\\AppData\\Local\\Programs\\cursor\\resources\\app\\bin"
         - "C:\\msys64\\mingw64\\bin"
-        - "C:\\Program Files\\CMake\\bin"
         - "C:\\Users\\Patrick\\AppData\\Roaming\\npm"
       CMAKE_INSTALL_PREFIX: "C:/Program Files (x86)/backtest_engine"
       CMAKE_SYSTEM_PREFIX_PATH:

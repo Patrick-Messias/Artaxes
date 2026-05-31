@@ -87,17 +87,128 @@ class Portfolio(BaseClass, BaseManager):
         self.datetime_timeline = portfolio_params.datetime_timeline
 
         self.hierarchy: dict={}
-        self.portfolio_returns: dict={}
         self.sim_data: dict= {}
+        self.iter_data_cache: dict={}
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
+
+
+    # - Por enquanto esquecer PSM e MMM no nível Portfolio e Model, apenas fazer o SSM
+    # - Depois gerar o código para Saida - Entrada - Update
+    # 1. Itera sobre active_positions e puxa os dados para o datetime atual, para cada ps_id / wf
+    # 2. Verifica se tem sinal de saida, se tiver então adiciona a saida (event="exit") para 
+    #portfolio_returns e remove de active_positions
+    # 3. Itera novamente sobre as posições ainda abertas e adiciona o pnl baseado no event="update" 
+    #para o portfolio_returns, entrada nova não consta event="update"
+    # 4. Se tiver espaço (limite de posições e/ou margem) para abrir nova posição então itera sobre 
+    #hierarchy e roda uma serie de verificações: Se atual for event="update" posso entrar no 
+    #meio da operação? Dos portfolios que poderia formar com active_positions + novas entradas, 
+    #qual é o melhor? se confirmar entrada então adiciona para active_positions
+        
+    def _calc_trade_current_results(self):
+        results={}
+        return results
+
+    def _exits(self, idx, step): # Exits positions based on previous data and open only [i] data
+        temporary_data_cache = {}
+
+        # Iterates over active_positions and checks if event="exit" or other exit conditions
+        if self.active_positions: 
+            for pos_key, pos_obj in self.active_positions.items(): # pos key = [op, m, s, a, p]
+                op_name, m_name, s_name, a_name, psid_wfid = pos_key
+                a_key = (op_name, m_name, s_name, a_name)
+
+                pos_data = self._populate_sim_data(a_key, idx, idx, pos_obj["side"], pos_obj["data_type"], pos_obj["psid_wfid"])
+                temporary_data_cache[pos_key] = pos_data
+
+                # Checks exit by event
+
+                # Checks exit by profit or loss limit
+
+        return temporary_data_cache
+    
+    def _updates(self, idx, step, temp_sim_data_cache): # If position is kept, then updates based on [i] data
+        
+        # Checks and can update lot in each position
+
+        # If event=update, adds trade_matrix update to portfolio_returns
+        
+        return True
+
+    def _entries(self, idx, step): # Enters new positions based on previous data and open only [i] data
+        # An update can create a new entry, no need to update a new entry on [i]
+
+        # [pos_key] = {
+        #     "data_type"="",
+        #     "psid_wfid"="",
+        #     "side"="",
+        #     "separate_ls"="",
+        #     "lot_size"=0.0,}
+
+        new_entry_candidates = {}
+        pmm = self.sm_mm_map["managers"].get("pmm", None)
+
+        # Checks if there's still margin and space to open new positions
+        if pmm and pmm.available_margin <= 0:
+            print(f"- Not enought margin to open new position - DELETE THIS DEBUG PRINT")
+            return False
+
+        for op_name, op_data in self.hierarchy.items():
+            for m_name, m_data in op_data.items():
+                if not m_data.get("active", False): continue
+
+                for s_name, s_data in m_data.get("strats", {}).items():
+                    if not s_data.get("active", False): continue
+
+                    for a_name, a_data in s_data.get("assets", {}).items():
+                        if not a_data.get("active", False): continue
+                        a_key = (op_name, m_name, s_name, a_name)
+
+                        # Creates lista with data for any enabled wf or ps ids
+                        wf_ids = a_data.get("wf_id")
+                        ps_ids = a_data.get("ps_id")
+                        side = a_data.get("side", "both")
+
+                        for wf_key, wf_val in wf_ids.items():
+                            if wf_val:
+                                pos_key = (op_name, m_name, s_name, a_name, wf_key)
+
+                                # Checks if there's current data for this backtest
+
+                                # Entry Else checks if event=="update" and can't enter continues
+                                
+                                # If valid position
+                                # new_entry_candidates[pos_key] = {
+                                #     "data"=data
+                                #     "data_type"=None,
+                                #     "id"="wf_id",
+                                #     "side"=side,}
+
+                        for ps_key, ps_val in ps_ids:
+                            if ps_val:
+                                pos_key = (op_name, m_name, s_name, a_name, ps_key)
+
+                        
+        # Validates final candidates and enter trades
+        for can_name, can_data in new_entry_candidates.items():
+            pass
+            # Ranks final candidate ranking, prob based on weights
+
+            # Checks best portfolio combination and margin
+
+            # Executes entries, adds to active_positions and subtracts margin
+
+            # Adds to logs
+
+
+        return True
     
         
     def _simulation(self):
         # 1 - Init, populating sim_data
         self.sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
-        self.active_positions = {} 
-        self.portfolio_returns = {}
-        self.indicator_pool = {}
+        self.active_positions: dict={}
+        self.portfolio_returns: dict={}
+        self.indicator_pool: dict={}
         self.current_idx = 0
 
         # Checks if is going to simulate portfolio with strat backtest results or asset positions
@@ -121,26 +232,13 @@ class Portfolio(BaseClass, BaseManager):
 
             #||=====================================================================================||#
             
-            # Exits at [i] open
-            for idf, pos_info in self.active_positions.items():
-                pass
+            temp_sim_data_cache = {}
 
-            #||=====================================================================================||#
-            
-            # Entries at [i] open - MM Tactical Level - Bottom Up (MM can change with exit/entry)
-            for idf, pos_info in self.hierarchy.items():
-                if portfolio_simulation_with_backtest_results: pass
-                    
-                # -> NOTE Para System e Money M colocar opção de seprar long (lot_size > 0) de short
-                # 1. Add long_active e short_active ao invés de só active, padrão ambos true
-                # 2. Iterares hierarchy, checks all parsets that are active (NOTE WF must activate only the current parset in SMM)
-                # 3. Creates temporary portfolio arrangements with current assets + new positions, finds best portfolio arrangement and calculates positions sizes
-                # First-Come First-Served - Allocates 10% until 100% is hit, following hierarchy
+            # Gets active_positions data for [i]
+            for pos in self.active_positions:
+                temp_sim_data_cache = self._exits(i, step_dt)
 
-            #||=====================================================================================||#
-            
-            # Updates PnL of open positions at [i] ends in previous step
-            #update_func_to_use(step_dt, self.active_positions)
+            # Gets hierarchy data for [i]
 
             #||=====================================================================================||#
             
@@ -269,6 +367,75 @@ class Portfolio(BaseClass, BaseManager):
         pass
 
     # ── Data Handling ───────────────────────────────────────────────
+
+    # Gets ps_id with wf_id best_param
+    def _get_psid_with_wfid(self, wf_map, wfid):
+        
+        if wf_map is None or wf_map.is_empty():
+            print(f"    < [Portfolio._get_psid_with_wfid] Error invalid input: wf_map")
+            return None
+        elif wfid is None:
+            print(f"    < [Portfolio._get_psid_with_wfid] Error invalid input: wfid")
+            return None
+        
+        # Filters walkforward map with requested wf id
+        wf_map_filtered = wf_map.filter(pl.col("wf_id") == wfid)
+        ps_id = wf_map_filtered['best_param']
+
+        return ps_id
+
+    # Creates fast signal generation
+    def _get_iter_data(self, key, step_datetime, psid_wfid, is_wf: bool):
+        pos_key = (*key, psid_wfid, step_datetime)
+
+        if pos_key not in self.iter_data_cache:
+            asset_data = self.storage.load(key)
+
+            if asset_data is None or asset_data.is_empty():
+                print(f"    < [Portfolio._get_iter_data] Error empty: asset_data")
+                self.iter_data_cache[pos_key] = {}
+                return None
+
+            # Gets asset's complete data datetime dataframe with all parsets and events
+            timeline_df = asset_data.get("timeline")
+            if timeline_df is None or timeline_df.is_empty():
+                print(f"    < [Portfolio._get_iter_data] Error empty: timeline_df")
+                self.iter_data_cache[pos_key] = {}
+                return None
+            
+            curr_dt_asset_data = timeline_df.filter(pl.col("datetime") == step_datetime)
+            if curr_dt_asset_data is None or curr_dt_asset_data.is_empty():
+                print(f"    < [Portfolio._get_iter_data] Error empty: curr_dt_asset_data")
+                self.iter_data_cache[pos_key] = {}
+                return None
+            
+            # Walkforward case, gets param set from walkforward map
+            if is_wf: 
+                wf_map = asset_data.get("wf")
+
+                if wf_map is None or wf_map.is_empty():
+                    print(f"    < [Portfolio._get_iter_data] Error empty: wf_map")
+                    self.iter_data_cache[pos_key] = {}
+                    return None
+            
+                ps_id = self._get_psid_with_wfid(wf_map, psid_wfid)
+            else: ps_id = psid_wfid 
+            
+            # Gets data for specific param set
+            trade_curr_dt_data = curr_dt_asset_data.filter(pl.col("ps_id") == ps_id)
+
+            # Adds to cache for use in up
+            self.iter_data_cache[pos_key] = trade_curr_dt_data
+
+            return trade_curr_dt_data
+        
+        else:
+            trade_curr_dt_data = self.iter_data_cache[pos_key]
+            return trade_curr_dt_data
+
+
+
+
 
     # Used to pull real data from parquet from selected source
     def _populate_sim_data(self, key, i, start_idx=0, side=None, data_type="aggr", psid_or_wfid=None):
@@ -633,7 +800,8 @@ class Portfolio(BaseClass, BaseManager):
                     "both":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
                     "long":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
                     "short":       {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
-                    "wf_ids":      {},
+                    "wf_id":       {}, # 12_12_12=True
+                    "ps_id":       {}  # param1-50_param2-2.0=False
                 }
 
         self.hierarchy = hcy

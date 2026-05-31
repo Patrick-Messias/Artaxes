@@ -240,6 +240,16 @@ def CorrelationClusteringMC(
     - If doesn't improve on any set then it's probably just overfitting and better to remove
 """
 
+# 7. Skip Trade Test - Randomly removes 5-20% of trades n times and analyzes performance drop
+
+# 8. Walkforward Test
+""" - Drawdown, Stagnation, WFE
+"""
+
+# 9. Walkforward Parameter Sensibility Test - Analises x=5 radious ticks for each parameter
+""" - Makes walkforward, takes every parameter of each OS and compares results to parameters on a radious
+"""
+
 # In Sample - Out Sample Test
 def ISOS_TEST(data: pl.DataFrame, os_start_datetime=None, os_end_datetime=None, metrics: list=['pnl', 'dd', 'pnl_dd'], mc_runs: int=1000, mc_shuffle: bool=True, mc_col: str='wfm_matrix_data', datetime_format: str="%Y-%m-%d %H:%M:%S"):
 

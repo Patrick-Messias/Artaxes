@@ -770,68 +770,70 @@ SimulationOutput Backtest::run_simulation(
                 double cap_ref = mm_context.capital;
 
                 for (auto& trade : active_trades) {
-                    bool is_long = (trade.lot_size > 0);
+                    if (trade.bars_held > 1) { // Temp fix, to avoid entry and update at same datetime
+                        bool is_long = (trade.lot_size > 0);
 
-                    double dv_pnl;  // $ return
-                    double dv_perc; // % return
+                        double dv_pnl;  // $ return
+                        double dv_perc; // % return
 
-                    // Updates MAE/MFE metrics
-                    if (is_daily_res) {
-                        update_mae_mfe(trade, is_long, is_pct_mode, close[i], close[i]);
-                    } else {
-                        update_mae_mfe(trade, is_long, is_pct_mode, high[i], low[i]);
-                    }
- 
-                    // Pnl and Percentage return delta calculation
-                    if (is_pct_mode) {
-                        dv_perc = trade.daily_pnl_accum ;  // retorno acumulado do período
-                        trade.daily_pnl_accum  = 0.0; // reseta para próximo período diário
-
-                        if (method == "neutral") { // Equilizes based on allocated capital (notional exposure)
-                            double notional_exposure = cap_ref * leverage;
-                            dv_pnl = (dv_perc / 100.0) * notional_exposure;
-                        } else { // Método 'perc' ou outros: PnL financeiro bruto não se aplica em pct_mode
-                            dv_pnl = dv_perc;
-                        }
-                    } else { // Absolute price
-                        double prev_p = trade.daily_pnl_accum;
-                        double curr_p = close[i];
-                    
-                        dv_perc = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
-                        trade.daily_pnl_accum = curr_p;
-
-                        if (method == "neutral") {
-                            double delta_ticks = (curr_p - prev_p) / tick_size;
-                            double pnl_cash_periodic = delta_ticks * tick_val * std::abs(trade.lot_size) * (is_long ? 1.0 : -1.0);
-
-                            dv_pnl = pnl_cash_periodic * trade.scaling_factor;
+                        // Updates MAE/MFE metrics
+                        if (is_daily_res) {
+                            update_mae_mfe(trade, is_long, is_pct_mode, close[i], close[i]);
                         } else {
-                            dv_pnl = dv_perc;
+                            update_mae_mfe(trade, is_long, is_pct_mode, high[i], low[i]);
                         }
+    
+                        // Pnl and Percentage return delta calculation
+                        if (is_pct_mode) {
+                            dv_perc = trade.daily_pnl_accum ;  // retorno acumulado do período
+                            trade.daily_pnl_accum  = 0.0; // reseta para próximo período diário
+
+                            if (method == "neutral") { // Equilizes based on allocated capital (notional exposure)
+                                double notional_exposure = cap_ref * leverage;
+                                dv_pnl = (dv_perc / 100.0) * notional_exposure;
+                            } else { // Método 'perc' ou outros: PnL financeiro bruto não se aplica em pct_mode
+                                dv_pnl = dv_perc;
+                            }
+                        } else { // Absolute price
+                            double prev_p = trade.daily_pnl_accum;
+                            double curr_p = close[i];
+                        
+                            dv_perc = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
+                            trade.daily_pnl_accum = curr_p;
+
+                            if (method == "neutral") {
+                                double delta_ticks = (curr_p - prev_p) / tick_size;
+                                double pnl_cash_periodic = delta_ticks * tick_val * std::abs(trade.lot_size) * (is_long ? 1.0 : -1.0);
+
+                                dv_pnl = pnl_cash_periodic * trade.scaling_factor;
+                            } else {
+                                dv_pnl = dv_perc;
+                            }
+                        }
+
+                        // Dinamic required margin calculation
+                        double current_margin = 0.0;
+                        if (!is_pct_mode) {
+                            current_margin = (close[i] * contract_size * std::abs(trade.lot_size)) / leverage;
+                        } else {
+                            current_margin = cap_ref;
+                        }
+
+                        // Saves latest margin update  to trade for exit_margin as final margin req
+                        trade.exit_margin = current_margin; 
+
+                        // Saves update to structure
+                        daily_results_matrix.push_back({
+                            format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
+                            dv_pnl,
+                            dv_perc,
+                            current_margin,
+                            trade.lot_size,
+                            trade.max_adv_price,
+                            trade.max_fav_price,
+                            trade.trade_id,
+                        });
                     }
-
-                    // Dinamic required margin calculation
-                    double current_margin = 0.0;
-                    if (!is_pct_mode) {
-                        current_margin = (close[i] * contract_size * std::abs(trade.lot_size)) / leverage;
-                    } else {
-                        current_margin = cap_ref;
-                    }
-
-                    // Saves latest margin update  to trade for exit_margin as final margin req
-                    trade.exit_margin = current_margin; 
-
-                    // Saves update to structure
-                    daily_results_matrix.push_back({
-                        format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
-                        dv_pnl,
-                        dv_perc,
-                        current_margin,
-                        trade.lot_size,
-                        trade.max_adv_price,
-                        trade.max_fav_price,
-                        trade.trade_id,
-                    });
                 }
             }
         }
