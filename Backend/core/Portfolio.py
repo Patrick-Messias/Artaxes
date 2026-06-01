@@ -7,7 +7,7 @@ from PortfolioMoneyManager import PortfolioMoneyManager
 from BaseClass import BaseClass, BaseManager
 from Storage import Storage
 from Asset import Asset
-import polars as pl, uuid, sys, os, json
+import polars as pl, uuid, sys, os, json, bisect
 
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
@@ -108,7 +108,7 @@ class Portfolio(BaseClass, BaseManager):
         results={}
         return results
 
-    def _exits(self, idx, step): # Exits positions based on previous data and open only [i] data
+    def _exits(self, idx_datetime): # Exits positions based on previous data and open only [i] data
         temporary_data_cache = {}
 
         # Iterates over active_positions and checks if event="exit" or other exit conditions
@@ -126,7 +126,7 @@ class Portfolio(BaseClass, BaseManager):
 
         return temporary_data_cache
     
-    def _updates(self, idx, step, temp_sim_data_cache): # If position is kept, then updates based on [i] data
+    def _updates(self, idx_datetime, temp_sim_data_cache): # If position is kept, then updates based on [i] data
         
         # Checks and can update lot in each position
 
@@ -134,15 +134,8 @@ class Portfolio(BaseClass, BaseManager):
         
         return True
 
-    def _entries(self, idx_datetime, step): # Enters new positions based on previous data and open only [i] data
+    def _entries(self, idx_datetime): # Enters new positions based on previous data and open only [i] data
         # An update can create a new entry, no need to update a new entry on [i]
-
-        # [pos_key] = {
-        #     "data_type"="",
-        #     "psid_wfid"="",
-        #     "side"="",
-        #     "separate_ls"="",
-        #     "lot_size"=0.0,}
 
         new_entry_candidates = {}
         pmm = self.sm_mm_map["managers"].get("pmm", None)
@@ -152,52 +145,56 @@ class Portfolio(BaseClass, BaseManager):
             print(f"- Not enought margin to open new position - DELETE THIS DEBUG PRINT")
             return False
 
-        for op_name, op_data in self.hierarchy.items():
-            for m_name, m_data in op_data.items():
-                if not m_data.get("active", False): continue
+        # 1. Filters new entry candidates
+        for op_name, _, m_name, _, s_name, _, *_ in self._iter_portfolio_data():
+            m_key = (op_name, m_name)
+            s_key = (op_name, m_name, s_name)
+            s_data = self.hierarchy[m_key]["strats"][s_key]
 
-                for s_name, s_data in m_data.get("strats", {}).items():
-                    if not s_data.get("active", False): continue
-                    trade_update_can_enter = s_data.get("trade_update_can_enter", False)
+            if not s_data.get("active", True): continue
+            trade_update_can_enter = s_data.get("trade_update_can_enter", False)
 
-                    for a_name, a_data in s_data.get("assets", {}).items():
-                        if not a_data.get("active", False): continue
-                        a_key = (op_name, m_name, s_name, a_name)
-                        #asset_candle_ref = 
+            for a_key, a_data in s_data["assets"].items():
+                if not a_data.get("active", True): continue
 
-                        # Creates lista with data for any enabled wf or ps ids
-                        wf_ids = a_data.get("wf_id")
-                        ps_ids = a_data.get("ps_id")
+                # Creates lista with data for any enabled wf or ps ids
+                wf_ids = a_data.get("wf_id")
+                ps_ids = a_data.get("ps_id")
+                side = a_data.get("side", "both")
 
-                        for wf_key, wf_val in wf_ids.items():
-                            if wf_val:
-                                pos_key = (op_name, m_name, s_name, a_name, wf_key)
-                                curr_parset_data = self._get_iter_data(a_key, idx_datetime, wf_key, True)
+                def eval_canditate(target_id, is_wf: bool):
+                    curr_data = self._get_iter_data(a_key, idx_datetime, target_id, is_wf)
 
-                        for ps_key, ps_val in ps_ids:
-                            if ps_val:
-                                pos_key = (op_name, m_name, s_name, a_name, ps_key)
-                                curr_parset_data = self._get_iter_data(a_key, idx_datetime, ps_key, False)
-
-                        # Entry Else checks if event=="update" and can't enter continues
-                        if curr_parset_data and (
-                            curr_parset_data["event"] == "entry" or \
-                            curr_parset_data["event"] == "flash_trade" or \
-                            (curr_parset_data["event"] == "update" and trade_update_can_enter)):
+                    if curr_data and (
+                        curr_data["event"] in ["entry", "flash_trade"] or \
+                        (curr_data["event"] == "update" and trade_update_can_enter)
+                    ):
+                        pos_key = (*a_key, target_id)
+                        new_entry_candidates[pos_key] = {
+                            "trade_data": curr_data,
+                            "a_hry_data": a_data,
+                            "side": side
+                        }
+                
+                for wf_key, wf_val in wf_ids.items():
+                    if wf_val: eval_canditate(wf_key, True)
+                for ps_key, ps_val in ps_ids.items():
+                    if ps_val: eval_canditate(ps_key, False)
                         
-                            # Has valid new entry candidate for this datetime
-                            new_entry_candidates[pos_key] = {
-                                "parset_data": curr_parset_data,
-                                "asset_data": a_data,
-                                #"asset_candle_reference": None,
-                            }
-                        
-        # Validates final candidates and enter trades
-        for can_name, can_data in new_entry_candidates.items():
-            parset_data = can_data["parset_data"]
-            asset_data = can_data["asset_data"]
-            asset_side = asset_data.get("side", "both")
+        # 2. Validates final candidates and enter trades
+        for can_key, can_data in new_entry_candidates.items():
+            trade_data = can_data["trade_data"]
+            a_hry_data = can_data["a_hry_data"]
+            event = trade_data["event"]
+            asset = trade_data["asset"]
+            print(f"Candidate found in {self.current_idx}")
 
+            asset_meta = self.global_assets[asset].ASSET_PARAMS
+            print(asset_meta)
+
+
+            # || ================================ || Market Analisys || ================================ ||
+            
             # Ranks final candidate ranking, prob based on weights
 
             # Checks best portfolio combination and margin
@@ -239,14 +236,13 @@ class Portfolio(BaseClass, BaseManager):
             step_pnl_nominal_total =  0.0
 
             #||=====================================================================================||#
-            
-            temp_sim_data_cache = {}
 
-            # Gets active_positions data for [i]
-            for pos in self.active_positions:
-                temp_sim_data_cache = self._exits(i, step_dt)
+            # Exits
 
-            # Gets hierarchy data for [i]
+            # Entries
+            self._entries(step_dt)
+
+            # Updates
 
             #||=====================================================================================||#
             
@@ -382,8 +378,10 @@ class Portfolio(BaseClass, BaseManager):
         if is_wf:
             asset_data = self.storage.load(key)
             wf_map = asset_data.get("wf")
-            ps_id = self._get_psid_with_wfid(key, wf_map, psid_wfid, step_datetime)
-            if not ps_id: return None
+            ps_id = self._get_psid_with_wfid(key, step_datetime, wf_map, psid_wfid)
+            if not ps_id: 
+                #print(f"    < [Portfolio._get_iter_data] Error unable to extract ps_id form wf_id")
+                return None
         else:
             ps_id = psid_wfid
             
@@ -395,11 +393,14 @@ class Portfolio(BaseClass, BaseManager):
 
         if pos_key not in self.iter_data_cache:
             asset_data = self.storage.load(key)
-            if not asset_data: return None
+            if not asset_data: 
+                print(f"    < [Portfolio._get_iter_data] Error loading data from storage.load, None")
+                return None
             
             timeline_df = asset_data.get("timeline")
             if timeline_df is None or timeline_df.is_empty():
                 self.iter_data_cache[pos_key] = {}
+                print(f"    < [Portfolio._get_iter_data] Error getting timeline from asset_data")
                 return None
                 
             # Filters correct ps_id only unce
@@ -726,32 +727,53 @@ class Portfolio(BaseClass, BaseManager):
 
         return True
 
-    # Gets ps_id with wf_id best_param
+    # Gets ps_id with wf_id best_param [>= initial IS optmization param and <= current datetime]
     def _get_psid_with_wfid(self, key, step_datetime, wf_map, wfid):
         
         if wf_map is None or wf_map.is_empty() or wfid is None:
-            print(f"    < [Portfolio._get_psid_with_wfid] Error invalid input: wf_map / wfid")
             return None
         
         pos_key = (*key, wfid)
 
-        # Creates {datetime: ps_id} map only unce in memory
+        # Creates {datetime: ps_id} map only once in memory
         if not hasattr(self, '_wf_map_cache'): self._wf_map_cache = {}
-
+        
         if pos_key not in self._wf_map_cache:
-            wf_map_filtered = wf_map.filter(pl.col("wf_id") == wfid)
+            # Garante o cast correto da data
+            if wf_map.schema["datetime"] not in [pl.Datetime, pl.Date]:
+                wf_map = wf_map.with_columns([
+                    pl.coalesce([
+                        pl.col("datetime").cast(pl.Utf8).str.to_datetime("%Y%m%d%H%M%S", strict=False),
+                        pl.col("datetime").cast(pl.Int64).cast(pl.Datetime("us"))
+                    ])
+                ])
 
-            # Zips columns converting into python dict
+            wf_map_filtered = (
+                wf_map.filter(pl.col("wf_id") == wfid)
+                .drop_nulls("datetime")
+                .sort("datetime")
+            )
+
             dates = wf_map_filtered["datetime"].to_list()
             params = wf_map_filtered["best_param"].to_list()
-            self._wf_map_cache[pos_key] = dict(zip(dates, params)) 
 
-        # Instant O(1) search
-        return self._wf_map_cache[pos_key].get(step_datetime)
+            self._wf_map_cache[pos_key] = (dates, params)
 
-
-
-    
+        # Gets cache lists
+        dates, params = self._wf_map_cache[pos_key]
+        if not dates: 
+            return None
+        
+        # Binary search to find date <= step_datetime
+        idx = bisect.bisect_right(dates, step_datetime) - 1
+        
+        # BLINDAGEM DO PERÍODO IN-SAMPLE:
+        if idx < 0:
+            # O step_datetime atual é ANTES da primeira atualização (In-Sample / Warm-up).
+            # Retorna None para impedir qualquer operação neste ativo com este WF.
+            return None
+        
+        return params[idx]
 
     def _init_hierarchy(self):
         models_found = {(op, m) for op, _, m, *_ in self._iter_portfolio_data()}
@@ -803,7 +825,7 @@ class Portfolio(BaseClass, BaseManager):
                     "both":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 1.0},
                     "long":        {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
                     "short":       {"score": 0.0, "exposure": 0.0, "capital": 0.0, "weight": 0.0},
-                    "wf_id":       {}, # 12_12_12=True
+                    "wf_id":       {"12_12_12": True}, # NOTE REMOVER, DEVE SER INPUT USUARIO 12_12_12=True
                     "ps_id":       {}  # param1-50_param2-2.0=False
                 }
 

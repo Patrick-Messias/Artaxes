@@ -1,4 +1,7 @@
 """
+MODEL
+
+STRAT
 Long Setup
 Entry
 - Close > HighD.shift(1)

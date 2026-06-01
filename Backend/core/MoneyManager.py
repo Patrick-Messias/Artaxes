@@ -46,6 +46,11 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
     def __init__(self, mm_params: MoneyManagerParams):
         super().__init__()
         self.name = mm_params.name
+
+        self.capital = mm_params.capital
+        self.max_capital_exposure = mm_params.max_capital_exposure
+        self.available_margin = self.capital * self.max_capital_exposure 
+
         self.reb_frequency = mm_params.reb_frequency
         self.reb_lookback = mm_params.reb_lookback
         self.reb_lookback_period_type = mm_params.reb_lookback_period_type
