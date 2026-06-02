@@ -94,8 +94,13 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
 
 #||=========================================================================================||
 
-    
+    #def calculate_position_sizing(self, min_lot, min_margin_required):
 
+    def calculate_lot_size(self, min_lot, min_margin_required, allocated_capital, leverage):
+        lot_mult = allocated_capital / (min_margin_required / leverage)
+        return lot_mult * min_lot
+
+#||=========================================================================================||
 
 
     # def __repr__(self):

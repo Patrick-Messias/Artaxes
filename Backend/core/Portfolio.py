@@ -85,12 +85,12 @@ class Portfolio(BaseClass, BaseManager):
         self.global_datetime_prefix = portfolio_params.global_datetime_prefix
 
         self.datetime_timeline = portfolio_params.datetime_timeline
-
         self.hierarchy: dict={}
         self.sim_data: dict= {}
         self.iter_data_cache: dict={}
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
 
+        self.portfolio_returns: dict={}
 
     # - Por enquanto esquecer PSM e MMM no nível Portfolio e Model, apenas fazer o SSM
     # - Depois gerar o código para Saida - Entrada - Update
@@ -104,10 +104,6 @@ class Portfolio(BaseClass, BaseManager):
     #meio da operação? Dos portfolios que poderia formar com active_positions + novas entradas, 
     #qual é o melhor? se confirmar entrada então adiciona para active_positions
         
-    def _calc_trade_current_results(self):
-        results={}
-        return results
-
     def _exits(self, idx_datetime): # Exits positions based on previous data and open only [i] data
         temporary_data_cache = {}
 
@@ -117,8 +113,6 @@ class Portfolio(BaseClass, BaseManager):
                 op_name, m_name, s_name, a_name, psid_wfid = pos_key
                 a_key = (op_name, m_name, s_name, a_name)
 
-                pos_data = self._populate_sim_data(a_key, idx, idx, pos_obj["side"], pos_obj["data_type"], pos_obj["psid_wfid"])
-                temporary_data_cache[pos_key] = pos_data
 
                 # Checks exit by event
 
@@ -136,20 +130,25 @@ class Portfolio(BaseClass, BaseManager):
 
     def _entries(self, idx_datetime): # Enters new positions based on previous data and open only [i] data
         # An update can create a new entry, no need to update a new entry on [i]
-
-        new_entry_candidates = {}
+        psm = self.sm_mm_map["managers"].get("psm", None)
         pmm = self.sm_mm_map["managers"].get("pmm", None)
-
+   
         # Checks if there's still margin and space to open new positions
         if pmm and pmm.available_margin <= 0:
             print(f"- Not enought margin to open new position - DELETE THIS DEBUG PRINT")
             return False
+        
+        new_entry_candidates = []
 
-        # 1. Filters new entry candidates
+        # Filters new entry candidates
         for op_name, _, m_name, _, s_name, _, *_ in self._iter_portfolio_data():
             m_key = (op_name, m_name)
             s_key = (op_name, m_name, s_name)
             s_data = self.hierarchy[m_key]["strats"][s_key]
+            m_data = self.hierarchy[m_key]
+
+            model_weight = m_data.get("weight", 1.0)
+            strat_weight = s_data.get("weight", 1.0) 
 
             if not s_data.get("active", True): continue
             trade_update_can_enter = s_data.get("trade_update_can_enter", False)
@@ -157,10 +156,15 @@ class Portfolio(BaseClass, BaseManager):
             for a_key, a_data in s_data["assets"].items():
                 if not a_data.get("active", True): continue
 
+                a_name = a_key[-1]
+                asset_obj = self.global_assets.get(a_name)
+                if not asset_obj: continue
+
                 # Creates lista with data for any enabled wf or ps ids
                 wf_ids = a_data.get("wf_id")
                 ps_ids = a_data.get("ps_id")
-                side = a_data.get("side", "both")
+                a_side = a_data.get("side", "both")
+                a_separate_ls = a_data.get("separate_ls", False)
 
                 def eval_canditate(target_id, is_wf: bool):
                     curr_data = self._get_iter_data(a_key, idx_datetime, target_id, is_wf)
@@ -169,41 +173,74 @@ class Portfolio(BaseClass, BaseManager):
                         curr_data["event"] in ["entry", "flash_trade"] or \
                         (curr_data["event"] == "update" and trade_update_can_enter)
                     ):
+                        lot_size = curr_data.get("lot_size")
+                        trade_direction = "long" if lot_size > 0 else "short"
+
+                        # Determines correct weight
+                        if a_separate_ls and a_side == "both":
+                            asset_weight = a_data.get(trade_direction, 1.0)
+                        else:
+                            asset_weight = a_data.get(a_side, 1.0)
+                        trade_weight = model_weight * strat_weight * asset_weight
+
                         pos_key = (*a_key, target_id)
-                        new_entry_candidates[pos_key] = {
+
+                        # Already builds final list to sort
+                        new_entry_candidates.append({
+                            "key": pos_key,
                             "trade_data": curr_data,
-                            "a_hry_data": a_data,
-                            "side": side
-                        }
+                            "asset_obj": asset_obj,
+                            "trade_weight": trade_weight,
+                            "margin_required": curr_data.get("margin_required"),
+                            "event": curr_data["event"],
+                        })
                 
                 for wf_key, wf_val in wf_ids.items():
                     if wf_val: eval_canditate(wf_key, True)
                 for ps_key, ps_val in ps_ids.items():
                     if ps_val: eval_canditate(ps_key, False)
                         
-        # 2. Validates final candidates and enter trades
-        for can_key, can_data in new_entry_candidates.items():
-            trade_data = can_data["trade_data"]
-            a_hry_data = can_data["a_hry_data"]
-            event = trade_data["event"]
-            asset = trade_data["asset"]
-            print(f"Candidate found in {self.current_idx}")
+        # No new offers
+        if not new_entry_candidates:
+            return True
+        
+        # Orders by: (1) Highest weight - (2) Lowest margin
+        new_entry_candidates.sort(key=lambda x: (x["weight"], -x["margin_required"]), reverse=True)
 
-            asset_meta = self.global_assets[asset].ASSET_PARAMS
-            print(asset_meta)
+        # First ranks and filters entries
+        for can in new_entry_candidates:
+            c_key = can["key"]
+            event = can["event"]
+            margin_required = can["margin_required"]
+            trade_data = can["trade_data"]
+            asset_obj = can["asset_obj"]
+            a_leverage = getattr(asset_obj, "leverage", 1.0)
+            min_trade_lot_size = trade_data["lot_size"]
 
+            # Calculates Position and Lot Size for Allocated Capital
+            # Teria que rolar MM de Portfolio até Strat e ir reduzindo os weights
+            lot_size = pmm.calculate_lot_size(min_trade_lot_size, margin_required, margin_required, a_leverage)
 
-            # || ================================ || Market Analisys || ================================ ||
-            
-            # Ranks final candidate ranking, prob based on weights
+            if pmm and pmm.available_margin >= margin_required:
+                if event in ["entry", "update"]: # NOTE obs: se update dependendo pode ou não contar o pnl/perc agora
+                    self.active_positions[c_key] = {
+                        "entry_datetime": idx_datetime,
+                        "allocated_margin": margin_required,
+                        "lot_size": lot_size,
+                        "pnl": 0.0,
+                        "perc": 0.0,
+                        "portfolio_weight": can["weight"],
+                        "event": "entry",
+                        "exit_datetime": None,
+                    }
+                    pmm.available_margin -= margin_required
 
-            # Checks best portfolio combination and margin
-
-            # Checks Order and Executes entries, adds to active_positions and subtracts margin
-            # - different entries timeframes and asset.datetime_candle_references bias ?
-
-            # Adds to logs
-
+                # Handles case of flash trades, where they are opened and closed at same candle datetime
+                elif event == "flash_trade":
+                    self.portfolio_returns[c_key] = trade_data["perc"] * lot_size
+                    continue
+            else: 
+                continue
 
         return True
     
@@ -1207,8 +1244,9 @@ if __name__ == "__main__":
     eurusd = assets.get("EURUSD")
     gbpusd = assets.get("GBPUSD")
     usdjpy = assets.get("USDJPY")
+    winfut = assets.get("WIN")
     
-    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
+    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
     psm = PortfolioSystemManager(PortfolioSystemManagerParams(
         reb_frequency="weekly",
@@ -1242,6 +1280,7 @@ if __name__ == "__main__":
     ))
 
     # ── Model level ───────────────────────────────────────────────────────────
+
     msm = ModelSystemManager(ModelSystemManagerParams(
         reb_frequency="weekly",
         params={
@@ -1263,6 +1302,7 @@ if __name__ == "__main__":
     ))
 
     # ── Strat level ───────────────────────────────────────────────────────────
+
     ssm = StratSystemManager(StratSystemManagerParams(
         params={
             "param1": range(21, 21+1, 1),

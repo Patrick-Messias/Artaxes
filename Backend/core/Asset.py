@@ -603,9 +603,9 @@ class Asset:
         """Timeframes disponíveis em cache."""
         return list(self._cache.keys())
 
-    def __repr__(self) -> str:
-        return (f"<Asset {self.name} | {self.type}/{self.market} | "
-                f"tick={self.tick} | date: {self.date_start or 'all'} → {self.date_end or 'all'}>")
+    # def __repr__(self) -> str:
+    #     return (f"<Asset {self.name} | {self.type}/{self.market} | "
+    #             f"tick={self.tick} | date: {self.date_start or 'all'} → {self.date_end or 'all'}>")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # CONVERT FOLDER  (utility standalone)
