@@ -344,6 +344,8 @@ _Python3_INCLUDE_DIR:INTERNAL=C:/Program Files/Python311/include
 //Python3 Properties
 _Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;11;9;64;<none>;cp311-win_amd64;;C:\Program Files\Python311\Lib;C:\Program Files\Python311\Lib;C:\Program Files\Python311\Lib\site-packages;C:\Program Files\Python311\Lib\site-packages
 _Python3_INTERPRETER_SIGNATURE:INTERNAL=00b829ae7a8766e20dddd916580e15bf
+//Interpreter reason failure
+_Python3_Interpreter_REASON_FAILURE:INTERNAL=
 //Path to a library.
 _Python3_LIBRARY_DEBUG:INTERNAL=C:/Program Files/Python311/libs/python311_d.lib
 _Python3_LIBRARY_RELEASE:INTERNAL=C:/Program Files/Python311/libs/python311.lib

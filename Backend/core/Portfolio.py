@@ -90,7 +90,7 @@ class Portfolio(BaseClass, BaseManager):
         self.iter_data_cache: dict={}
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
 
-        self.portfolio_returns: dict={}
+        self.portfolio_returns: list=[]
 
     # - Por enquanto esquecer PSM e MMM no nível Portfolio e Model, apenas fazer o SSM
     # - Depois gerar o código para Saida - Entrada - Update
@@ -104,38 +104,59 @@ class Portfolio(BaseClass, BaseManager):
     #meio da operação? Dos portfolios que poderia formar com active_positions + novas entradas, 
     #qual é o melhor? se confirmar entrada então adiciona para active_positions
         
-    def _exits(self, idx_datetime): # Exits positions based on previous data and open only [i] data
-        temporary_data_cache = {}
+    def _exits_and_updates(self, idx_datetime): # Exits positions based on previous data and open only [i] data
+
+        # - Um ledger que registra as posições, não precisa atualizar a cada dt
+        # - Um retorno completo onde cada dt precisa me dizer, \
+        #se tenho posições, quais contribuiram o que para o tempo atual
 
         # Iterates over active_positions and checks if event="exit" or other exit conditions
         if self.active_positions: 
-            for pos_key, pos_obj in self.active_positions.items(): # pos key = [op, m, s, a, p]
-                op_name, m_name, s_name, a_name, psid_wfid = pos_key
-                a_key = (op_name, m_name, s_name, a_name)
+            for pos_key in list(self.active_positions.keys()): 
+                pos_obj = self.active_positions[pos_key]
+
+                p_name, m_name, s_name, a_name, target_id = pos_key
+                a_key = (p_name, m_name, s_name, a_name)
+                curr_trade_data = self._get_iter_data(a_key, idx_datetime, target_id, pos_obj["is_wf"])
+
+                # self.active_positions[c_key] = {
+                #     "entry_datetime": idx_datetime,
+                #     "lot_size": lot_size,
+                #     "allocated_margin": actual_margin_required,}
+
+                # self.portfolio_returns.append({
+                #     "c_key": c_key,
+                #     "datetime": idx_datetime,
+                #     "allocated_margin": actual_margin_required,
+                #     "lot_size": lot_size,
+                #     "pnl": pnl,
+                #     "perc": perc,
+                #     "portfolio_weight": can["weight"],
+                #     "event": "entry",
+                #     "exit_datetime": None,})
+
+                # Checks for Exits
+                #if curr_trade_data and curr_trade_data["event"] == "exit":
+
+                # Checks for Updates
+                if curr_trade_data and curr_trade_data["event"] == "update":
+                    current_margin = ()
 
 
-                # Checks exit by event
 
-                # Checks exit by profit or loss limit
-
-        return temporary_data_cache
-    
-    def _updates(self, idx_datetime, temp_sim_data_cache): # If position is kept, then updates based on [i] data
-        
-        # Checks and can update lot in each position
-
-        # If event=update, adds trade_matrix update to portfolio_returns
-        
+                if curr_trade_data and curr_trade_data["event"] == "entry": 
+                    print(f"    < [Portfolio._exits_and_updates] Error this shouldn't have happened")
+                    print(cabeza de huevo) # type: ignore
+ 
         return True
 
     def _entries(self, idx_datetime): # Enters new positions based on previous data and open only [i] data
         # An update can create a new entry, no need to update a new entry on [i]
-        psm = self.sm_mm_map["managers"].get("psm", None)
         pmm = self.sm_mm_map["managers"].get("pmm", None)
    
         # Checks if there's still margin and space to open new positions
         if pmm and pmm.available_margin <= 0:
-            print(f"- Not enought margin to open new position - DELETE THIS DEBUG PRINT")
+            print(f"- Not enought margin to open new position - DELETE THIS DEBUG PRINT AFTER") # NOTE
             return False
         
         new_entry_candidates = []
@@ -181,7 +202,7 @@ class Portfolio(BaseClass, BaseManager):
                             asset_weight = a_data.get(trade_direction, 1.0)
                         else:
                             asset_weight = a_data.get(a_side, 1.0)
-                        trade_weight = model_weight * strat_weight * asset_weight
+                        trade_weight = model_weight * strat_weight * asset_weight["weight"]
 
                         pos_key = (*a_key, target_id)
 
@@ -190,9 +211,10 @@ class Portfolio(BaseClass, BaseManager):
                             "key": pos_key,
                             "trade_data": curr_data,
                             "asset_obj": asset_obj,
-                            "trade_weight": trade_weight,
+                            "weight": trade_weight,
                             "margin_required": curr_data.get("margin_required"),
                             "event": curr_data["event"],
+                            "is_wf": is_wf,
                         })
                 
                 for wf_key, wf_val in wf_ids.items():
@@ -211,33 +233,62 @@ class Portfolio(BaseClass, BaseManager):
         for can in new_entry_candidates:
             c_key = can["key"]
             event = can["event"]
-            margin_required = can["margin_required"]
+            min_margin_required = can["margin_required"]
             trade_data = can["trade_data"]
             asset_obj = can["asset_obj"]
-            a_leverage = getattr(asset_obj, "leverage", 1.0)
-            min_trade_lot_size = trade_data["lot_size"]
 
-            # Calculates Position and Lot Size for Allocated Capital
-            # Teria que rolar MM de Portfolio até Strat e ir reduzindo os weights
-            lot_size = pmm.calculate_lot_size(min_trade_lot_size, margin_required, margin_required, a_leverage)
+            pnl = trade_data["pnl"]
+            perc = trade_data["perc"]
+            min_trade_lot_size = trade_data["lot_size"] 
+            a_lot_step = getattr(asset_obj, "lot_step", min_trade_lot_size)
 
-            if pmm and pmm.available_margin >= margin_required:
+            # Capital 
+            allocated_capital = pmm.calculate_position_size(can["weight"])
+
+            # Lot
+            lot_size = pmm.calculate_lot_size(min_trade_lot_size, min_margin_required, allocated_capital, a_lot_step)
+            
+            # Recalculated real margin required for actual calculated lot_size
+            actual_margin_required = (lot_size / min_trade_lot_size) * min_margin_required
+
+            if pmm.available_margin >= actual_margin_required:
                 if event in ["entry", "update"]: # NOTE obs: se update dependendo pode ou não contar o pnl/perc agora
                     self.active_positions[c_key] = {
                         "entry_datetime": idx_datetime,
-                        "allocated_margin": margin_required,
                         "lot_size": lot_size,
-                        "pnl": 0.0,
-                        "perc": 0.0,
+                        "allocated_margin": actual_margin_required,
+                        "is_wf": can["is_wf"]
+                    }
+
+                    self.portfolio_returns.append({
+                        "c_key": c_key,
+                        "datetime": idx_datetime,
+                        "allocated_margin": actual_margin_required,
+                        "lot_size": lot_size,
+                        "pnl": pnl,
+                        "perc": perc,
                         "portfolio_weight": can["weight"],
                         "event": "entry",
                         "exit_datetime": None,
-                    }
-                    pmm.available_margin -= margin_required
+                    })
+
+                    pmm.available_margin -= actual_margin_required
+                    pmm.allocated_margin += actual_margin_required
+                    pmm.update_states(self.active_positions)
 
                 # Handles case of flash trades, where they are opened and closed at same candle datetime
                 elif event == "flash_trade":
-                    self.portfolio_returns[c_key] = trade_data["perc"] * lot_size
+                    self.portfolio_returns.append({
+                        "c_key": c_key,
+                        "entry_datetime": idx_datetime,
+                        "allocated_margin": actual_margin_required,
+                        "lot_size": lot_size,
+                        "pnl": pnl,
+                        "perc": perc,
+                        "portfolio_weight": can["weight"],
+                        "event": "flash_trade",
+                        "exit_datetime": idx_datetime,
+                    })
                     continue
             else: 
                 continue
@@ -257,7 +308,6 @@ class Portfolio(BaseClass, BaseManager):
         has_pnl = any("pnls" in str(key).lower() for key in self.sim_data.keys())
         has_wf = any("wf_pnls" in str(key).lower() for key in self.sim_data.keys())
         portfolio_simulation_with_backtest_results = (has_pnl or has_wf)
-        update_func_to_use = self._update_pos_with_backtest_ret if portfolio_simulation_with_backtest_results else self._update_pos_with_assets_ret
 
         # SM and MM Pre-Compute Metrics, Indicators and Rebalance Schedule
         params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch \
@@ -268,18 +318,16 @@ class Portfolio(BaseClass, BaseManager):
             self.current_idx = i
 
             # Init step data
-            self.portfolio_returns[step_dt] = {"assets": {}}
             step_perc_total        =     0.0
             step_pnl_nominal_total =  0.0
 
             #||=====================================================================================||#
 
-            # Exits
+            # Exits and Updates
+            self._exits_and_updates(step_dt)
 
             # Entries
             self._entries(step_dt)
-
-            # Updates
 
             #||=====================================================================================||#
             
@@ -362,50 +410,6 @@ class Portfolio(BaseClass, BaseManager):
                         self.hierarchy = smm.main(i, dt, s_key)
                         #print("smm")
         return True
-
-    def _update_pos_with_backtest_ret(self, step_dt):
-        for idf, pos_info in self.active_positions.items():
-            # ifs       = (op, mod, strat, asset)
-            # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
-            tid = pos_info["id"]
-            wht = pos_info["weight"] # Defined by Money Manager (capital allocated)
-
-            asset_data = None# instance.get(idf, {})
-
-            # Lógic to decide where PnL comes from (wf or pnl_matrix)
-            if "wf_pnls" in asset_data and tid in asset_data["wf_pnls"]:
-                inst_ret = asset_data["wf_pnls"][tid]
-            else: 
-                inst_ret = asset_data.get("pnls", {}).get(tid, 0.0)
-            inst_lot = asset_data.get("lots", {}).get(tid, 1.0)
-
-            # perc
-            trade_perc = inst_ret * inst_lot    # Raw trade percentage weighted with lot_size
-            pos_perc_port = trade_perc * wht    # trade percentage in relation to portfolio
-            step_perc_total += pos_perc_port    # perc accumulated in this datetime
-
-            # PnL
-            pos_pnl_port = self.sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
-            step_pnl_nominal_total += pos_pnl_port # pnl accumulated in this datetime
-
-            # Strat Returns
-            self.portfolio_returns[step_dt][idf] = {
-                "trade_perc": trade_perc,
-                "pos_perc_port": pos_perc_port,
-                "pos_pnl_port": pos_pnl_port,
-                "weight": wht
-            }
-
-        # Updates global
-        self.sim_current_equity += step_pnl_nominal_total
-        self.portfolio_returns[step_dt].update({
-            "portfolio_perc": step_perc_total,
-            "portfolio_pnl": step_pnl_nominal_total,
-            "equity": self.sim_current_equity
-        })
-
-    def _update_pos_with_assets_ret(self, step_dt):
-        pass
 
     # ── Data Handling ───────────────────────────────────────────────
 
@@ -1423,6 +1427,58 @@ if __name__ == "__main__":
     ))
 
     portfolio._run()
+
+
+    """
+    Portfolio uses only stock prices
+
+    update_func_to_use = self._update_pos_with_backtest_ret if portfolio_simulation_with_backtest_results else self._update_pos_with_assets_ret
+
+    def _update_pos_with_backtest_ret(self, step_dt):
+        for idf, pos_info in self.active_positions.items():
+            # ifs       = (op, mod, strat, asset)
+            # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
+            tid = pos_info["id"]
+            wht = pos_info["weight"] # Defined by Money Manager (capital allocated)
+
+            asset_data = None# instance.get(idf, {})
+
+            # Lógic to decide where PnL comes from (wf or pnl_matrix)
+            if "wf_pnls" in asset_data and tid in asset_data["wf_pnls"]:
+                inst_ret = asset_data["wf_pnls"][tid]
+            else: 
+                inst_ret = asset_data.get("pnls", {}).get(tid, 0.0)
+            inst_lot = asset_data.get("lots", {}).get(tid, 1.0)
+
+            # perc
+            trade_perc = inst_ret * inst_lot    # Raw trade percentage weighted with lot_size
+            pos_perc_port = trade_perc * wht    # trade percentage in relation to portfolio
+            step_perc_total += pos_perc_port    # perc accumulated in this datetime
+
+            # PnL
+            pos_pnl_port = self.sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
+            step_pnl_nominal_total += pos_pnl_port # pnl accumulated in this datetime
+
+            # Strat Returns
+            self.portfolio_returns[step_dt][idf] = {
+                "trade_perc": trade_perc,
+                "pos_perc_port": pos_perc_port,
+                "pos_pnl_port": pos_pnl_port,
+                "weight": wht
+            }
+
+        # Updates global
+        self.sim_current_equity += step_pnl_nominal_total
+        self.portfolio_returns[step_dt].update({
+            "portfolio_perc": step_perc_total,
+            "portfolio_pnl": step_pnl_nominal_total,
+            "equity": self.sim_current_equity
+        })
+
+    def _update_pos_with_assets_ret(self, step_dt):
+        pass
+    
+    """
 
     """
     PCA-Regime-Adjusted Momentum (PCA-RAM)

@@ -7,8 +7,7 @@ MMM (Model Money Management): define quanto cada estratégia do modelo recebe.
 PMM (Portfolio Money Management): define quanto cada modelo recebe do portfólio.
 """
 
-import polars as pl
-import uuid
+import polars as pl, uuid, math
 from typing import Literal, Dict, Optional, Callable, List
 from dataclasses import dataclass, field
 from Indicator import Indicator
@@ -48,8 +47,13 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
         self.name = mm_params.name
 
         self.capital = mm_params.capital
+
+        self.cash = self.capital
         self.max_capital_exposure = mm_params.max_capital_exposure
-        self.available_margin = self.capital * self.max_capital_exposure 
+        self.allocated_margin = 0.0
+
+        self.total_equity = self.cash + self.allocated_margin + 0.0
+        self.available_margin = self.total_equity * self.max_capital_exposure - self.allocated_margin
 
         self.reb_frequency = mm_params.reb_frequency
         self.reb_lookback = mm_params.reb_lookback
@@ -94,11 +98,28 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
 
 #||=========================================================================================||
 
-    #def calculate_position_sizing(self, min_lot, min_margin_required):
+    def update_states(self, active_positions):
+        # Updates Equity and Margin available based on pnl
+        floating_pnl = sum(pos.get("pnl", 0.0) for pos in active_positions.values())
+        self.total_equity = self.cash + self.allocated_margin + floating_pnl
+        self.available_margin = (self.total_equity * self.max_capital_exposure) - self.allocated_margin
 
-    def calculate_lot_size(self, min_lot, min_margin_required, allocated_capital, leverage):
-        lot_mult = allocated_capital / (min_margin_required / leverage)
-        return lot_mult * min_lot
+    def calculate_position_size(self, global_weight):
+        # Calculates nominal financial capital for candidate in $
+        return self.total_equity * global_weight
+
+    def calculate_lot_size(self, min_lot, min_margin_required, allocated_capital, lot_step):
+        # Converts financial capital in operational lot size
+        if min_margin_required <= 0:
+            return min_lot
+        
+        # /leverage already done in cpp backtester for min_lot
+        lot_mult = allocated_capital / min_margin_required
+        ideal_lot_raw = lot_mult * min_lot
+
+        ideal_lot = math.floor(ideal_lot_raw / lot_step) * lot_step
+
+        return max(ideal_lot, min_lot) # Only >= minimum lot size
 
 #||=========================================================================================||
 
