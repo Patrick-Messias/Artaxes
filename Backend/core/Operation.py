@@ -570,17 +570,17 @@ class Operation(BaseClass):
 
                     row_count = wfm_con.execute("SELECT COUNT(*) FROM wfm_raw").fetchone()[0]
 
-                    if row_count > 0:
-                        # Extracts DuckDB data already in final format for parquet
+                    long_matrix = None
+                    if row_count > 0: # Extracts DuckDB data already in final format for parquet
                         long_matrix = self._process_wfm_from_duckdb(wfm_con)
 
-                        # Saves using new format
-                        self._save_asset_results(
-                            m_name=model_name,
-                            s_name=strat_name,
-                            a_name=asset_name,
-                            matrix_df=long_matrix
-                        )
+                    # Saves using new format
+                    self._save_asset_results(
+                        m_name=model_name,
+                        s_name=strat_name,
+                        a_name=asset_name,
+                        matrix_df=long_matrix
+                    )
 
                     wfm_con.close()
                     if os.path.exists(wfm_db_path): os.remove(wfm_db_path)
@@ -790,9 +790,9 @@ class Operation(BaseClass):
             batch_df = pl.DataFrame(wfm_col) 
             wfm_con.execute("INSERT INTO wfm_raw SELECT * FROM batch_df")
 
-    def _save_asset_results(self, m_name, s_name, a_name, matrix_df):
+    def _save_asset_results(self, m_name, s_name, a_name, matrix_df, default_path="Backend/results"):
         from Storage import Storage
-        storage = Storage()
+        storage = Storage(default_path)
 
         # Salva a matriz no formato vertical (Long Format)
         # Se o seu storage.save_matrix_data exigir dois DFs, recomendo 
@@ -1441,15 +1441,15 @@ class Operation(BaseClass):
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        #self._operation()
+        self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
         print(f"\n>>> III - Pos-Processing, Saving and Cleaning <<<")
-        #self._save_and_clean()
+        self._save_and_clean()
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        #self._run_walkforward(True)
+        self._run_walkforward(True)
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()
@@ -1852,12 +1852,12 @@ if __name__ == "__main__":
                 wf_selection_logic='highest_stable', wf_returns_mode='selected'
             ),
             execution_settings=ExecutionSettings(hedge=True, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
-                                                 order_type='market', limit_order_base_calc_ref_price='open', 
-                                                 slippage=0.0, commission=0.0, # * Tick 
-                                                 day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
-                                                 day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
-                                                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
-                                                 backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
+                order_type='market', limit_order_base_calc_ref_price='open', 
+                slippage=0.0, commission=0.0, # * Tick 
+                day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
+                day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
+                fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
+                backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
             strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
                 sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
                 sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
@@ -1881,7 +1881,7 @@ if __name__ == "__main__":
             execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                 order_type='market', limit_order_base_calc_ref_price='open', 
                 slippage=0.0, commission=0.0, # * Tick 
-                day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
+                day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                 day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                 backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),

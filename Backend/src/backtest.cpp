@@ -378,7 +378,7 @@ SimulationOutput Backtest::run_simulation(
                     // Optinal fin commission
                     // pnl_cash -= comission * std::abs(t.lot_size);
 
-                    final_pnl_cash = pnl_cash * t.scaling_factor;
+                    final_pnl_cash = pnl_cash ;//* t.scaling_factor;
                 } else {
                     final_pnl_cash = final_pnl_perc;
                 }
@@ -445,7 +445,7 @@ SimulationOutput Backtest::run_simulation(
                 mm_context, asset_context, idx, temp_cumulative_pnl, fast_pool);
             t.capital_at_entry = capital_at_entry;
 
-            t.scaling_factor = lr.scaling_factor;
+            //t.scaling_factor = lr.scaling_factor;
             t.margin_required = lr.required_margin;
  
             t.max_fav_price  = is_pct_mode ? 0.0 : fill;
@@ -695,7 +695,7 @@ SimulationOutput Backtest::run_simulation(
                             Trade t; t.trade_id=generate_id(); t.asset=asset_name; t.path=trade_path;
                             t.entry_price=target; t.status="pending";
                             t.entry_datetime = format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]); //{ auto _s=make_dt_str(i); std::memcpy(t.entry_datetime,_s.c_str(),std::min(_s.size()+1,sizeof(t.entry_datetime))); }
-                            t.bars_held=0; t.lot_size=is_long?1.0:-1.0; t.exit_reason=pos_type;
+                            t.bars_held=0; t.lot_size=is_long?asset_context.min_lot:-asset_context.min_lot; t.exit_reason=pos_type;
                             pending_orders.push_back(std::move(t));
                         }
                     };
@@ -803,9 +803,9 @@ SimulationOutput Backtest::run_simulation(
 
                             if (method == "neutral") {
                                 double delta_ticks = (curr_p - prev_p) / tick_size;
-                                double pnl_cash_periodic = delta_ticks * tick_val * std::abs(trade.lot_size) * (is_long ? 1.0 : -1.0);
+                                double pnl_cash_periodic = delta_ticks * tick_val * trade.lot_size ;//std::abs(trade.lot_size) * (is_long ? 1.0 : -1.0);
 
-                                dv_pnl = pnl_cash_periodic * trade.scaling_factor;
+                                dv_pnl = pnl_cash_periodic; //dv_pnl = pnl_cash_periodic * trade.scaling_factor;
                             } else {
                                 dv_pnl = dv_perc;
                             }

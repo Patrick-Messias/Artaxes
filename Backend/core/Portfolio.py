@@ -28,48 +28,6 @@ class PortfolioParams():
 
     datetime_timeline: set=field(default_factory=set)
 
-
-
-    # XXX - ADICIONAR opção para pegar apenas 1 valor [i] do ind
-    # XXX - Gerar nova DEBUG para testar todas as configurações do BaseClass para os indicadores
-    # XXX - Eliminar todos envios de indicador_pool e portfolio_returns, usar self.portfolio.indicator_pool e self.portfolio.portfolio_returns
-    # XXX - Consolidar todo tipo de SM/MM para sm_mm_map, eliminar do self do portfolio
-    # XXX - Transformar hierarchy em self.hierarchy no nível Portfolio.py, assim com self.indicator_pool
-    
-    # XXX - Gerar mais estratégias mockup para testar
-    
-
-#                                                                                               I M P O R T A N T E   L E R
-    
-#     - No backtest de Operation para cada Asset-Strat calcular o capital para lot_min com leverage mínimo aproximando de 100k, add para ledger: pnl (agora é o pnl $ final de 1 lot), perc (% final de 1 lot), raw_perc (% final de 1 lot)
-# add para matrix: lot (agora é asset.lot_min ao invés de 1), required_capital_unit (capital mínimo necessário para lot_min e leverage min), pnl (resultado $ para dt atual), perc (resultado % para dt atual), raw_perc (var % do asset mesmo)
-# Assim posso ter o menor lot dentro de 100k e depois, na hora de fazer o aggr usar o fator de multiplicação para igualar todos mais próximo de 100k possível
-# apenas diferenciar margin, capital, etc. para isso vai precisar reimplementar o sistema de gestão financeira básica, usando tudo no mínimo. NOTE Permitido fator de multiplicação < 1 para casos onde a margem > capital minimo
-
-# Em resumo:
-# - Backtest calcular os resultados com lot minimo dentro de 100k
-# - Na hora de calcular o aggr, fazer 100k/required_capital_unit para calcular para ter o fator de multiplicação para * os resultados e "igualar" ao máximo os resultados diferentes
-# - Em Portfolio posso apenas usar esses dados para encontrar a posição ideal para o capital alocado ao Model-Strat-Asset
-# - ELIMINAR lot_value de asset
-
-#    - Ler metadados dos resultados para ter acesso aos assets dos models
-
-
-
-#     - Terminar todos os SystemManagers com a ultima versão no Gemini, resolvendo qual aggr o MSM vai receber
-#     - Gerar o sistema de entrada e junto desenvolver os Money Managers
-#     - Desenvolver sistema de saida 
-    
-
-    # - analise_long_short_separate está errado na hora do calculo do aggr
-    # - Está crashando muito, procurar otimizar o código e talvez instanciar
-    # - Para otimizar, talvez gerar parquet de aggr no Operation e carregar direto
-    # - Salvar ind em parquet?
-
-
-
-
-
 class Portfolio(BaseClass, BaseManager): 
     def __init__(self, portfolio_params: PortfolioParams):
         self.name = portfolio_params.name
@@ -88,6 +46,9 @@ class Portfolio(BaseClass, BaseManager):
         self.hierarchy: dict={}
         self.sim_data: dict= {}
         self.iter_data_cache: dict={}
+        self.portfolio_returns: list=[]
+        self.active_positions: dict={}
+        self.indicator_pool: dict={}
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
       
     def _exits_and_updates(self, idx_datetime): # Exits positions based on previous data and open only [i] data
@@ -111,11 +72,13 @@ class Portfolio(BaseClass, BaseManager):
             base_margin_now = curr_trade_data["margin_required"]
             scale_factor = pos_obj["scale_factor"]
             allocated_margin = pos_obj["allocated_margin"]
+            pnl = curr_trade_data.get("pnl", 0.0) * scale_factor
+            perc = curr_trade_data.get("perc", 0.0)
+
+            #print(f"Asset: {a_name} | PnL: {pnl:.2f} | Perc: {perc:.2f}")
 
             # Checks for Exits
             if event in ["exit", "entry"]:
-                pnl = curr_trade_data.get("pnl", 0.0) * scale_factor
-                perc = curr_trade_data.get("perc", 0.0)
 
                 # Gives back margin
                 if pmm:
@@ -145,10 +108,6 @@ class Portfolio(BaseClass, BaseManager):
                     margin_delta = new_actual_margin - allocated_margin
                     pmm.cash -= margin_delta
                     pmm.allocated_margin += margin_delta
-
-                # Calculates pnl for this one bar
-                pnl = curr_trade_data.get("pnl", 0.0) * scale_factor
-                perc = curr_trade_data.get("perc", 0.0)
 
                 # Partial lot_size update (WIP in CPP)
                 # pos_obj["lot_size"] = curr_trade_data.get("lot_size") * scale_factor
@@ -198,7 +157,10 @@ class Portfolio(BaseClass, BaseManager):
 
                 a_name = a_key[-1]
                 asset_obj = self.global_assets.get(a_name)
-                if not asset_obj: continue
+            
+                if not asset_obj: 
+                    print(f"    < [Portfolio._entries] Error, asset_obj not found for asset: {a_name}")
+                    continue
 
                 # Creates lista with data for any enabled wf or ps ids
                 wf_ids = a_data.get("wf_id")
@@ -268,15 +230,15 @@ class Portfolio(BaseClass, BaseManager):
             lot_size = pmm.calculate_lot_size(min_trade_lot_size, min_margin_required, allocated_capital, a_lot_step)
             
             # Recalculated real margin required for actual calculated lot_size
-            actual_margin_required = (lot_size / min_trade_lot_size) * min_margin_required
-            scale_factor = getattr(asset_obj, "min_lot", min_trade_lot_size)
+            lot_multiplier = lot_size / min_trade_lot_size
+            actual_margin_required = lot_multiplier * min_margin_required
 
             if pmm.available_margin >= actual_margin_required:
                 if event in ["entry", "update"]: # NOTE obs: se update dependendo pode ou não contar o pnl/perc agora
                     self.active_positions[c_key] = {
                         "entry_datetime": idx_datetime,
                         "lot_size": lot_size,
-                        "scale_factor": lot_size / scale_factor,
+                        "scale_factor": lot_multiplier,
                         "allocated_margin": actual_margin_required,
                         "portfolio_weight": can["weight"],
                         "is_wf": can["is_wf"]
@@ -287,7 +249,7 @@ class Portfolio(BaseClass, BaseManager):
                         "datetime": idx_datetime,
                         "allocated_margin": actual_margin_required,
                         "lot_size": lot_size,
-                        "pnl": pnl * scale_factor,
+                        "pnl": pnl * lot_multiplier,
                         "perc": perc,
                         "portfolio_weight": can["weight"],
                         "event": "entry",
@@ -299,12 +261,13 @@ class Portfolio(BaseClass, BaseManager):
 
                 # Handles case of flash trades, where they are opened and closed at same candle datetime
                 elif event == "flash_trade":
+                    #print(f"Asset: {a_name} | PnL: {pnl:.2f} | Perc: {perc:.2f}")
                     self.portfolio_returns.append({
                         "c_key": c_key,
                         "datetime": idx_datetime,
                         "allocated_margin": actual_margin_required,
                         "lot_size": lot_size,
-                        "pnl": pnl *scale_factor,
+                        "pnl": pnl *lot_multiplier,
                         "perc": perc,
                         "portfolio_weight": can["weight"],
                         "event": "flash_trade",
@@ -314,14 +277,10 @@ class Portfolio(BaseClass, BaseManager):
                 continue
 
         return True
-    
-        
+     
     def _simulation(self):
         # 1 - Init, populating sim_data
         self.sim_current_equity = self.portfolio_parameters.get("capital", 100000.0)
-        self.portfolio_returns: list=[]
-        self.active_positions: dict={}
-        self.indicator_pool: dict={}
         self.current_idx = 0
 
         # Checks if is going to simulate portfolio with strat backtest results or asset positions
@@ -348,7 +307,7 @@ class Portfolio(BaseClass, BaseManager):
 
             # Entries
             self._entries(step_dt)
-
+   
             #||=====================================================================================||#
             
             # Updates System and Money Managers - Top Down - at [i] ends
@@ -1143,22 +1102,121 @@ class Portfolio(BaseClass, BaseManager):
 
     # ──────────────────────────────────────────────────────────────────────────── 
 
-    """"""
-    # -> Saidas: 
-    # Para cada trade:
-    # - Se date_exit == datetime então sai 
-    # - Se o mae ou mfe do datetime atual passou os limites de ganho ou perda do trade definido pelo MM então fecha 
-    # Para todos: se pnl do portfolio chegar a x ou y então encerra tudo (ganho/perda mês)
+    def debug_plot_portfolio_performance(self, portfolio_returns, initial_capital=100000.0):
+        import polars as pl
+        import matplotlib.pyplot as plt
+        """
+        Gera um report visual do backtest dividindo a tela em:
+        1. Curva de Capital Global do Portfólio (Equity Curve)
+        2. Curvas de PnL de todas as Estratégias juntas para comparação
+        """
+        if not portfolio_returns:
+            print("[-] Erro no Debug: portfolio_returns está vazio.")
+            return
 
-    # -> Entradas: 
-    # - SSM decide se First Come First Serve ou 1 trade por Strat por nível ou 1 trade por Asset
-    # - Se posição aberta, verifica hierarchy, onde foi rankeado os pretendentes basedo em todos os níveis pelos SM, verifica se pode entrar durante trade aberto ou apenas na abertura
-    # - Pega e executa a entrada nos trades válidos, 1 por 1, atualizando as variáveis globais (MM) a cada etapa, ao executar ele vai calcular o lote baseado nos dados unicos do ativo que o trade foi executado, analisando o lot_min, leverage, etc.
+        # 1. Converte o log flat para um DataFrame do Polars
+        df = pl.DataFrame(portfolio_returns)
 
-    # -> Atualização PnL:
-    # - Cada posição aberta != da aberta no datetime vai atualizar o PnL, verificando o MAE e MFE para decidir se está tudo bem, atualiza lote (def que pode ser enviada, default None)
-    # - Para cada trade em self.active_positions deve puxar os dados do trades_matrix, verificar se precisa atualizar o lot (diminuir ou aumentar, pode ser uma def enviada, default None, mantêm mesma coisa até saida) para saber o PnL * Lot atualizado
-    # - Criando e enviando a imagem do datetime para self.portfolio_returns
+        # Extrai uma chave única para a estratégia combinando Model Name e Strat Name
+        # c_key formato: (op_name, m_name, s_name, a_name, ps_id)
+        df = df.with_columns([
+            pl.col("c_key").map_elements(lambda x: f"{x[1]} | {x[2]}", return_dtype=pl.String).alias("strat")
+        ])
+
+        # Cria uma timeline mestre contendo todos os datetimes e estratégias do sistema
+        all_dts = df["datetime"].unique().sort()
+        all_strats = df["strat"].unique()
+        grid = pl.DataFrame({"datetime": all_dts}).join(pl.DataFrame({"strat": all_strats}), how="cross")
+
+        # --- PROCESSA LUCRO REALIZADO (EXITS) ---
+        df_exits = (
+            df.filter(pl.col("event") == "exit")
+            .group_by(["datetime", "strat"])
+            .agg(pl.col("pnl").sum().alias("realized_pnl_instant"))
+        )
+
+        # --- PROCESSA LUCRO FLUTUANTE (UPDATES) ---
+        df_updates = (
+            df.filter(pl.col("event") == "update")
+            .group_by(["datetime", "strat"])
+            .agg(pl.col("pnl").sum().alias("floating_pnl"))
+        )
+
+        # --- RECONSTRUÇÃO DA MATRIZ DO BACKTEST ---
+        df_curves = (
+            grid
+            .join(df_exits, on=["datetime", "strat"], how="left")
+            .join(df_updates, on=["datetime", "strat"], how="left")
+            .with_columns([
+                pl.col("realized_pnl_instant").fill_null(0.0),
+                pl.col("floating_pnl").fill_null(0.0)
+            ])
+            .sort(["strat", "datetime"]) # Garante a ordem cronológica por grupo
+        )
+
+        # Calcula o PnL acumulado fechado de cada estratégia ao longo do tempo
+        df_curves = df_curves.with_columns(
+            pl.col("realized_pnl_instant").cum_sum().over("strat").alias("cum_realized_pnl")
+        )
+
+        # PnL Total de uma estratégia = Realizado acumulado até a barra + Flutuante aberto na barra
+        df_curves = df_curves.with_columns(
+            (pl.col("cum_realized_pnl") + pl.col("floating_pnl")).alias("total_strat_pnl")
+        )
+
+        # --- AGREGAÇÃO DO PORTFÓLIO GLOBAL ---
+        # Soma o PnL de todas as estratégias vigentes em cada ponto do tempo
+        df_portfolio = (
+            df_curves.group_by("datetime")
+            .agg(pl.col("total_strat_pnl").sum().alias("portfolio_pnl"))
+            .sort("datetime")
+            .with_columns(
+                (pl.col("portfolio_pnl") + initial_capital).alias("portfolio_equity")
+            )
+        )
+
+        # --- CONSTRUÇÃO DOS GRÁFICOS (MATPLOTLIB) ---
+        fig, axes = plt.subplots(2, 1, figsize=(14, 10), sharex=True)
+        
+        # Renderiza os eixos x com os valores reais (seja string de datetime ou inteiros)
+        x_axis_values = df_portfolio["datetime"].to_list()
+
+        # GRÁFICO 1: Curva de Capital Total do Portfólio
+        axes[0].plot(
+            x_axis_values, 
+            df_portfolio["portfolio_equity"].to_list(), 
+            color="#2ca02c", 
+            linewidth=2.5, 
+            label="Patrimônio Líquido (Equity)"
+        )
+        axes[0].axhline(initial_capital, color="red", linestyle=":", alpha=0.7, label="Capital Inicial")
+        axes[0].set_title("Curva de Capital Global do Portfólio (Total Equity)", fontsize=14, fontweight="bold", pad=10)
+        axes[0].set_ylabel("Capital Disponível ($)", fontsize=12)
+        axes[0].grid(True, linestyle="--", alpha=0.5)
+        axes[0].legend(loc="upper left")
+
+        # GRÁFICO 2: Todas as Estratégias Separadas na Mesma Aba
+        for strat_name in all_strats.to_list():
+            strat_data = df_curves.filter(pl.col("strat") == strat_name).sort("datetime")
+            axes[1].plot(
+                strat_data["datetime"].to_list(),
+                strat_data["total_strat_pnl"].to_list(),
+                label=strat_name,
+                alpha=0.85,
+                linewidth=1.5
+            )
+
+        axes[1].axhline(0, color="black", linestyle="-", alpha=0.3)
+        axes[1].set_title("Evolução de Performance por Estratégia (PnL Individual)", fontsize=14, fontweight="bold", pad=10)
+        axes[1].set_xlabel("Linha do Tempo (Datetime / Index)", fontsize=12)
+        axes[1].set_ylabel("PnL Acumulado ($)", fontsize=12)
+        axes[1].grid(True, linestyle="--", alpha=0.5)
+        
+        # Posiciona a legenda para fora do gráfico para não cobrir as linhas caso existam muitas sub-estratégias
+        axes[1].legend(loc="upper left", bbox_to_anchor=(1.02, 1), borderaxespad=0)
+
+        plt.tight_layout()
+        plt.show()
 
     # TEMP - DELETAR
     def debug_model_aggregations(self):
@@ -1236,6 +1294,88 @@ class Portfolio(BaseClass, BaseManager):
         plt.tight_layout()
         plt.show()
 
+    def debug_print_portfolio_summary(self, portfolio_returns):
+        import polars as pl
+        """
+        Imprime um sumário resumido e limpo no terminal agrupado por Modelo -> Estratégia,
+        mostrando estatísticas de trades fechados e posições abertas.
+        """
+        if not portfolio_returns:
+            print("\n[-] Erro no Debug: portfolio_returns está vazio.")
+            return
+
+        # 1. Converte para DataFrame do Polars
+        df = pl.DataFrame(portfolio_returns)
+
+        # 2. Extrai identificadores amigáveis a partir da tupla c_key
+        # c_key: (op_name, m_name, s_name, a_name, ps_id)
+        df = df.with_columns([
+            pl.col("c_key").map_elements(lambda x: f"{x[1]} -> {x[2]}", return_dtype=pl.String).alias("model_strat"),
+            pl.col("c_key").map_elements(lambda x: x[3], return_dtype=pl.String).alias("asset"),
+            pl.col("c_key").map_elements(lambda x: x[4], return_dtype=pl.String).alias("trade_id")
+        ])
+
+        print("\n" + "=" * 70)
+        print("         RELATÓRIO CONSOLIDADO DE PERFORMANCE (MÉTRICAS OPERACIONAIS)       ")
+        print("=" * 70)
+
+        # Filtra apenas eventos de encerramento para calcular métricas reais de trades finalizados
+        df_exits = df.filter(pl.col("event") == "exit")
+
+        if df_exits.height == 0:
+            print("[!] Nenhum trade foi fechado ('exit') durante o período do backtest ainda.")
+        else:
+            # Agrupa por estratégia e calcula estatísticas clássicas
+            summary = df_exits.group_by("model_strat").agg([
+                pl.len().alias("total_trades"),
+                pl.col("pnl").sum().alias("pnl_total"),
+                pl.col("pnl").mean().alias("pnl_medio"),
+                
+                # CORREÇÃO: Aplica o filtro na coluna 'pnl' e conta as ocorrências
+                pl.col("pnl").filter(pl.col("pnl") > 0).count().alias("ganhos"),
+                pl.col("pnl").filter(pl.col("pnl") < 0).count().alias("perdas"),
+                
+                pl.col("pnl").max().alias("maior_lucro"),
+                pl.col("pnl").min().alias("maior_prejuizo")
+            ]).with_columns(
+                # Calcula a Taxa de Acerto (Win Rate)
+                (pl.col("ganhos") / (pl.col("ganhos") + pl.col("perdas")) * 100).round(2).alias("win_rate")
+            ).sort("pnl_total", descending=True)
+
+            # Imprime o sumário de cada estratégia
+            for row in summary.iter_rows(named=True):
+                print(f"\n[ESTRATÉGIA]: {row['model_strat']}")
+                print(f"  ├─ Total de Trades Fechados: {row['total_trades']}")
+                print(f"  ├─ Taxa de Acerto (Win Rate): {row['win_rate']}%  ({row['ganhos']} Vitórias / {row['perdas']} Derrotas)")
+                print(f"  ├─ Lucro/Prejuízo Total:     ${row['pnl_total']:.2f}")
+                print(f"  ├─ Retorno Médio por Trade:  ${row['pnl_medio']:.2f}")
+                print(f"  └─ Extremos (Max Win/Loss):  +${row['maior_lucro']:.2f} / -${abs(row['maior_prejuizo']):.2f}")
+
+        print("\n" + "=" * 70)
+        print("                    POSIÇÕES QUE TERMINARAM ABERTAS                   ")
+        print("=" * 70)
+
+        # Descobre quais posições terminaram abertas pegando o ÚLTIMO estado cronológico de cada c_key única
+        df_latest_state = df.sort("datetime").group_by("c_key").last()
+        df_open_positions = df_latest_state.filter(pl.col("event") == "update")
+
+        if df_open_positions.height == 0:
+            print("  [•] Nenhuma posição aberta pendente no final do backtest.")
+        else:
+            # Recria as colunas amigáveis para o print das abertas
+            df_open_positions = df_open_positions.with_columns([
+                pl.col("c_key").map_elements(lambda x: f"{x[1]} -> {x[2]}", return_dtype=pl.String).alias("model_strat"),
+                pl.col("c_key").map_elements(lambda x: x[3], return_dtype=pl.String).alias("asset")
+            ]).sort("model_strat")
+
+            for row in df_open_positions.iter_rows(named=True):
+                print(f"  • [{row['model_strat']}] Ativo: {row['asset']} "
+                    f"| Lote Operado: {row['lot_size']} "
+                    f"| Margem Retida: ${row['allocated_margin']:.2f} "
+                    f"| PnL Flutuante Atual: ${row['pnl']:.2f}")
+
+        print("=" * 70 + "\n")
+
     def _run(self):
         # Data Init - Loads data, saves unique datetimes and generates aggr results
         print("     > Populating Portfolio Data from Database")
@@ -1246,6 +1386,9 @@ class Portfolio(BaseClass, BaseManager):
         # Runs Portfolio Simulation
         print("     > Executing Portfolio Simulation")
         self._simulation()
+
+        self.debug_print_portfolio_summary(self.portfolio_returns)
+        self.debug_plot_portfolio_performance(self.portfolio_returns)
             
         return True
 
@@ -1268,7 +1411,7 @@ if __name__ == "__main__":
     eurusd = assets.get("EURUSD")
     gbpusd = assets.get("GBPUSD")
     usdjpy = assets.get("USDJPY")
-    winfut = assets.get("WIN")
+    winfut = assets.get("WIN$")
     
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
@@ -1449,56 +1592,6 @@ if __name__ == "__main__":
     portfolio._run()
 
 
-    """
-    Portfolio uses only stock prices
-
-    update_func_to_use = self._update_pos_with_backtest_ret if portfolio_simulation_with_backtest_results else self._update_pos_with_assets_ret
-
-    def _update_pos_with_backtest_ret(self, step_dt):
-        for idf, pos_info in self.active_positions.items():
-            # ifs       = (op, mod, strat, asset)
-            # pos_info  = {"weight": 0.1, "lot": 1.0, "type": "wf", "id": "48_48_48", "meta": {"margin": ...}}}
-            tid = pos_info["id"]
-            wht = pos_info["weight"] # Defined by Money Manager (capital allocated)
-
-            asset_data = None# instance.get(idf, {})
-
-            # Lógic to decide where PnL comes from (wf or pnl_matrix)
-            if "wf_pnls" in asset_data and tid in asset_data["wf_pnls"]:
-                inst_ret = asset_data["wf_pnls"][tid]
-            else: 
-                inst_ret = asset_data.get("pnls", {}).get(tid, 0.0)
-            inst_lot = asset_data.get("lots", {}).get(tid, 1.0)
-
-            # perc
-            trade_perc = inst_ret * inst_lot    # Raw trade percentage weighted with lot_size
-            pos_perc_port = trade_perc * wht    # trade percentage in relation to portfolio
-            step_perc_total += pos_perc_port    # perc accumulated in this datetime
-
-            # PnL
-            pos_pnl_port = self.sim_current_equity * pos_perc_port # $ pnl in relation to portfolio
-            step_pnl_nominal_total += pos_pnl_port # pnl accumulated in this datetime
-
-            # Strat Returns
-            self.portfolio_returns[step_dt][idf] = {
-                "trade_perc": trade_perc,
-                "pos_perc_port": pos_perc_port,
-                "pos_pnl_port": pos_pnl_port,
-                "weight": wht
-            }
-
-        # Updates global
-        self.sim_current_equity += step_pnl_nominal_total
-        self.portfolio_returns[step_dt].update({
-            "portfolio_perc": step_perc_total,
-            "portfolio_pnl": step_pnl_nominal_total,
-            "equity": self.sim_current_equity
-        })
-
-    def _update_pos_with_assets_ret(self, step_dt):
-        pass
-    
-    """
 
     """
     PCA-Regime-Adjusted Momentum (PCA-RAM)
@@ -1577,9 +1670,7 @@ if __name__ == "__main__":
 
     """
 
-
-
-    """
+    """ NOTE
     Pontos para melhorar para V2
     - 3 SM para rankear, filtrar e limitar com pesos cada Nível e Asset
     - 1 MM para gerenciar as Strat(s) e Asset(s) dos param_set selecionados
