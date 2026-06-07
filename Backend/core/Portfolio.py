@@ -75,8 +75,6 @@ class Portfolio(BaseClass, BaseManager):
             pnl = curr_trade_data.get("pnl", 0.0) * scale_factor
             perc = curr_trade_data.get("perc", 0.0)
 
-            #print(f"Asset: {a_name} | PnL: {pnl:.2f} | Perc: {perc:.2f}")
-
             # Checks for Exits
             if event in ["exit", "entry"]:
 
@@ -261,7 +259,6 @@ class Portfolio(BaseClass, BaseManager):
 
                 # Handles case of flash trades, where they are opened and closed at same candle datetime
                 elif event == "flash_trade":
-                    #print(f"Asset: {a_name} | PnL: {pnl:.2f} | Perc: {perc:.2f}")
                     self.portfolio_returns.append({
                         "c_key": c_key,
                         "datetime": idx_datetime,
