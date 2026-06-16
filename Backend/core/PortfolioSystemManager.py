@@ -16,7 +16,6 @@ class PortfolioSystemManagerParams(SystemManagerParams):
     reb_metric: Literal["pnl", "pnl_dd", "sharpe"] = "pnl" # Metric used for performance-based rebalancing (if reb_method == "performance")
     reb_method: Literal["fixed", "equal_weight", "risk_parity", "performance"] = "fixed"
     reb_deviation_func: Optional[Dict[str, Callable]] = None # Only rebalance if (ex: Portfolio std deviated "x" std from mean)
-    reb_closes_open_trades_on_rebalance: bool = False # NOTE add this only to StratSystemManager
 
 class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarchy 
     def __init__(self, psm_params: PortfolioSystemManagerParams):
@@ -26,7 +25,6 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
         self.model_hierarchy                    = dict(psm_params.model_hierarchy)
         self.max_active_models                  = psm_params.max_active_models
         self.reb_method                         = getattr(psm_params, 'reb_method', 'fixed')
-        self.reb_closes_open_trades_on_rebalance = psm_params.reb_closes_open_trades_on_rebalance
 
 #||=========================================================================================||
 
@@ -137,13 +135,9 @@ class PortfolioSystemManager(SystemManager): # Manages portfolio's model hierarc
                 for m_key, col_name in target_col_names:
                     if col_name in weights:
                         hierarchy[m_key][sd]['weight'] = float(weights[col_name]) 
-                        if i % 1000 == 0 or i == 55394:
-                            print(f"hierarchy[{m_key}][{sd}]['weight']: {hierarchy[m_key][sd]['weight']}")
                         
             except Exception as e:
-                # O erro 55394 agora será capturado aqui sem travar o backtest
-                if i % 1000 == 0 or i == 55394: # Evita spam de log, mas foca no erro
-                    print(f"    < [PSM Rebalance] Side '{sd}' at idx {i} skip: {e}")
+                print(f"    < [PSM Rebalance] Side '{sd}' at idx {i} skip: {e}")
 
         return hierarchy
 

@@ -223,61 +223,8 @@ SimulationOutput Backtest::run_simulation(
 
         // Money Management Metrics - Instanciação e leitura com std::optional
         MMContext mm_context;
-        mm_context.capital = (!mm_params.is_null() && mm_params.contains("reference_capital") && !mm_params["reference_capital"].is_null())
-            ? mm_params["reference_capital"].get<double>()
-            : 100000.0;
-
-        if (!mm_params.is_null()) {
-            // Lambda que retorna um std::optional preenchido ou vazio
-            auto get_mm_optional = [&](const std::string& key) -> std::optional<double> {
-                if (!mm_params.contains(key) || mm_params[key].is_null() || !mm_params[key].is_number()) {
-                    return std::nullopt; // Não usa/Desativado
-                }
-                return mm_params[key].get<double>();
-            };
-
-            if (mm_params.contains("sizing_method") && !mm_params["sizing_method"].is_null()) {
-                mm_context.sizing_method = mm_params["sizing_method"].get<std::string>();
-            } else {
-                mm_context.sizing_method = "neutral";
-            }
-
-            // Se for null no JSON, a propriedade no C++ ficará vazia (std::nullopt)
-            mm_context.pct             = get_mm_optional("pct");
-            mm_context.compound_fract  = get_mm_optional("compound_fract");
-            mm_context.risk_pct        = get_mm_optional("risk_pct");
-            mm_context.risk_pct_min    = get_mm_optional("risk_pct_min");
-            mm_context.risk_pct_max    = get_mm_optional("risk_pct_max");
-            mm_context.fixed_lot       = get_mm_optional("fixed_lot");
-            mm_context.dist_fixed      = get_mm_optional("dist_fixed");
-            mm_context.kelly_weight    = get_mm_optional("kelly_weight");
-            mm_context.var_confidence  = get_mm_optional("var_confidence");
-            
-            if (!mm_params.contains("min_trades") || mm_params["min_trades"].is_null()) {
-                mm_context.min_trades = std::nullopt;
-            } else {
-                mm_context.min_trades = mm_params["min_trades"].get<int>();
-            }
-        }
-
-        // MMContext mm_context;
-        // mm_context.capital = mm_params.value("reference_capital", 100000.0);
-        // mm_context.sizing_method = mm_params.value("sizing_method", "neutral");
-        // mm_context.capital_method = mm_params.value("capital_method", "fixed");
-        // if (mm_params.contains("compound_fract") && !mm_params["compound_fract"].is_null()) {
-        //     mm_context.compound_fract = mm_params["compound_fract"].get<double>();
-        // }
-        // mm_context.dist_fixed = mm_params.value("dist_fixed", 0);
-        // mm_context.fixed_lot = mm_params.value("fixed_lot", 1.0);
-        // mm_context.risk_pct = mm_params.value("risk_pct", 0.01);
-        // mm_context.risk_pct_min = mm_params.value("risk_pct_min", 0.001);
-        // mm_context.risk_pct_max = mm_params.value("risk_pct_max", 0.05);
-        // if (mm_params.contains("pct") && !mm_params["pct"].is_null()) {
-        //     mm_context.pct = mm_params["pct"].get<double>();
-        // }
-        // mm_context.kelly_weight = mm_params.value("kelly_weight", 0.25);
-        // mm_context.var_confidence = mm_params.value("var_confidence", 0.95);
-        // mm_context.min_trades = mm_params.value("min_trades", 0);
+        mm_context.sizing_method = "neutral";
+        mm_context.capital = 100000.0;
 
         auto snp = exec_settings.value("strat_num_pos", json::array({1,1}));
         int max_long  = snp[0].get<int>(), max_short = snp[1].get<int>();

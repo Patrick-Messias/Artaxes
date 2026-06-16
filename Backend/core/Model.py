@@ -1,11 +1,9 @@
  # Holds 1+ Strat with 1+ Asset, uses Model Management Algorith to select from entries from multiple Strat or Asset positions (if either >1) 
  # and Model Money Management to manage Risk, Exposition, etc.
  
-from typing import Optional, Union
+from typing import Union
 from dataclasses import dataclass, field
 from Asset import Asset
-from ModelMoneyManager import ModelMoneyManager
-from ModelSystemManager import ModelSystemManager
 import uuid
 
 
@@ -32,8 +30,8 @@ class ModelParams():
     assets: Union[Asset]=None # Asset(s) that the model will trade with it's strat(s)
 
     execution_timeframe: str=None
-    model_money_manager: Optional[ModelMoneyManager] = None
-    model_system_manager: Optional[ModelSystemManager] = None # Pode, também, gerênciar os ativos e strats que estarão habilitados para trade por regra x dentre os listados no Model
+    #model_money_manager = None
+    #model_system_manager = None # Pode, também, gerênciar os ativos e strats que estarão habilitados para trade por regra x dentre os listados no Model
 
 class Model():
     def __init__(self, model_params: ModelParams):
@@ -47,10 +45,10 @@ class Model():
         self.execution_timeframe = model_params.execution_timeframe
         
         # ModelMoneyManager is optional - if None, will use default or PMM from Operation
-        self.model_money_manager = model_params.model_money_manager
+        #self.model_money_manager = model_params.model_money_manager
         
         # ModelSystemManager is optional - if None, will use default system management
-        self.model_system_manager = model_params.model_system_manager
+        #self.model_system_manager = model_params.model_system_manager
         
 
 

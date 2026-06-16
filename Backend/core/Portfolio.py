@@ -2,12 +2,13 @@
 
 from dataclasses import dataclass, field
 from typing import Optional
-from PortfolioSystemManager import PortfolioSystemManager
-from PortfolioMoneyManager import PortfolioMoneyManager
 from BaseClass import BaseClass, BaseManager
 from Storage import Storage
 from Asset import Asset
 import polars as pl, uuid, sys, os, json, bisect
+from PortfolioSystemManager import PortfolioSystemManager, PortfolioSystemManagerParams
+from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
+from StratSystemManager import StratSystemManager, StratSystemManagerParams
 
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
@@ -50,6 +51,13 @@ class Portfolio(BaseClass, BaseManager):
         self.active_positions: dict={}
         self.indicator_pool: dict={}
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
+
+
+    # NOTE Up Next:
+    # - Transform Portfolio, Model and Strat SM and MM in @dataclass
+    # - Focus all steps (rank, filter, rebalance) on SM and MM 
+
+
       
     def _exits_and_updates(self, idx_datetime): # Exits positions based on previous data and open only [i] data
         pmm = self.sm_mm_map["managers"].get("pmm", None)
@@ -286,7 +294,7 @@ class Portfolio(BaseClass, BaseManager):
         portfolio_simulation_with_backtest_results = (has_pnl or has_wf)
 
         # SM and MM Pre-Compute Metrics, Indicators and Rebalance Schedule
-        params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch \
+        params_pool, psm_sch, msm_sch, ssm_sch \
         = self._pre_compute_and_calc_rebalance_schedule(self.global_assets, self.sm_mm_map) # NOTE Futuramente salvar os indicadores calculados para SQL/parquet para não pesar memória
 
         # 2 - Run Timeline
@@ -308,7 +316,7 @@ class Portfolio(BaseClass, BaseManager):
             #||=====================================================================================||#
             
             # Updates System and Money Managers - Top Down - at [i] ends
-            self._system_money_managers(i, step_dt, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch)
+            self._system_money_managers(i, step_dt, psm_sch, msm_sch, ssm_sch)
                                                     
             #||=====================================================================================||#
                 
@@ -332,21 +340,17 @@ class Portfolio(BaseClass, BaseManager):
     
     # ── Portfolio Defs ───────────────────────────────────────────────
 
-    def _system_money_managers(self, i, dt, psm_sch, pmm_sch, msm_sch, mmm_sch, ssm_sch, smm_sch):
+    def _system_money_managers(self, i, dt, psm_sch, msm_sch, ssm_sch):
         m_map = self.sm_mm_map
         p_name = self.name
         p_key = (p_name,)
 
         # If any of the two need to run, populate data
-        if (dt in psm_sch.get(p_name, set())) or (dt in pmm_sch.get(p_name, set())):
+        if (dt in psm_sch.get(p_name, set())):
             psm = m_map.get("managers", {}).get("psm")
             if psm and dt in psm_sch.get(p_name, set()):
                 self.hierarchy = psm.main(i, dt, p_key)
-                #print("PSM")
-            pmm = m_map.get("managers", {}).get("pmm")
-            if pmm and dt in pmm_sch.get(p_name, set()):
-                self.hierarchy = pmm.main(i, dt, p_key)
-                #print("PMM")
+                print("PSM")
 
         # Model and Strat Levels
         seen_models = set()
@@ -360,31 +364,24 @@ class Portfolio(BaseClass, BaseManager):
             if m_key not in seen_models:
                 seen_models.add(m_key)
                 
-                if (dt in msm_sch.get(m_key, set())) or (dt in mmm_sch.get(m_key, set())):
+                if (dt in msm_sch.get(m_key, set())):
                     msm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("msm")
-                    mmm = m_map.get("models", {}).get(m_name, {}).get("managers", {}).get("mmm")
 
                     if msm and dt in msm_sch.get(m_key, set()): 
                         self.hierarchy = msm.main(i, dt, m_key)
-                        #print("msM")
-                    if mmm and dt in mmm_sch.get(m_key, set()):
-                        self.hierarchy = mmm.main(i, dt, m_key)
-                        #print("mmM")
+                        print("msM")
 
             # Strat level — executa apenas 1x por strat
             if s_key not in seen_strats:
                 seen_strats.add(s_key)
                 
-                if (dt in ssm_sch.get(s_key, set())) or (dt in smm_sch.get(s_key, set())):
+                if (dt in ssm_sch.get(s_key, set())):
                     ssm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("ssm")
-                    smm = m_map.get("models", {}).get(m_name, {}).get("strats", {}).get(s_name, {}).get("managers", {}).get("smm")
 
                     if ssm and dt in ssm_sch.get(s_key, set()):
                         self.hierarchy = ssm.main(i, dt, s_key)
-                        #print("ssm")
-                    if smm and dt in smm_sch.get(s_key, set()):
-                        self.hierarchy = smm.main(i, dt, s_key)
-                        #print("smm")
+                        print("ssm")
+
         return True
 
     # ── Data Handling ───────────────────────────────────────────────
@@ -850,16 +847,13 @@ class Portfolio(BaseClass, BaseManager):
         return True
 
     def _pre_compute_and_calc_rebalance_schedule(self, global_assets, sm_mm_map):
-        psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch = {}, {}, {}, {}, {}, {}
+        psm_sch, msm_sch, ssm_sch = {}, {}, {}
         params_pool = {}
 
         DEFAULT_MGR_CONFIG = {
             "psm": (PortfolioSystemManager, PortfolioSystemManagerParams),
-            "pmm": (PortfolioMoneyManager, PortfolioMoneyManagerParams),
             "msm": (ModelSystemManager, ModelSystemManagerParams),
-            "mmm": (ModelMoneyManager, ModelMoneyManagerParams),
             "ssm": (StratSystemManager, StratSystemManagerParams),
-            "smm": (StratMoneyManager, StratMoneyManagerParams),
         }
         
         timeline = self.datetime_timeline
@@ -878,8 +872,7 @@ class Portfolio(BaseClass, BaseManager):
            
             # PSM and PMM
             for mgr_key, mgr_class, sch_dict in [
-                ("psm", DEFAULT_MGR_CONFIG["psm"], psm_sch),
-                ("pmm", DEFAULT_MGR_CONFIG["pmm"], pmm_sch)
+                ("psm", DEFAULT_MGR_CONFIG["psm"], psm_sch)
             ]: 
                 mgr = p_magrs.get(mgr_key) or mgr_class() 
                 mgr.set_portfolio(self)
@@ -901,8 +894,7 @@ class Portfolio(BaseClass, BaseManager):
                 if m_data:
                     m_node = {m_key: m_data}
                     for mgr_key, (mgr_class, params_class), sch_dict in [
-                        ("msm", DEFAULT_MGR_CONFIG["msm"], msm_sch),
-                        ("mmm", DEFAULT_MGR_CONFIG["mmm"], mmm_sch)
+                        ("msm", DEFAULT_MGR_CONFIG["msm"], msm_sch)
                     ]:
                         mgr = m_magrs.get(mgr_key) or mgr_class()
                         mgr.set_portfolio(self)
@@ -923,8 +915,7 @@ class Portfolio(BaseClass, BaseManager):
                     if s_data:
                         s_node = {s_key: s_data}
                         for mgr_key, mgr_class, sch_dict in [
-                            ("ssm", DEFAULT_MGR_CONFIG["ssm"], ssm_sch),
-                            ("smm", DEFAULT_MGR_CONFIG["smm"], smm_sch)
+                            ("ssm", DEFAULT_MGR_CONFIG["ssm"], ssm_sch)
                         ]: 
                             mgr = s_magrs.get(mgr_key) or mgr_class()
                             mgr.set_portfolio(self)
@@ -933,7 +924,7 @@ class Portfolio(BaseClass, BaseManager):
                             sch_dict[s_key] = mgr.get_schedule(timeline)
                             s_magrs[mgr_key] = mgr
 
-        return params_pool, psm_sch, msm_sch, ssm_sch, pmm_sch, mmm_sch, smm_sch
+        return params_pool, psm_sch, msm_sch, ssm_sch
 
     # ── Datetime timeline mapping ───────────────────────────────────────────────
 
@@ -1389,15 +1380,16 @@ class Portfolio(BaseClass, BaseManager):
             
         return True
 
+
+
+# 1. XXX Fallback para SM/MM antigo
+# 2. Eliminar todos MM, apenas um geral
+# 3. MM usa o rebalance do SM para rebalance do nível MM também, além de guardar defs de mm
+# 4. Strat SM pode selecionar se vai usar o LONG/SHORT/BOTH de cada parset OU usar sempre todos os selecionados no sm_mm_map
+
+
+
 if __name__ == "__main__":
-    from ModelMoneyManager  import ModelMoneyManager,  ModelMoneyManagerParams
-    from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
-    from StratMoneyManager  import StratMoneyManager,  StratMoneyManagerParams
-    from StratSystemManager import StratSystemManager, StratSystemManagerParams
-    from PortfolioMoneyManager  import PortfolioMoneyManager,  PortfolioMoneyManagerParams
-    from PortfolioSystemManager import PortfolioSystemManager, PortfolioSystemManagerParams
-    from Model import Model, ModelParams
-    from Strat import Strat, StratParams
     from MA import MA # type: ignore
     from VAR import VAR # type: ignore
     from ATR_SL import ATR_SL # type: ignore
@@ -1428,21 +1420,6 @@ if __name__ == "__main__":
         #assets={'EURUSD'},
     ))
 
-    pmm = PortfolioMoneyManager(PortfolioMoneyManagerParams(
-        capital=100000.0,
-        max_capital_exposure=1.0,
-        reb_frequency="weekly",
-        reb_metric="pnl",
-        reb_method="fixed",
-        reb_lookback=252,
-        reb_deviation_func=None,
-        params={
-            "param1": range(4, 12+1, 4),
-            "param2": range(20, 80+1, 50),
-        },
-        indicators=None,
-    ))
-
     # ── Model level ───────────────────────────────────────────────────────────
 
     msm = ModelSystemManager(ModelSystemManagerParams(
@@ -1460,11 +1437,6 @@ if __name__ == "__main__":
         },
     ))
 
-    mmm = ModelMoneyManager(ModelMoneyManagerParams(
-        capital=100000.0,
-        reb_frequency="weekly",
-    ))
-
     # ── Strat level ───────────────────────────────────────────────────────────
 
     ssm = StratSystemManager(StratSystemManagerParams(
@@ -1479,10 +1451,15 @@ if __name__ == "__main__":
                       window="param1", ma_type="ema", price_col="close"),
         },
     ))
-
-    smm = StratMoneyManager(StratMoneyManagerParams(
-        capital=100000.0,
-        reb_frequency="weekly",
+    ssm2 = StratSystemManager(StratSystemManagerParams(
+        params={
+            "param1": range(50, 200+1, 50),
+        },
+        indicators={
+            "vol": Volatility(asset="@total_both", timeframe="tick", 
+                              window="param1", aggr_days=True, 
+                              price_col="pnl", min_periods="param1"),
+        },
     ))
 
     # ── portfolio_data com SM/MM em cada nível ────────────────────────────────
@@ -1530,7 +1507,7 @@ if __name__ == "__main__":
                     },
                 }
             },
-            "Futures Mean Reversion": {
+            "WIN Day Sazonality": {
                 "AT20": {
                     "WIN$": {
                         "side": "both",
@@ -1538,38 +1515,30 @@ if __name__ == "__main__":
                         "calculate_on_data": "wf",
                     }
                 },
-                "AT30": {
-                    "WIN$": {
-                        "side": "both",
-                        "analise_long_short_separate": True,
-                        "calculate_on_data": "wf",
-                    }
-                }
             },
         }
     }
 
     # SM/MM mapeados por nível — referenciados durante a simulação
     sm_mm_map = {
-        "managers": {"psm": psm, "pmm": pmm, "separate_ls": True, "side": 'both'},
+        "managers": {"psm": psm, "separate_ls": True, "side": 'both'},
         "models": {
             "FX MA Trend Following": {
-                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
+                "managers": {"msm": msm, "separate_ls": True, "side": 'both'},
                 "strats": {
-                    "AT15": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both', "trade_update_can_enter": False}}
+                    "AT15": {"managers": {"ssm": ssm, "separate_ls": True, "side": 'both', "trade_update_can_enter": False}}
                 }
             },
             "FX Mean Reversion": {
-                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
+                "managers": {"msm": msm, "separate_ls": True, "side": 'both'},
                 "strats": {
-                    "AT30": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both', "trade_update_can_enter": False}}
+                    "AT30": {"managers": {"ssm": ssm, "separate_ls": True, "side": 'both', "trade_update_can_enter": False}}
                 }
             },
-            "Futures Mean Reversion": {
-                "managers": {"msm": msm, "mmm": mmm, "separate_ls": True, "side": 'both'},
+            "WIN Day Sazonality": {
+                "managers": {"msm": msm, "separate_ls": True, "side": 'both'},
                 "strats": {
-                    "AT20": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both', "trade_update_can_enter": False}},
-                    "AT30": {"managers": {"ssm": ssm, "smm": smm, "separate_ls": True, "side": 'both', "trade_update_can_enter": False}}
+                    "AT20": {"managers": {"ssm": ssm2, "separate_ls": True, "side": 'both', "trade_update_can_enter": False}},
                 }
             },
         }

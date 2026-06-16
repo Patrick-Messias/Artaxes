@@ -8,11 +8,8 @@ from Model import ModelParams, Model
 from Asset import Asset
 from BaseClass import BaseClass
 from Strat import Strat, StratParams, ExecutionSettings
-from ModelMoneyManager import ModelMoneyManager, ModelMoneyManagerParams
-from StratMoneyManager import StratMoneyManager, StratMoneyManagerParams
 from Walkforward import Walkforward
 from Indicator import Indicator
-from itertools import product
 
 import duckdb, tempfile, os, psutil
 
@@ -484,22 +481,8 @@ class Operation(BaseClass):
                             'trades': []
                         }
 
-                        # Strat Money Manager rules NOTE DEPOIS MOVER ACIMA PARA NIVEL STRAT
-                        mm_params = {"sizing_method": getattr(strat_obj.strat_money_manager, "sizing_method", "neutral")} #smm.to_sim_params() if smm is not None else {"method": "neutral"}
-                        mm_params["capital_method"] = getattr(strat_obj.strat_money_manager, "capital_method", "fixed")
-                        mm_params["compound_fract"] = getattr(strat_obj.strat_money_manager, "compound_fract", 1.0)
-                        mm_params["dist_fixed"]     = getattr(strat_obj.strat_money_manager, "dist_fixed", 0)
-                        mm_params["fixed_lot"]      = getattr(strat_obj.strat_money_manager, "fixed_lot", 1.0)
-                        mm_params["risk_pct"]       = getattr(strat_obj.strat_money_manager, "risk_pct", 0.01)
-                        mm_params["risk_pct_min"]   = getattr(strat_obj.strat_money_manager, "risk_pct_min", 0.001)
-                        mm_params["risk_pct_max"]   = getattr(strat_obj.strat_money_manager, "risk_pct_max", 0.05)
-                        mm_params["pct"]            = getattr(strat_obj.strat_money_manager, "pct", 0.01)
-                        mm_params["kelly_weight"]   = getattr(strat_obj.strat_money_manager, "kelly_weight", 0.25)
-                        mm_params["var_confidence"] = getattr(strat_obj.strat_money_manager, "var_confidence", 0.95)
-                        mm_params["min_trades"]     = getattr(strat_obj.strat_money_manager, "min_trades", 0)
-
                         # Asset specific rules
-                        mm_params["tick"]                   = getattr(asset_class, "tick",         0.01)
+                        mm_params                           = {"tick": getattr(asset_class, "tick", 0.01)}
                         mm_params["tick_fin_val"]           = getattr(asset_class, "tick_fin_val", 1.0)
                         mm_params["contract_size"]          = getattr(asset_class, "contract_size", 1.0)
                         mm_params["min_lot"]                = getattr(asset_class, "min_lot", 0.01)
@@ -1653,30 +1636,28 @@ if __name__ == "__main__":
     def AT20_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point
 
+        df = df.with_columns(pl.col("datetime").dt.weekday().alias("dweek"))
+        df = df.with_columns(pl.col("datetime").dt.hour().alias("hour"))
+
         atr = df['atr']
-        #day_open = df['open_day']
-        #atr_range = (atr * 3)
 
-        bull = df['close'] < df['open'] 
-        bear = df['close'] > df['open']
+        entry_long  = (df['dweek']==4) & (df['close'] > df['open']) & (df['hour'] < 10)
+        entry_short = (df['dweek']==4) & (df['close'] < df['open']) & (df['hour'] < 10)
 
-        entry_long  = bull & bull.shift(1) & bull.shift(2) #& (df['close'] > day_open + atr_range) # & (df['close'] > day_open) #& (ema < ema.shift(1))
-        entry_short = bear & bear.shift(1) & bear.shift(2) #& (df['close'] < day_open - atr_range) # & (df['close'] < day_open) #& (ema > ema.shift(1))
-
-        exit_tf_long  = bear & bear.shift(1)
-        exit_tf_short = bull & bull.shift(1)
+        exit_tf_long  = (df['close'] < df['low'])
+        exit_tf_short = (df['close'] > df['high'])
 
         # Preço da ordem pendente
         limit_long_price  = df['open'] #'high[1]' #
         limit_short_price = df['open'] #'low[1]' #
 
         # Distâncias (definidas ANTES de serem usadas)
-        sl_long_price  = limit_long_price - atr * params['sl_perc'] 
-        sl_short_price = limit_long_price + atr * params['sl_perc'] 
+        sl_long_price  = limit_long_price - 400 #limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = limit_long_price + 400 #limit_long_price + atr * params['sl_perc'] 
 
         # TP absoluto: 2R
-        tp_long_price  = None #limit_long_price + atr  * params['tp_perc']
-        tp_short_price = None #limit_long_price - atr * params['tp_perc']
+        tp_long_price  = limit_long_price + 1000 #limit_long_price + atr  * params['tp_perc']
+        tp_short_price = limit_long_price - 1000 #limit_long_price - atr * params['tp_perc']
 
         # Trailing: 0.5R
         trail_long_dist  = None #sl_long_dist  * 0.5
@@ -1858,10 +1839,10 @@ if __name__ == "__main__":
                 day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                 backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
-            strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
-                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
-            )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+            # strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
+            #     sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
+            #     sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
+            # )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT15'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=AT15_indicators,
             signals=AT15_Signals
@@ -1881,14 +1862,14 @@ if __name__ == "__main__":
             execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
                 order_type='market', limit_order_base_calc_ref_price='open', 
                 slippage=0.0, commission=0.0, # * Tick 
-                day_trade=False, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
+                day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                 day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                 backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
-            strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
-                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
-            )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+            # strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
+            #     sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
+            #     sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
+            # )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT20'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators=AT20_indicators,
             signals=AT20_Signals
@@ -1912,10 +1893,10 @@ if __name__ == "__main__":
                 day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                 backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
-            strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
-                sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
-                sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
-            )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
+            # strat_money_manager=StratMoneyManager(StratMoneyManagerParams(
+            #     sizing_method="neutral", capital_method="fixed", compound_fract=1.0, dist_fixed=None,
+            #     sizing_params={"fixed_lot": 1.0, "risk_pct": 0.01, "risk_pct_min": 0.001, "risk_pct_max": 0.05,"pct": 0.01,"kelly_weight": 0.25, "var_confidence": 0.95, "min_trades": 30}
+            # )), # If mma_rules=None then will use default or PMA or other saved MMA define in Operation. Else it creates a temporary MMA with mma_settings
             params=strat_param_sets['AT30'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
             indicators={},
             signals=AT30_Signals
@@ -1928,8 +1909,8 @@ if __name__ == "__main__":
             assets=['EURUSD', "GBPUSD", 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT15': AT15},
             execution_timeframe=AT15_model_execution_tf,
-            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_1_mm")),
-            model_system_manager=None  # Optional - will use default system management
+            #model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_1_mm")),
+            #model_system_manager=None  # Optional - will use default system management
         )
     )
     model_2 = Model(
@@ -1938,25 +1919,25 @@ if __name__ == "__main__":
             assets=['EURUSD', "GBPUSD", "USDJPY"], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT30': AT30},
             execution_timeframe=AT15_model_execution_tf,
-            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_2_mm")),
-            model_system_manager=None  # Optional - will use default system management
+            #model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_2_mm")),
+            #model_system_manager=None  # Optional - will use default system management
         )
     )
     model_3 = Model(
         ModelParams(
-            name='Futures Mean Reversion',
+            name='WIN Day Sazonality',
             assets=['WIN$'], # CURR_ASSET refers to this one in strat_support_assets
-            strat={'AT20': AT20, 'AT30': AT30},
+            strat={'AT20': AT20},
             execution_timeframe=AT20_model_execution_tf,
-            model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_3_mm")),
-            model_system_manager=None  # Optional - will use default system management
+            #model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_3_mm")),
+            #model_system_manager=None  # Optional - will use default system management
         )
     )
 
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_1, model_2, model_3], # model_2, model_3
+            data=[model_3], # model_1, model_2, 
             assets=global_assets,
             #operation_timeframe=AT15_model_execution_tf, # NOTE maybe unnecessary, remove later
             date_start=None, #'2020-01-01',

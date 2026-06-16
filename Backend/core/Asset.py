@@ -347,11 +347,20 @@ class Asset:
                     "datetime_candle_references": "open",
                 },
                 "WDO$": {
-                    "tick": 0.5, "tick_fin_val": 5.0, "contract_size": 10.0, # "lot_value": 40000.0, 
+                    "tick": 0.5, "tick_fin_val": 5.0, "contract_size": 1.0, # "lot_value": 40000.0, 
                     "min_lot": 1, "lot_step": 1, "lot_max": 10000,
                     "coin_pnl": "BRL", "coin_margin": "BRL",
-                    "leverage": 20, "margin_rate": 0.05,
-                    "commissions": 0.5, "slippage": 0.25, "spread": 0.25,
+                    "leverage": 1, "margin_rate": 0.10,
+                    "commissions": 0.5, "slippage": 0.5, "spread": 0.5,
+                    "swap_long": 0.0, "swap_short": 0.0,
+                    "datetime_candle_references": "open",
+                },
+                "BIT$": {
+                    "tick": 5.0, "tick_fin_val": 0.5, "contract_size": 0.1, # "lot_value": 40000.0, 
+                    "min_lot": 1, "lot_step": 1, "lot_max": 10000,
+                    "coin_pnl": "BRL", "coin_margin": "BRL",
+                    "leverage": 3, "margin_rate": 0.35,
+                    "commissions": 2.0, "slippage": 10.0, "spread": 5.0,
                     "swap_long": 0.0, "swap_short": 0.0,
                     "datetime_candle_references": "open",
                 },
@@ -653,6 +662,70 @@ def convert_folder(
     # Mostra registry final do market
     AssetRegistry(market=market, asset_type=asset_type).summary()
 
+# def mt5_convert_folder(
+#     source_folder: str,
+#     asset_type:    str,
+#     market:        str,
+#     update_reason: str = "initial import from MT5",
+# ):    
+#     folder = Path(source_folder)
+#     if not folder.is_dir():
+#         print(f"⚠️ Folder not found: {folder.resolve()}")
+#         return
+
+#     # Pega os arquivos originais, ignorando arquivos de limpeza anteriores se existirem
+#     files = sorted(f for f in folder.iterdir() if f.suffix.lower() == ".csv" and "_CLEAN" not in f.name)
+    
+#     if not files:
+#         print(f"⚠️ No CSV files in {folder.resolve()}")
+#         return
+
+#     print(f"\n>>> Converting {len(files)} file(s) from '{folder}'\n")
+
+#     for file in files:
+#         # Extrai o nome do ativo (ex: WIN$)
+#         asset_name = file.stem.split('_')[0].upper()
+#         print(f"  → {file.name}  (asset: {asset_name})")
+
+#         # 1. Lê o arquivo original (MT5 usa tabulação)
+#         df = pl.read_csv(file, separator="\t")
+
+#         # 2. Mapeamento e limpeza de colunas
+#         # Remove < >, coloca em lowercase e renomeia campos específicos
+#         mapping = {}
+#         for col in df.columns:
+#             new_name = col.replace("<", "").replace(">", "").lower().strip()
+            
+#             # Aplica seus mapeamentos específicos
+#             if new_name == "date": new_name = "datetime"
+#             if new_name == "vol":  new_name = "volume"
+            
+#             mapping[col] = new_name
+        
+#         df = df.rename(mapping)
+
+#         # 3. O PULO DO GATO: Usamos um sufixo sem números no final do nome.
+#         # Assim, a Regex do Asset.py vai ignorar o "CLEAN" e encontrará o 
+#         # timeframe real (M1, D1, W1, MN) que já está no meio do nome original.
+#         temp_file = folder / f"{file.stem}_CLEAN.csv"
+#         df.write_csv(temp_file)
+
+#         # 4. Chama a conversão usando o arquivo sanitizado
+#         asset = Asset(name=asset_name, type=asset_type, market=market)
+#         asset.convert(
+#             source_path=str(temp_file),
+#             delimiter=",",           # O write_csv acima salva com vírgula por padrão
+#             datetime_col="datetime", 
+#             update_reason=update_reason,
+#         )
+
+#         # 5. Remove o arquivo temporário após o uso
+#         temp_file.unlink()
+
+#     AssetRegistry(market=market, asset_type=asset_type).summary()
+
+
+
 def mt5_convert_folder(
     source_folder: str,
     asset_type:    str,
@@ -664,7 +737,6 @@ def mt5_convert_folder(
         print(f"⚠️ Folder not found: {folder.resolve()}")
         return
 
-    # Pega os arquivos originais, ignorando arquivos de limpeza anteriores se existirem
     files = sorted(f for f in folder.iterdir() if f.suffix.lower() == ".csv" and "_CLEAN" not in f.name)
     
     if not files:
@@ -674,49 +746,46 @@ def mt5_convert_folder(
     print(f"\n>>> Converting {len(files)} file(s) from '{folder}'\n")
 
     for file in files:
-        # Extrai o nome do ativo (ex: WIN$)
         asset_name = file.stem.split('_')[0].upper()
         print(f"  → {file.name}  (asset: {asset_name})")
 
-        # 1. Lê o arquivo original (MT5 usa tabulação)
+        # 1. Lê TSV do MT5
         df = pl.read_csv(file, separator="\t")
 
-        # 2. Mapeamento e limpeza de colunas
-        # Remove < >, coloca em lowercase e renomeia campos específicos
+        # 2. Limpa nomes das colunas
         mapping = {}
         for col in df.columns:
-            new_name = col.replace("<", "").replace(">", "").lower().strip()
-            
-            # Aplica seus mapeamentos específicos
-            if new_name == "date": new_name = "datetime"
-            if new_name == "vol":  new_name = "volume"
-            
-            mapping[col] = new_name
-        
+            mapping[col] = col.replace("<", "").replace(">", "").lower().strip()
         df = df.rename(mapping)
 
-        # 3. O PULO DO GATO: Usamos um sufixo sem números no final do nome.
-        # Assim, a Regex do Asset.py vai ignorar o "CLEAN" e encontrará o 
-        # timeframe real (M1, D1, W1, MN) que já está no meio do nome original.
+        # 3. Resolve vol -> volume
+        if "vol" in df.columns:
+            df = df.rename({"vol": "volume"})
+
+        # 4. Concatena date + time -> datetime
+        if "date" in df.columns and "time" in df.columns:
+            df = df.with_columns(
+                (pl.col("date") + " " + pl.col("time")).alias("datetime")
+            ).drop(["date", "time"])
+        elif "date" in df.columns:
+            df = df.rename({"date": "datetime"})
+
+        # 5. Salva temporário
         temp_file = folder / f"{file.stem}_CLEAN.csv"
         df.write_csv(temp_file)
 
-        # 4. Chama a conversão usando o arquivo sanitizado
+        # 6. Converte
         asset = Asset(name=asset_name, type=asset_type, market=market)
         asset.convert(
             source_path=str(temp_file),
-            delimiter=",",           # O write_csv acima salva com vírgula por padrão
+            delimiter=",",
             datetime_col="datetime", 
             update_reason=update_reason,
         )
 
-        # 5. Remove o arquivo temporário após o uso
+        # 7. Limpa disco
         temp_file.unlink()
 
     AssetRegistry(market=market, asset_type=asset_type).summary()
-
-
-
-
 
 

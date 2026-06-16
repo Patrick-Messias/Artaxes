@@ -2,7 +2,7 @@ from typing import Dict, Optional, List, Callable, Literal
 from dataclasses import dataclass, field
 import uuid
 
-from StratMoneyManager import StratMoneyManager
+#from StratMoneyManager import StratMoneyManager
 from Indicator import Indicator
 from Walkforward import Walkforward
 
@@ -64,7 +64,7 @@ class StratParams:
     operation:          Optional[Walkforward] = None
     params:             Dict                                            = field(default_factory=dict)
     execution_settings: ExecutionSettings                               = field(default_factory=ExecutionSettings)
-    strat_money_manager: Optional[StratMoneyManager]                   = None
+    #strat_money_manager: Optional[any]                   = None
     indicators:         Dict[str, Indicator]                           = field(default_factory=dict)
     signals:            Optional[Callable]                             = None
 
@@ -90,14 +90,14 @@ class Strat:
         self.operation           = strat_params.operation
         self.params              = strat_params.params
         self.execution_settings  = strat_params.execution_settings
-        self.strat_money_manager = strat_params.strat_money_manager
+        #self.strat_money_manager = strat_params.strat_money_manager
         self.indicators          = strat_params.indicators
         self.signals             = strat_params.signals
 
-    def __repr__(self) -> str:
-        op   = type(self.operation).__name__ if self.operation else 'None'
-        smm  = type(self.strat_money_manager).__name__ if self.strat_money_manager else 'None'
-        inds = list(self.indicators.keys())
-        return (f"<Strat '{self.name}' | op={op} | "
-                f"indicators={inds} | SMM={smm} | "
-                f"mode={self.execution_settings.backtest_mode}>")
+    # def __repr__(self) -> str:
+    #     op   = type(self.operation).__name__ if self.operation else 'None'
+    #     smm  = type(self.strat_money_manager).__name__ if self.strat_money_manager else 'None'
+    #     inds = list(self.indicators.keys())
+    #     return (f"<Strat '{self.name}' | op={op} | "
+    #             f"indicators={inds} | SMM={smm} | "
+    #             f"mode={self.execution_settings.backtest_mode}>")

@@ -2,45 +2,12 @@
     "date_start": null,
     "date_end": null,
     "models": {
-        "FX MA Trend Following": {
-            "execution_timeframe": "M15",
-            "date_start": null,
-            "date_end": null,
-            "strats": {
-                "AT15": {
-                    "assets": [
-                        "EURUSD",
-                        "GBPUSD",
-                        "USDJPY"
-                    ]
-                }
-            }
-        },
-        "FX Mean Reversion": {
-            "execution_timeframe": "M15",
-            "date_start": null,
-            "date_end": null,
-            "strats": {
-                "AT30": {
-                    "assets": [
-                        "EURUSD",
-                        "GBPUSD",
-                        "USDJPY"
-                    ]
-                }
-            }
-        },
-        "Futures Mean Reversion": {
+        "WIN Day Sazonality": {
             "execution_timeframe": "M10",
             "date_start": null,
             "date_end": null,
             "strats": {
                 "AT20": {
-                    "assets": [
-                        "WIN$"
-                    ]
-                },
-                "AT30": {
                     "assets": [
                         "WIN$"
                     ]
