@@ -34,7 +34,12 @@ class StratSystemManager(SystemManager):
                        
     def _default_rank(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> Dict[str, float]:
         # Calculates performance metric for each parset in selected lookback
-
+        strat_node = hierarchy.get(key)
+        if not strat_node:
+            return hierarchy
+        
+        scores = {}
+        param_sets_dict = strat_node.get("parma_sets")
         
         return hierarchy
 

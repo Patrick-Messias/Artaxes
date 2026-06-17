@@ -249,29 +249,29 @@ class Operation(BaseClass):
                     for ps_name, ps_dict in param_sets.items():
                         ps_ind_keys[ps_name] = []
 
-                        #if strat_obj.indicators is not None:
-                        for ind_key, ind_obj in strat_obj.indicators.items():
-                            eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
-                            ind_p_hash = self.param_suffix(eff_params)
-                            unique_key = f"{asset_name}_{model_tf}_{ind_key}_{ind_p_hash}"
+                        if strat_obj.indicators is not None:
+                            for ind_key, ind_obj in strat_obj.indicators.items():
+                                eff_params = self.effective_params_from_global(ind_obj.params, ps_dict)
+                                ind_p_hash = self.param_suffix(eff_params)
+                                unique_key = f"{asset_name}_{model_tf}_{ind_key}_{ind_p_hash}"
 
-                            if unique_key not in ind_cache:
-                                print(f"   > Calculating indicator >>> {ind_key} >>> {unique_key}")
-                                temp_ind_df = self._calculate_indicator(
-                                    model_timeframe=model_tf,
-                                    ind_name=ind_key,
-                                    ind_obj=ind_obj,
-                                    eff_params=eff_params,
-                                    curr_asset_obj=base_asset_df,
-                                    asset_name=asset_name,
-                                    datetime_candle_references=asset_class.datetime_candle_references
-                                )
-                                novas_colunas = [c for c in temp_ind_df.columns if c not in base_asset_df.columns]
-                                ind_cache[unique_key] = {
-                                    c: temp_ind_df[c].cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
-                                    for c in novas_colunas
-                                }
-                            ps_ind_keys[ps_name].append(unique_key)
+                                if unique_key not in ind_cache:
+                                    print(f"   > Calculating indicator >>> {ind_key} >>> {unique_key}")
+                                    temp_ind_df = self._calculate_indicator(
+                                        model_timeframe=model_tf,
+                                        ind_name=ind_key,
+                                        ind_obj=ind_obj,
+                                        eff_params=eff_params,
+                                        curr_asset_obj=base_asset_df,
+                                        asset_name=asset_name,
+                                        datetime_candle_references=asset_class.datetime_candle_references
+                                    )
+                                    novas_colunas = [c for c in temp_ind_df.columns if c not in base_asset_df.columns]
+                                    ind_cache[unique_key] = {
+                                        c: temp_ind_df[c].cast(pl.Float64).fill_null(0.0).to_numpy().astype(np.float64)
+                                        for c in novas_colunas
+                                    }
+                                ps_ind_keys[ps_name].append(unique_key)
 
                         if sig_key_params is not None:
                             sig_hash = self.param_suffix({k: ps_dict[k] for k in sig_key_params if k in ps_dict})
@@ -388,7 +388,7 @@ class Operation(BaseClass):
                     ps_signal_arrays: dict[str, dict] = {ps: {} for ps in param_sets}
 
                     for ps_name, ps_dict in param_sets.items():
-                        sig_hash = ps_sig_hash[ps_name]
+                        sig_hash = ps_sig_hash[ps_name] 
                         for sig_name, sig_val in sig_cache[sig_hash].items():
                             if isinstance(sig_val, str):
                                 ps_signal_refs[ps_name][sig_name] = sig_val
@@ -1436,7 +1436,7 @@ class Operation(BaseClass):
 
         #self._report_pnl_summary()
         #self._plot_pnl_curves()
-        #self._plot_wfm()
+        self._plot_wfm()
 
         # V - Portfolio Simulation
         print(f"\n>>> V - Portfolio Simulation <<<")
@@ -1487,7 +1487,7 @@ if __name__ == "__main__":
         },
         'AT20': { 
             'execution_tf': AT20_model_execution_tf,
-            'backtest_start_idx': 21,
+            'backtest_start_idx': 2,
             'limit_order_exclusion_after_period': 1,
             'limit_order_perc_treshold_for_order_diff': 0.03,
             'limit_can_enter_at_market_if_gap': False,
@@ -1497,9 +1497,8 @@ if __name__ == "__main__":
             'exit_nb_long': range(0, 0+1, 7),
             'exit_nb_short': range(0, 0+1, 7),
             
-            'sl_perc': range(2, 10+1, 4), # 3
-            'tp_perc': range(2, 10+1, 4), 
-            'param2': range(10, 80+1, 10), # 3
+            'tp_pts': range(200, 2000+1, 200), # 3
+            'sl_pts': range(10, 80+1, 10), # 3
         },
         'AT30': { 
             'execution_tf': AT20_model_execution_tf,
@@ -1533,10 +1532,10 @@ if __name__ == "__main__":
         # 'min': PriorCote(asset=None, timeframe=AT15_model_execution_tf, price_col='low'),
         # 'open_day': DayOpen(assertsset=None, timeframe=AT15_model_execution_tf),
     }
-    AT20_indicators = {
-        'atr': ATR_SL(asset=None, timeframe=AT20_model_execution_tf, window='param2'),
-        #'open_day': DayOpen(asset=None, timeframe=AT20_model_execution_tf),
-    }
+    AT20_indicators = None#{
+    #    'atr': ATR_SL(asset=None, timeframe=AT20_model_execution_tf, window='param2'),
+    #    #'open_day': DayOpen(asset=None, timeframe=AT20_model_execution_tf),
+    #}
 
     def AT15_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point
@@ -1639,25 +1638,23 @@ if __name__ == "__main__":
         df = df.with_columns(pl.col("datetime").dt.weekday().alias("dweek"))
         df = df.with_columns(pl.col("datetime").dt.hour().alias("hour"))
 
-        atr = df['atr']
-
         entry_long  = (df['dweek']==4) & (df['close'] > df['open']) & (df['hour'] < 10)
         entry_short = (df['dweek']==4) & (df['close'] < df['open']) & (df['hour'] < 10)
 
-        exit_tf_long  = (df['close'] < df['low'])
-        exit_tf_short = (df['close'] > df['high'])
+        exit_tf_long  = None #(df['close'] < df['low'])
+        exit_tf_short = None #(df['close'] > df['high'])
 
         # Preço da ordem pendente
         limit_long_price  = df['open'] #'high[1]' #
         limit_short_price = df['open'] #'low[1]' #
 
         # Distâncias (definidas ANTES de serem usadas)
-        sl_long_price  = limit_long_price - 400 #limit_long_price - atr * params['sl_perc'] 
-        sl_short_price = limit_long_price + 400 #limit_long_price + atr * params['sl_perc'] 
+        sl_long_price  = limit_long_price - params['sl_pts'] #limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = limit_long_price + params['sl_pts'] #limit_long_price + atr * params['sl_perc'] 
 
         # TP absoluto: 2R
-        tp_long_price  = limit_long_price + 1000 #limit_long_price + atr  * params['tp_perc']
-        tp_short_price = limit_long_price - 1000 #limit_long_price - atr * params['tp_perc']
+        tp_long_price  = limit_long_price + params['tp_pts'] #limit_long_price + atr  * params['tp_perc']
+        tp_short_price = limit_long_price - params['tp_pts'] #limit_long_price - atr * params['tp_perc']
 
         # Trailing: 0.5R
         trail_long_dist  = None #sl_long_dist  * 0.5
@@ -1725,7 +1722,7 @@ if __name__ == "__main__":
             'compound_fract_series': compound_fract_series,
             'dist_signal_ref': dist_signal_ref,
 
-            '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
+            '__sig_key_params': ['tp_pts', 'sl_pts']
         }
     def AT30_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point

@@ -9,6 +9,7 @@ import polars as pl, uuid, sys, os, json, bisect
 from PortfolioSystemManager import PortfolioSystemManager, PortfolioSystemManagerParams
 from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
 from StratSystemManager import StratSystemManager, StratSystemManagerParams
+from MoneyManager import MoneyManager, MoneyManagerParams
 
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
@@ -60,10 +61,10 @@ class Portfolio(BaseClass, BaseManager):
 
       
     def _exits_and_updates(self, idx_datetime): # Exits positions based on previous data and open only [i] data
-        pmm = self.sm_mm_map["managers"].get("pmm", None)
-
         if not self.active_positions:
             return True
+        
+        pmm = self.sm_mm_map["managers"]["pmm"]
 
         # Iterates over active_positions and checks if event="exit" or other exit conditions
         for pos_key in list(self.active_positions.keys()): 
@@ -85,11 +86,9 @@ class Portfolio(BaseClass, BaseManager):
 
             # Checks for Exits
             if event in ["exit", "entry"]:
-
                 # Gives back margin
-                if pmm:
-                    pmm.cash += allocated_margin
-                    pmm.allocated_margin -= allocated_margin
+                pmm.cash += allocated_margin
+                pmm.allocated_margin -= allocated_margin
 
                 self.portfolio_returns.append({
                     "c_key": pos_key,
@@ -110,10 +109,9 @@ class Portfolio(BaseClass, BaseManager):
                 new_actual_margin = base_margin_now * scale_factor
 
                 # Adjusts Money Manager difference
-                if pmm:
-                    margin_delta = new_actual_margin - allocated_margin
-                    pmm.cash -= margin_delta
-                    pmm.allocated_margin += margin_delta
+                margin_delta = new_actual_margin - allocated_margin
+                pmm.cash -= margin_delta
+                pmm.allocated_margin += margin_delta
 
                 # Partial lot_size update (WIP in CPP)
                 # pos_obj["lot_size"] = curr_trade_data.get("lot_size") * scale_factor
@@ -129,15 +127,13 @@ class Portfolio(BaseClass, BaseManager):
                     "event": "update",
                 })
  
-        if pmm:
-            pmm.update_states(self.active_positions)
+        pmm.update_states(self.active_positions)
             
         return True
 
     def _entries(self, idx_datetime): # Enters new positions based on previous data and open only [i] data
-        # An update can create a new entry, no need to update a new entry on [i]
-        pmm = self.sm_mm_map["managers"].get("pmm", None)
-   
+        pmm = self.sm_mm_map["managers"]["pmm"]
+
         # Checks if there's still margin and space to open new positions
         if pmm and pmm.available_margin <= 0:
             print(f"- Not enought margin to open new position - DELETE THIS DEBUG PRINT AFTER") # NOTE
@@ -319,20 +315,7 @@ class Portfolio(BaseClass, BaseManager):
             self._system_money_managers(i, step_dt, psm_sch, msm_sch, ssm_sch)
                                                     
             #||=====================================================================================||#
-                
-            import matplotlib.pyplot as plt
-            import numpy as np
-            import polars as pl
-            import matplotlib as mpl # Import para colormaps novos
-
-            # if i == int(len(self.datetime_timeline)-4):
-            #     print("\n" + "="*80)
-            #     print("      DEBUG SYSTEM: INDICATOR HIERARCHY & LOOKUP TEST")
-            #     print("="*80)
-            #     for i, k in enumerate(list(self.indicator_pool.keys())):
-            #         print(f" Exemplo de Chave {i}: {k}")
-            #     print("="*80)
-           
+                           
             if i < 3 or i > len(self.datetime_timeline)-4: 
                 print(f"> {step_dt} - Portfolio PnL: {self.sim_current_equity:.2f}")
             
@@ -350,7 +333,7 @@ class Portfolio(BaseClass, BaseManager):
             psm = m_map.get("managers", {}).get("psm")
             if psm and dt in psm_sch.get(p_name, set()):
                 self.hierarchy = psm.main(i, dt, p_key)
-                print("PSM")
+                #print("PSM")
 
         # Model and Strat Levels
         seen_models = set()
@@ -369,7 +352,7 @@ class Portfolio(BaseClass, BaseManager):
 
                     if msm and dt in msm_sch.get(m_key, set()): 
                         self.hierarchy = msm.main(i, dt, m_key)
-                        print("msM")
+                        #print("msM")
 
             # Strat level — executa apenas 1x por strat
             if s_key not in seen_strats:
@@ -380,7 +363,7 @@ class Portfolio(BaseClass, BaseManager):
 
                     if ssm and dt in ssm_sch.get(s_key, set()):
                         self.hierarchy = ssm.main(i, dt, s_key)
-                        print("ssm")
+                        #print("ssm")
 
         return True
 
@@ -859,7 +842,7 @@ class Portfolio(BaseClass, BaseManager):
         timeline = self.datetime_timeline
         last_idx = len(timeline) - 1
 
-        # 1. Portfolio Level (PSM / PMM)
+        # 1. Portfolio Level
         p_name = self.name
         p_key = (p_name,)
         p_magrs = sm_mm_map.get("managers", {})
@@ -870,7 +853,7 @@ class Portfolio(BaseClass, BaseManager):
         if p_data:
             p_node = {p_key: p_data}
            
-            # PSM and PMM
+            # NOTE MUDAR PSM and PMM
             for mgr_key, mgr_class, sch_dict in [
                 ("psm", DEFAULT_MGR_CONFIG["psm"], psm_sch)
             ]: 
@@ -963,40 +946,6 @@ class Portfolio(BaseClass, BaseManager):
 
         return unique_ind_dts
     
-    def _get_all_mm_ind_datetimes(self, data_source="local"):
-        assets = self.global_assets #Asset.load_all() # NOTE Deletar futuramente
-        unique_ind_dts = set()
-        repeated_assets = set()
-
-        pmm = self.sm_mm_map.get("managers", {}).get("pmm")
-        mm_inds = pmm.indicators if (pmm and pmm.indicators) else {}
-        if mm_inds:
-            for ind_name, ind_obj in mm_inds.items():
-                tf = ind_obj.timeframe
-                if tf is None:
-                    print(f"< [Error] No timeframe found for Money Manager Indicator: {ind_name}. Skipping.")
-                    continue
-
-                # Gets Asset define in ind and not in repeated_assets 
-                if ind_obj.asset is None:
-                    if ind_obj.asset not in repeated_assets:
-                        asset_obj = assets.get(ind_obj.asset)
-                        asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
-                        unique_ind_dts.update(asset_df["datetime"])
-                        repeated_assets.add(ind_obj.asset)
-
-                # Else gets each asset defined in assets and not in repeated_assets
-                else:
-                    assets = pmm.assets if pmm and pmm.assets else []
-                    for asset_name in assets:
-                        if asset_name not in repeated_assets:
-                            asset_obj = assets.get(asset_name)
-                            asset_df = asset_obj.load(tf, data_source, self.date_start, self.date_end)
-                            unique_ind_dts.update(asset_df["datetime"])
-                            repeated_assets.add(ind_obj.asset)
-
-        return unique_ind_dts
-
     # ── Global ───────────────────────────────────────────────
 
     def _iter_portfolio_data(self):
@@ -1383,7 +1332,7 @@ class Portfolio(BaseClass, BaseManager):
 
 
 # 1. XXX Fallback para SM/MM antigo
-# 2. Eliminar todos MM, apenas um geral
+# 2. XXX Eliminar todos MM, apenas um geral
 # 3. MM usa o rebalance do SM para rebalance do nível MM também, além de guardar defs de mm
 # 4. Strat SM pode selecionar se vai usar o LONG/SHORT/BOTH de cada parset OU usar sempre todos os selecionados no sm_mm_map
 
@@ -1403,7 +1352,7 @@ if __name__ == "__main__":
     winfut = assets.get("WIN$")
     
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
-
+    pmm = MoneyManager(MoneyManagerParams())
     psm = PortfolioSystemManager(PortfolioSystemManagerParams(
         reb_frequency="weekly",
         reb_metric="pnl",
@@ -1521,7 +1470,7 @@ if __name__ == "__main__":
 
     # SM/MM mapeados por nível — referenciados durante a simulação
     sm_mm_map = {
-        "managers": {"psm": psm, "separate_ls": True, "side": 'both'},
+        "managers": {"psm": psm, "pmm": pmm, "separate_ls": True, "side": 'both'},
         "models": {
             "FX MA Trend Following": {
                 "managers": {"msm": msm, "separate_ls": True, "side": 'both'},
