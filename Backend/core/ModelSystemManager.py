@@ -1,21 +1,24 @@
 from dataclasses import dataclass, field
 from SystemManager import SystemManager, SystemManagerParams
-from typing import Optional, Callable, Dict, List
+from typing import Literal, Dict, List
 import polars as pl, numpy as np
 
 @dataclass
 class ModelSystemManagerParams(SystemManagerParams):
-    model_hierarchy: dict = field(default_factory=lambda: {"order_by": 'highest', "metric": 'profit_perc'})
-    rebalance_frequency: str = 'weekly'
-    close_open_trades_on_rebalance: bool = False
+    parset_order: Literal["highest", "lowest", "mode"] = "highest"
+    parset_metric: Literal["pnl", "sharpe", "pnl_dd"] = "pnl"
+    parset_allocation: Literal["1/n", "custom"] = "1/n"
+    parset_number_cutoff: int = 1
+    parset_sides_overwrite: str = None
 
 class ModelSystemManager(SystemManager): # Manages portfolio's model hierarchy 
     def __init__(self, msm_params: ModelSystemManagerParams):
         super().__init__(msm_params) # SystemManager attributes init
-        
-        self.model_hierarchy = dict(msm_params.model_hierarchy)
-        self.rebalance_frequency = msm_params.rebalance_frequency
-        self.close_open_trades_on_rebalance = msm_params.close_open_trades_on_rebalance
+        self.parset_order = msm_params.parset_order
+        self.parset_metric = msm_params.parset_metric
+        self.parset_allocation = msm_params.parset_allocation
+        self.parset_number_cutoff = msm_params.parset_number_cutoff
+        self.parset_sides_overwrite = msm_params.parset_sides_overwrite
 
 #||=========================================================================================||
 
@@ -24,86 +27,115 @@ class ModelSystemManager(SystemManager): # Manages portfolio's model hierarchy
         return indicator_pool
                        
     def _default_rank(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> Dict[str, float]:
-        df_rets = pl.DataFrame(sim_data.get('both', {})).fill_null(0.0)
-        if df_rets.is_empty() or df_rets.width < 1: return {}
+        model_node = hierarchy.get(key)
+        if not model_node:
+            return hierarchy
+        series_dict = {}
 
+        for s_name, s_node in model_node.get("strats", {}).items():
+            # "BOTH", "LONG", "SHORT", "SEPR"
+            strat_side = s_node.get('side', 'BOTH').upper()
+
+            for a_name in s_node.get('assets', {}).keys():
+                col_name = f"{s_name}_{a_name}"
+
+                if strat_side in ['BOTH', 'LONG', 'SHORT']:
+                    side_key = strat_side.lower()
+                    if side_key in sim_data and col_name in sim_data[side_key]:
+                        # Creates unique entity
+                        series_dict[f"{col_name}_{side_key}"] = sim_data[side_key][col_name]
+                elif strat_side == "SEPR": # Dismembers into two different entities
+                    if "long" in sim_data and col_name in sim_data["long"]:
+                        series_dict[f"{col_name}_long"] = sim_data['long'][col_name]
+                    if 'short' in sim_data and col_name in sim_data['short']:
+                        series_dict[f"{col_name}_short"] = sim_data['short'][col_name]
+
+        df_rets = pl.DataFrame(series_dict).fill_null(0.0)
         scores = {}
-        corr_matrix = df_rets.corr() if df_rets.width > 1 else None
 
-        for col in df_rets.columns:
-            series = df_rets[col]
-            std = series.std()
-            sharpe = (series.mean() / std * np.sqrt(252)) if std > 0 else 0.0
+        # Calculates Sharpe and Corr for entities
+        if not df_rets.is_empty() and df_rets.width > 0:
+            corr_matrix = df_rets.corr() if df_rets.width > 1 else None
 
-            if corr_matrix is not None:
-                avg_corr = (corr_matrix[col].sum() - 1) / (df_rets.width - 1)
-            else:
-                avg_corr = 0.0
+            for col in df_rets.columns:
+                series = df_rets[col]
+                std = series.std()
 
-            scores[col] = sharpe * (1 - avg_corr)
+                if std and std>0:
+                    sharpe = (series.mean() / std / np.sqrt(252))
+                else:
+                    sharpe = -999.0
+
+                if corr_matrix is not None and sharpe > -999.0:
+                    avg_corr = (corr_matrix[col].sum()-1 / (df_rets.width-1))
+                    score_val = sharpe * (1-avg_corr)
+                else:
+                    score_val = sharpe
+                
+                scores[col] = score_val
         
-        return scores
+        model_node["_scores"] = scores
+        return hierarchy
 
     def _default_filter(self, i, step_dt, hierarchy: dict, indicator_pool: dict, scores: dict, port_returns: dict, key) -> List[str]:
-        # Enables only top N asset/strat based on ranking
-        top_n = getattr(self.params, 'top_n', 5)
-        max_asset_per_strat_n = getattr(self.params, 'max_asset_per_strat_n', None)
-        order_by = self.model_hierarchy['order_by']
+        model_node = hierarchy.get(key)
+        if not model_node or "_scores" not in model_node:
+            return hierarchy
+        
+        scores = model_node["_scores"]
+        valid_scores = {k: v for k, v in scores.items() if v > -999.0}
+        is_reverse = True if self.model_hierarchy.get("order_by", "highest") == "highest" else False
 
-        # Filters only those with score > 0 and takes N self.model_hierarchy['order_by']
-        valid_scores = {k: v for k, v in scores.items() if v > 0}
-        ranked_keys = sorted(valid_scores, key=valid_scores.get, reverse=True)[:top_n]
+        ranked_keys = sorted(valid_scores, key=valid_scores.get, reverse=is_reverse)[:self.parset_number_cutoff]
 
-        for s_name, s_node in hierarchy.get('strats', {}).items():
-            for a_name, a_node in s_node.get('assets', {}).items():
-                item_key = f"{s_name}_{a_name}"
-
-                if item_key in ranked_keys:
-                    a_node['active'] = True
-                    a_node['score'] = scores[item_key]
-                else:
-                    a_node['active'] = False
-                    a_node['score'] = 0.0
-
-        return hierarchy
-    
-    def _generate_internal_weights(self, i, step_dt, hierarchy: dict, scores: dict) -> dict:
-        # Converts approved asset scores in percent weights that sum up to 1.0, later MM will use this to apply capital
-        total_score = 0.0
-        active_nodes = []
-
-        for s_name, s_node in hierarchy.get("strats", {}).items():
-            for a_name, a_node in s_node.get('assets', {}).items():
-                if a_node.get('active', False):
-                    total_score += a_node.get('score', 0.0)
-                    active_nodes.append(a_node)
-
-        # Distribute weigts proportionally
-        for a_node in active_nodes:
-            if total_score > 0:
-                relative_weight = a_node.get('score', 0.0) / total_score
-            else:
-                relative_weight = 1.0 / len(active_nodes)
-
-            # Applies weights on hierarchy
-            l_factor = getattr(self.params, 'long_factor', 0.5)
-            s_factor = getattr(self.params, 'short_factor', 0.5)
-
-            if 'long' in a_node: a_node['long']['weight'] = relative_weight * l_factor 
-            if 'short' in a_node: a_node['short']['weight'] = relative_weight * s_factor
-            if 'both' in a_node: a_node['both']['weight'] = relative_weight
-
-        return hierarchy
-    
+        model_node["_active_combos"] = ranked_keys
+        return hierarchy    
 
     def _default_rebalance(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
+        model_node = hierarchy.get(key)
+        if not model_node or "_active_combos" not in model_node:
+            return hierarchy
+
+        active_combos = model_node["_active_combos"]
+        scores = model_node.get("_scores", {})
+        weights_dict = {}
+
+        if not active_combos:
+            model_node["weights"] = weights_dict
+            return hierarchy
+
+        if self.parset_allocation == "equal":
+            target_weight = 1.0 / len(active_combos)
+            weights_dict = {combo: target_weight for combo in active_combos}
+            
+        elif self.parset_allocation == "performance_weighted":
+            valid_scores = {combo: max(0.0, scores.get(combo, 0.0)) for combo in active_combos}
+            total_score = sum(valid_scores.values())
+            
+            if total_score > 0:
+                weights_dict = {combo: score / total_score for combo, score in valid_scores.items()}
+            else:
+                target_weight = 1.0 / len(active_combos)
+                weights_dict = {combo: target_weight for combo in active_combos}
+
+        # Strats weights ex: "AT2_WIN$_long": 0.3, "AT2_WIN$_short": 0.15, "AT2_WIN$_both": 0.45
+        model_node["weights"] = weights_dict
+        
         return hierarchy
 
     # ── Every Datetime [i] ───────────────────────────────────────────────
     
     def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> dict:
         lookback = getattr(self.params, 'reb_lookback', 63)
-        #sim_data = self.get_data(key=key, lookback=lookback, data_type="aggr", side="both")
+        print(key)
+        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr", side="both")
+
+        if not sim_data:
+            return hierarchy
+
+        hierarchy = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+        hierarchy = self.rebalance(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
         return hierarchy
 

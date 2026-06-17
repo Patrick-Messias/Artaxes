@@ -1494,11 +1494,11 @@ if __name__ == "__main__":
             'limit_opposite_order_closes_pending': False,
 
             'exit_nb_only_if_pnl_is': 0, 
-            'exit_nb_long': range(0, 0+1, 7),
-            'exit_nb_short': range(0, 0+1, 7),
+            'exit_nb_long': range(0, 0+1, 3),
+            'exit_nb_short': range(0, 0+1, 3),
             
             'tp_pts': range(200, 2000+1, 200), # 3
-            'sl_pts': range(10, 80+1, 10), # 3
+            'sl_pts': range(200, 2000+1, 200) # 3
         },
         'AT30': { 
             'execution_tf': AT20_model_execution_tf,
@@ -1532,10 +1532,11 @@ if __name__ == "__main__":
         # 'min': PriorCote(asset=None, timeframe=AT15_model_execution_tf, price_col='low'),
         # 'open_day': DayOpen(assertsset=None, timeframe=AT15_model_execution_tf),
     }
-    AT20_indicators = None#{
-    #    'atr': ATR_SL(asset=None, timeframe=AT20_model_execution_tf, window='param2'),
+    AT20_indicators = None
+    # {
+    #    'atr': ATR_SL(asset=None, timeframe=AT20_model_execution_tf, window='param1'),
     #    #'open_day': DayOpen(asset=None, timeframe=AT20_model_execution_tf),
-    #}
+    # }
 
     def AT15_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point
@@ -1648,13 +1649,15 @@ if __name__ == "__main__":
         limit_long_price  = df['open'] #'high[1]' #
         limit_short_price = df['open'] #'low[1]' #
 
+        #atr = df['atr']
+
         # Distâncias (definidas ANTES de serem usadas)
-        sl_long_price  = limit_long_price - params['sl_pts'] #limit_long_price - atr * params['sl_perc'] 
-        sl_short_price = limit_long_price + params['sl_pts'] #limit_long_price + atr * params['sl_perc'] 
+        sl_long_price  = limit_long_price - params['sl_pts'] # atr * params['sl_pts']  # 
+        sl_short_price = limit_long_price + params['sl_pts'] # atr * params['sl_pts'] # 
 
         # TP absoluto: 2R
-        tp_long_price  = limit_long_price + params['tp_pts'] #limit_long_price + atr  * params['tp_perc']
-        tp_short_price = limit_long_price - params['tp_pts'] #limit_long_price - atr * params['tp_perc']
+        tp_long_price  = limit_long_price + params['tp_pts'] # atr  * params['tp_pts'] # 
+        tp_short_price = limit_long_price - params['tp_pts'] # atr * params['tp_pts'] # 
 
         # Trailing: 0.5R
         trail_long_dist  = None #sl_long_dist  * 0.5
