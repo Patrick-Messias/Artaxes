@@ -5,7 +5,7 @@ from typing import Optional
 from BaseClass import BaseClass, BaseManager
 from Storage import Storage
 from Asset import Asset
-import polars as pl, uuid, sys, os, json, bisect
+import polars as pl, numpy as np, uuid, sys, os, json, bisect
 from PortfolioSystemManager import PortfolioSystemManager, PortfolioSystemManagerParams
 from ModelSystemManager import ModelSystemManager, ModelSystemManagerParams
 from StratSystemManager import StratSystemManager, StratSystemManagerParams
@@ -436,20 +436,15 @@ class Portfolio(BaseClass, BaseManager):
             if not node: return None
 
             def slice_data(block):
-                # Retorna o slice do start_idx até o i atual (inclusive)
-                # zipando com as colunas para manter o formato de dicionário
                 data_slice = block["data"][start_idx : i + 1]
                 cols = block["cols"]
                 return {col: data_slice[:, idx].tolist() for idx, col in enumerate(cols)}
             
-            # Case of only 1 str
             if isinstance(side, str):
                 data_block = node.get(side.lower())
                 return slice_data(data_block) if data_block else None
 
-            # Case of list or None, returns mapped dict {"side": {}}
             target_sides = [s.lower() for s in side] if isinstance(side, list) else ["both", "long", "short"]
-            
             payload = {}
             for s in target_sides:
                 data_block = node.get(s)
@@ -461,68 +456,133 @@ class Portfolio(BaseClass, BaseManager):
         # --- CASO 2: DADOS DE PARSET (Leitura de Disco/Storage) ---
         elif data_type == "parset":
             try:
-                # Chama o seu método load conforme definido na sua classe Storage
                 asset_data = self.storage.load(key)
-                
-                # O seu load retorna um dict. O que queremos para simulação é a 'timeline'
                 raw_df = asset_data.get("timeline")
-                
-                if raw_df is None or raw_df.is_empty():
-                    return None
+                if raw_df is None or raw_df.is_empty(): return None
 
-                # Filtragem por PS_ID (Seu ID longo)
                 if psid_or_wfid is not None:
                     raw_df = raw_df.filter(pl.col("ps_id") == psid_or_wfid)
 
-                # Filtragem Temporal baseada na sua timeline do backtest
                 end_dt = self.datetime_timeline[i]
-                
                 if start_idx is not None:
                     start_dt = self.datetime_timeline[start_idx]
-                    # Note que usamos a coluna 'datetime' que o seu _build_timeline cria
-                    raw_df = raw_df.filter(
-                        (pl.col("datetime") >= start_dt) & 
-                        (pl.col("datetime") <= end_dt)
-                    )
+                    raw_df = raw_df.filter((pl.col("datetime") >= start_dt) & (pl.col("datetime") <= end_dt))
                 else:
                     raw_df = raw_df.filter(pl.col("datetime") == end_dt)
 
                 return raw_df.to_dicts()
-            
             except Exception as e:
                 print(f"Erro ao carregar parset para {key}: {e}")
                 return None
             
-        elif data_type == "wf": # wf_ids can be str, list[str] or None (all ps_id)
+        elif data_type == "wf":
             try:
-                if start_idx is None:
-                    start_dt_val = None
-                elif isinstance(start_idx, str):
-                    start_dt_val = start_idx
-                else:
-                    start_dt_val = self.datetime_timeline[start_idx]
-                    
-                if i is None:
-                    end_dt_val = None
-                elif isinstance(i, str):
-                    end_dt_val = i
-                else:
-                    end_dt_val = self.datetime_timeline[i]
+                start_dt_val = None if start_idx is None else (start_idx if isinstance(start_idx, str) else self.datetime_timeline[start_idx])
+                end_dt_val = None if i is None else (i if isinstance(i, str) else self.datetime_timeline[i])
 
                 wfm_df = self.storage.load_walkforward_matrix_v2(
                     key=key, res_price="perc", side_val=side, wf_ids=psid_or_wfid, 
                     timeline_df=None, wf_map=None, start_dt=start_dt_val, end_dt=end_dt_val
                 )
-                
-                if wfm_df is None or wfm_df.is_empty():
-                    print(f"    < [Portfolio._populate_sim_data] wfm_df empty for Walkforward Matrix {psid_or_wfid} for {key}: {e}")
-                    return None
-                
-                # Format: to_dicts() returns [{col1: val, col2: val}, ...] best to itearate line by line
+                if wfm_df is None or wfm_df.is_empty(): return None
                 return wfm_df.to_dicts()
-            
             except Exception as e:
-                print(f"    < [Portfolio._populate_sim_data] error constructing Walkforward Matrix {psid_or_wfid} for {key}: {e}")
+                print(f" < [Portfolio._populate_sim_data] error constructing Walkforward Matrix for {key}: {e}")
+                return None
+            
+        elif data_type == "aggr_dynamic":
+            node = self.sim_data.get(key)
+            if not node: return None
+
+            target_sides = [side.lower()] if isinstance(side, str) else (side if isinstance(side, list) else ["both", "long", "short"])
+            
+            # Captura de forma resiliente o estado atual da hierarquia viva do Manager
+            h_viva = getattr(self, "hierarchy", {}) or getattr(getattr(self, "portfolio", None), "hierarchy", {})
+
+            # Função auxiliar interna para varrer a árvore viva e validar herança de filtros/pesos
+            def _check_hierarchy_status(col_name, current_side):
+                parts = col_name.split(":")
+                if len(parts) < 4: return True, 1.0
+                op, m, s, a = parts[0], parts[1], parts[2], parts[3]
+
+                active = True
+                weight = 1.0
+
+                # Varredura defensiva multinível (suporta dicionários aninhados ou chaves diretas)
+                if h_viva and isinstance(h_viva, dict):
+                    # Level 1: Operação
+                    op_node = h_viva.get(op)
+                    if isinstance(op_node, dict):
+                        if not op_node.get("active", True): active = False
+                        weight *= op_node.get("weight", 1.0)
+
+                        # Level 2: Modelo
+                        m_node = op_node.get("models", {}).get(m) or op_node.get(m)
+                        if isinstance(m_node, dict):
+                            if not m_node.get("active", True): active = False
+                            weight *= m_node.get("weight", 1.0)
+
+                            # Level 3: Estratégia
+                            s_node = m_node.get("strats", {}).get(s) or m_node.get(s)
+                            if isinstance(s_node, dict):
+                                if not s_node.get("active", True): active = False
+                                weight *= s_node.get("weight", 1.0)
+
+                                # Level 4: Ativo
+                                a_node = s_node.get("assets", {}).get(a) or s_node.get(a)
+                                if isinstance(a_node, dict):
+                                    if not a_node.get("active", True): active = False
+                                    weight *= a_node.get("weight", 1.0)
+                                    
+                                    # Valida se o lado específico (long/short) possui travas locais
+                                    if current_side in a_node and isinstance(a_node[current_side], dict):
+                                        if not a_node[current_side].get("active", True): active = False
+                                        weight *= a_node[current_side].get("weight", 1.0)
+
+                return active, weight
+
+            def slice_dynamic_block(block, current_side):
+                cols = block["cols"]
+                data_matrix = block["data"][start_idx : i + 1] # Shape: (tamanho_slice, numero_colunas)
+                
+                active_series = []
+                weights = []
+
+                # Filtra e aplica pesos apenas nas colunas que passarem na validação viva
+                for idx, col in enumerate(cols):
+                    is_active, w = _check_hierarchy_status(col, current_side)
+                    if is_active:
+                        active_series.append(data_matrix[:, idx])
+                        weights.append(w)
+
+                # Fallback caso tudo no ramo tenha sido desligado pelo System Manager
+                if not active_series:
+                    return {"@total": [0.0] * (i + 1 - start_idx)}
+
+                # Combinação inteligente das séries em vetor NumPy acelerado
+                if all(w == 1.0 for w in weights):
+                    # Se todos os pesos forem 1.0, mantém a média horizontal padrão (Equal Weight)
+                    combined = np.mean(active_series, axis=0)
+                else:
+                    # Se houver pesos customizados (Ex: Risk Parity ou Performance Sizing do MM), faz a soma ponderada
+                    combined = np.zeros(data_matrix.shape[0])
+                    for series, w in zip(active_series, weights):
+                        combined += series * w
+
+                return {"@total": combined.tolist()}
+
+            # Processamento do Payload de retorno
+            if isinstance(side, str):
+                data_block = node.get(side.lower())
+                return slice_dynamic_block(data_block, side.lower()) if data_block else None
+
+            payload = {}
+            for s in target_sides:
+                data_block = node.get(s)
+                if data_block:
+                    payload[s] = slice_dynamic_block(data_block, s)
+            
+            return payload if payload else None
 
         print(f"    < [Portfolio._populate_sim_data] data_type unknown")
         return None
@@ -532,21 +592,14 @@ class Portfolio(BaseClass, BaseManager):
         storage = self.storage #Storage(base_path=self.data_storage_base_path)
         self.sim_data = {}
 
-        # # Specific Aggr
-        # asset_aggr = [dt, ps_id1, ps_id2, ps_id3] # (op_name, m_name, s_name, a_name)
-        # strat_aggr = [dt, asset1, asset2, asset3] # (op_name, m_name, s_name)
-        # model_aggr = [dt, strat1, strat2, strat3] # (op_name, m_name)
-        # opera_aggr = [dt, model1, model2, model3] # (op_name)
-        # # Global Aggr
-        # portf_aggr = [dt, model1, model2, model3, model4, ...] # (self.name) # Joins all opera_aggr into one
-
         # Acumuladores hierárquicos: { key: { direction: { child_name: series } } }
-        temp_asset_cache, strat_acc, model_acc, opera_acc, portf_acc = {}, {}, {}, {}, {} # { (op, m, s, a): { "both": df, "long": df... } }
+        flat_granular_data = {"both": {}, "long": {}, "short": {}}
+        raw_collected = [] # Tuple list (a_key, dir_label, col_name, df_pnl)
         unique_dts = set()
 
         REF_CAPITAL = self.portfolio_parameters.get("capital", 100000.0)
 
-        # --- 1. COLETA DE DADOS E TIMELINE ---
+        # 1. Data collection
         for op_n, _, m_n, _, s_n, _, a_n, _ in self._iter_portfolio_data():
             config = self.portfolio_data[op_n][m_n][s_n][a_n]
             a_key = (op_n, m_n, s_n, a_n)
@@ -559,168 +612,124 @@ class Portfolio(BaseClass, BaseManager):
             # Loads brute data (Parset)
             asset_data = storage.load(a_key)
             timeline_df = asset_data.get("timeline")
-            if timeline_df is None or timeline_df.is_empty(): continue
             
             # Preparates direction
             vias = {"both": side_pref}
             if separate_ls:
                 vias.update({"long": "long", "short": "short"})
-            asset_entry = {}
 
             for dir_label, side_val in vias.items():
-                sources = []
-
-                # Source A: Parsets
+                # Source A - Param Sets
                 if calculate_on_data in ["all", "parset"] and timeline_df is not None and not timeline_df.is_empty():
-                    p_aggr = self.get_aggr_pnl_by_side(timeline_df, side_val, a_n, metric_col="perc")
-                    if p_aggr is not None and not p_aggr.is_empty():
-                        val_col = [c for c in p_aggr.columns if c != "datetime"][0]
-                        normalized_parset = p_aggr.with_columns(
-                            (pl.col(val_col) * REF_CAPITAL).alias("parset_pnl")
-                        ).select(["datetime", "parset_pnl"])
-                        sources.append(normalized_parset)
+                    ps_ids = timeline_df["ps_id"].unique().to_list() if "ps_id" in timeline_df.columns else ["default"]
 
-                # Source B: Walkforward
+                    for pid in ps_ids:
+                        df_pid = timeline_df.filter(pl.col("ps_id") == pid) if pid != "default" else timeline_df
+                        p_aggr = self.get_aggr_pnl_by_side(df_pid, side_val, a_n, metric_col="perc")
+                        
+                        if p_aggr is not None and not p_aggr.is_empty():
+                            val_col = [c for c in p_aggr.columns if c != "datetime"][0]
+                            normalized_parset = p_aggr.with_columns(
+                                (pl.col(val_col) * REF_CAPITAL).alias("pnl")
+                            ).select(["datetime", "pnl"])
+                            
+                            # Complete nomeclature alignment preserving setup granularity
+                            col_name = f"{op_n}:{m_n}:{s_n}:{a_n}:parset:{pid}"
+                            raw_collected.append((a_key, dir_label, col_name, normalized_parset))
+                            unique_dts.update(normalized_parset['datetime'].to_list())
+                
+                # Source B - Walkforward
                 if calculate_on_data in ["all", "wf"]:
                     wfm_wide = storage.load_walkforward_matrix_v2(a_key, side_val=side_val, res_price="perc")
                     if wfm_wide is not None and not wfm_wide.is_empty():
                         wf_cols = [c for c in wfm_wide.columns if c != "datetime"]
                         
-                        if wf_cols:
-                            wf_aggr = wfm_wide.select([
+                        for wfid in wf_cols:
+                            wf_series_df = wfm_wide.select([
                                 pl.col("datetime"),
-                                (pl.mean_horizontal(wf_cols) * REF_CAPITAL).alias("wf_pnl")
+                                (pl.col(wfid) * REF_CAPITAL).alias("pnl")
                             ])
-                            sources.append(wf_aggr)
+                            col_name = f"{op_n}:{m_n}:{s_n}:{a_n}:wf:{wfid}"
+                            raw_collected.append((a_key, dir_label, col_name, wf_series_df))
+                            unique_dts.update(wf_series_df['datetime'].to_list())
 
-                # Combines all sources to generate aggr for the asset
-                if not sources: continue
+        # If no data is collected then ends safely
+        if not unique_dts:
+            print(" < [Portfolio._load_selected_saved_returns_data] Error: No data available to load.")
+            return False
+        
+        # 2. Main timeline build
+        self.datetime_timeline = sorted(unique_dts)
+        timeline_global = pl.DataFrame({"datetime": self.datetime_timeline})
+        zeros_series = pl.Series("pnl", values=[0.0] * len(self.datetime_timeline))
+        all_directions = ["both", "long", "short"]
 
-                if len(sources) == 1: 
-                    val_col = [c for c in sources[0].columns if c != "datetime"][0]
-                    combined = sources[0].rename({val_col: a_n})
-                else: # If "all", takes avg between parsets and wf
-                    combined = (
-                        sources[0]
-                        .join(sources[1], on="datetime", how="full", coalesce=True)
-                        .fill_null(0.0)
-                        .select([
-                            pl.col("datetime"),
-                            pl.mean_horizontal(["parset_pnl", "wf_pnl"]).alias(a_n)
-                        ])
-                    )
-                
-                asset_entry[dir_label] = combined
-
-                # Updates unique datetime
-                unique_dts.update(combined['datetime'].to_list())
-            
-            # Registro de Metadados de Disco (apenas uma vez por ativo, independente da via)
-            if asset_entry:
-                temp_asset_cache[a_key] = asset_entry
+        # Metadata init
+        for a_key, _, _, _ in raw_collected:
+            if a_key not in self.sim_data:
                 base_path = storage._asset_path(*a_key)
                 self.sim_data[a_key] = {
                     "type": "disk",
                     "trades_path": str(base_path / "trades" / "trades.parquet"),
                 }
 
-        # --- 2. ALINHAMENTO TEMPORAL E AGREGAÇÃO SUBORDINADA ---
-        if not unique_dts:
-            print(" < [Portfolio._load_selected_saved_returns_data] Error: No data available to load.")
-            return False
+        # Horizontal alignment for all collected time series
+        for a_key, dir_label, col_name, df_pnl in raw_collected:
+            aligned = timeline_global.join(df_pnl, on="datetime", how="left").fill_null(0.0)
+            flat_granular_data[dir_label][col_name] = aligned.get_column("pnl")
 
-        self.datetime_timeline = sorted(unique_dts)
-        timeline_global = pl.DataFrame({"datetime": self.datetime_timeline})
+        # 3. Recursive key mapping for hierarchical levels
+        # Collects all structure keys possible present in portfolio config
+        all_hierarchical_keys = set()
+        all_hierarchical_keys.add((self.name,)) # Global portfolio level
 
-        # Serie of zeroes with exact size of timeline to fill missing long/short gaps
-        zeros_series = pl.Series("zeros", values=[0.0] * len(self.datetime_timeline))
-        all_directions = ["both", "long", "short"]
-
-        # A. Ativos -> Estratégias
         for op_n, op_obj in self.portfolio_data.items():
+            all_hierarchical_keys.add((op_n,)) # Op level
             for m_n, m_obj in op_obj.items():
+                all_hierarchical_keys.add((op_n, m_n)) # Model level
                 for s_n, s_obj in m_obj.items():
-                    s_key = (op_n, m_n, s_n)
+                    all_hierarchical_keys.add((op_n, m_n, s_n)) # Strat level
+                    for a_n in s_obj.keys():
+                        all_hierarchical_keys.add((op_n, m_n, s_n, a_n)) # Asset level
 
-                    for d_name in all_directions:
-                        strat_assets_pnl = {}
+        # Populates sim_data associating every key with own granular column
+        for key in all_hierarchical_keys:
+            if key not in self.sim_data:
+                self.sim_data[key] = {"type": "aggr"}
 
-                        for a_n in s_obj.keys():
-                            a_key = (op_n, m_n, s_n, a_n)
+            for d_name in all_directions:
+                dir_cols = flat_granular_data[d_name]
+                matched_series = {}
 
-                            # Uses if asset has real data for this direction else fills with 0.0
-                            if a_key in temp_asset_cache and d_name in temp_asset_cache[a_key]:
-                                pnl_df = temp_asset_cache[a_key][d_name]
-                                aligned = timeline_global.join(pnl_df, on="datetime", how="left").fill_null(0.0)
-                                pnl_series = aligned.get_column(a_n)
-                            else:
-                                pnl_series = zeros_series.alias(a_n)
+                # Filters series based on size and fit of prefix tuple-key
+                if len(key) == 1:
+                    if key[0] == self.name:
+                        matched_series = dir_cols # Global portfolio inherits all
+                    else:
+                        prefix = f"{key[0]}:"
+                        matched_series = {k: v for k, v in dir_cols.items() if k.startswith(prefix)}
+                elif len(key) == 2:
+                    prefix = f"{key[0]}:{key[1]}:"
+                    matched_series = {k: v for k, v in dir_cols.items() if k.startswith(prefix)}
+                elif len(key) == 3:
+                    prefix = f"{key[0]}:{key[1]}:{key[2]}:"
+                    matched_series = {k: v for k, v in dir_cols.items() if k.startswith(prefix)}
+                elif len(key) == 4:
+                    prefix = f"{key[0]}:{key[1]}:{key[2]}:{key[3]}:"
+                    matched_series = {k: v for k, v in dir_cols.items() if k.startswith(prefix)}
 
-                            # Allocates in sim_data asset only if asset's base knot exists
-                            if a_key in temp_asset_cache:
-                                self.sim_data[a_key].setdefault(d_name, {})
-                                self.sim_data[a_key][d_name] = {
-                                    "data": pnl_series.to_numpy().reshape(-1, 1),
-                                    "cols": [a_n]
-                                }
-
-                            strat_assets_pnl[a_n] = pnl_series
-
-                        # Now strat dict will always have all assets mapped
-                        strat_acc.setdefault(s_key, {})[d_name] = strat_assets_pnl
-
-        # B. Strat -> Model
-        for s_key, directions in strat_acc.items():
-            self.sim_data[s_key] = {"type": "aggr"}
-            for d_name, assets in directions.items():
-                wide_df = pl.DataFrame(assets)
-
-                s_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
-                wide_df = wide_df.with_columns(s_avg)
-
-                self.sim_data[s_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
-
-                m_series = wide_df.get_column("@total").alias(s_key[2]) # Renomeia a coluna de @total para o nome da strat para facilitar o próximo nível de agregação
-                model_acc.setdefault((s_key[0], s_key[1]), {}).setdefault(d_name, {})[s_key[2]] = m_series
-
-        # C. Model -> Operation
-        for m_key, directions in model_acc.items():
-            self.sim_data[m_key] = {"type": "aggr"}
-            for d_name, strats in directions.items():
-                wide_df = pl.DataFrame(strats)
-
-                m_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
-                wide_df = wide_df.with_columns(m_avg)
-
-                self.sim_data[m_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
-
-                o_series = wide_df.get_column("@total").alias(m_key[1])
-                opera_acc.setdefault((m_key[0],), {}).setdefault(d_name, {})[m_key[1]] = o_series
-
-        # D. Operation -> Portfolio
-        for o_key, directions in opera_acc.items():
-            self.sim_data[o_key] = {"type": "aggr"}
-            for d_name, models in directions.items():
-                wide_df = pl.DataFrame(models)
-                
-                o_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
-                wide_df = wide_df.with_columns(o_avg)
-
-                self.sim_data[o_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
-                
-                p_series = wide_df.get_column("@total").alias(o_key[0])
-                portf_acc.setdefault((self.name,), {}).setdefault(d_name, {})[o_key[0]] = p_series
-
-        # E. Portfólio (Global)
-        for p_key, directions in portf_acc.items():
-            self.sim_data[p_key] = {"type": "aggr"}
-            for d_name, operations in directions.items():
-                wide_df = pl.DataFrame(operations)
-                
-                p_avg = wide_df.select(pl.mean_horizontal(pl.all())).to_series().alias("@total")
-                wide_df = wide_df.with_columns(p_avg)
-
-                self.sim_data[p_key][d_name] = {"data": wide_df.to_numpy(), "cols": wide_df.columns}
+                # Transformas filtered series group into a bidimensional numpy clean matrix
+                if matched_series:
+                    wide_df = pl.DataFrame(matched_series)
+                    self.sim_data[key][d_name] = {
+                        "data": wide_df.to_numpy(),
+                        "cols": wide_df.columns
+                    }
+                else: # Safe fallback to an specific side in case hasen't valid data
+                    self.sim_data[key][d_name] = {
+                        "data": zeros_series.to_numpy().reshape(-1, 1),
+                        "cols": ["zeros"]
+                    }
 
         return True
 
@@ -1331,10 +1340,13 @@ class Portfolio(BaseClass, BaseManager):
 
 
 
-# 1. XXX Fallback para SM/MM antigo
-# 2. XXX Eliminar todos MM, apenas um geral
-# 3. MM usa o rebalance do SM para rebalance do nível MM também, além de guardar defs de mm
-# 4. Strat SM pode selecionar se vai usar o LONG/SHORT/BOTH de cada parset OU usar sempre todos os selecionados no sm_mm_map
+# XXX Fallback para SM/MM antigo
+# XXX Eliminar todos MM, apenas um geral
+# XXX SM focam em gerar peso apenas
+# XXX SystemManager permanece como está servindo de repositório de func pai para os níveis
+# Modificar get_data para poder ao invés de usar o AGGR criar um com lookback atual
+# Mover funções de gestão para MM onde vai selecionar entradas concorrentes
+# Strat SM pode selecionar se vai usar o LONG/SHORT/BOTH de cada parset OU usar sempre todos os selecionados no sm_mm_map
 
 
 
