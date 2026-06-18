@@ -1,7 +1,7 @@
 from itertools import product
 from dataclasses import dataclass
 import polars as pl, json, Indicator
-from typing import Dict, Optional, Callable, List
+from typing import Optional, Callable, Literal
 
 @dataclass
 class BaseClass():
@@ -409,7 +409,7 @@ class BaseManager():
             return next(iter(sliced_matches.values()))
         return sliced_matches
 
-    def get_data(self, key=None, lookback=1, data_type="aggr", side="both", psid_or_wfid=None):
+    def get_data(self, key=None, lookback=1, data_type: Literal["aggr", "parset", "wf", "aggr_dynamic"]="aggr_dynamic", side="both", psid_or_wfid=None):
         # Aux method for managers to search data
         if key is None: key = (self.portfolio.name,)
 

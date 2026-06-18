@@ -137,8 +137,14 @@ class StratSystemManager(SystemManager):
     # ── Every Datetime [i] ───────────────────────────────────────────────
 
     def _default_main(self, i, step_dt, hierarchy: dict, indicator_pool: dict, port_returns: dict, key) -> bool:
+        strat_node = hierarchy.get(key, {})
+        strat_side = strat_node.get("side", "BOTH").upper()
+        valid_sides = ["long", "short"] if strat_side == "SEPR" else [strat_side.lower()]
+        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="aggr_dynamic", side=valid_sides)
 
-        sim_data = self.get_data(key=key, lookback=self.reb_lookback, data_type="parset", side="both")
+        if not sim_data:
+            print(f"    < [StratSystemManager._default_main] Warning, no sim_data for step {i}")
+            return hierarchy
 
         hierarchy = self.rank(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
         hierarchy = self.filter(i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)

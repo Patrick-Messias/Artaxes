@@ -1,7 +1,7 @@
 # Holds >1 models, doesn't define Assets, Server uniquely to Manage Positions between multiple models has to dominate over all MMM and MMA
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Literal
 from BaseClass import BaseClass, BaseManager
 from Storage import Storage
 from Asset import Asset
@@ -417,7 +417,7 @@ class Portfolio(BaseClass, BaseManager):
         return self.iter_data_cache[pos_key].get(step_datetime)
 
     # Used to pull real data from parquet from selected source
-    def _populate_sim_data(self, key, i, start_idx=0, side=None, data_type="aggr", psid_or_wfid=None):
+    def _populate_sim_data(self, key, i, start_idx=0, side=None, data_type: Literal["aggr", "parset", "wf", "aggr_dynamic"]="aggr_dynamic", psid_or_wfid=None):
         """
         Recupera dados de PnL ou resultados brutos (parsets).
         
@@ -1344,10 +1344,9 @@ class Portfolio(BaseClass, BaseManager):
 # XXX Eliminar todos MM, apenas um geral
 # XXX SM focam em gerar peso apenas
 # XXX SystemManager permanece como está servindo de repositório de func pai para os níveis
-# Modificar get_data para poder ao invés de usar o AGGR criar um com lookback atual
+# XXX Modificar get_data para poder ao invés de usar o AGGR criar um com lookback atual
 # Mover funções de gestão para MM onde vai selecionar entradas concorrentes
-# Strat SM pode selecionar se vai usar o LONG/SHORT/BOTH de cada parset OU usar sempre todos os selecionados no sm_mm_map
-
+# Dynamic WF in SSM and WF that will need to look for ps_ids even if not selected to Portfolio
 
 
 if __name__ == "__main__":
@@ -1366,10 +1365,11 @@ if __name__ == "__main__":
     global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
     pmm = MoneyManager(MoneyManagerParams())
     psm = PortfolioSystemManager(PortfolioSystemManagerParams(
-        reb_frequency="weekly",
-        reb_metric="pnl",
-        reb_method="fixed",
-        max_active_models=None,
+        parset_order = "highest",
+        parset_metric = "pnl",
+        parset_allocation = "1/n",
+        parset_number_cutoff = 1,
+        parset_sides_overwrite = None,
         params={
             "param1": range(21, 21+1, 1),
         },
