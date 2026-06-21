@@ -75,28 +75,143 @@ class MoneyManager(BaseClass, BaseManager): # Classe base para SMM, MMM e PMM
 
 #||=========================================================================================||
 
-    # ── Every Datetime [i] ───────────────────────────────────────────────
+    # def allocate(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> Dict[str, float]:
+    #     # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
+    #     return self._call(self._fn_allocate, self._default_allocate, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
-    def allocate(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> Dict[str, float]:
-        # Ranks each model by metric defined in model_hierarchy. Returns dict[model_name: score]
-        return self._call(self._fn_allocate, self._default_allocate, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+    # def size(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
+    #     # Removes models that don't pass the filter function
+    #     # Returns list of model_names that are active
+    #     return self._call(self._fn_size, self._default_size, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
-    def size(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
-        # Removes models that don't pass the filter function
-        # Returns list of model_names that are active
-        return self._call(self._fn_size, self._default_size, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+    # def risk_guard(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
+    #     # Orchestrates rank -> filter -> selection
+    #     # Returns ordered list of active models
+    #     return self._call(self._fn_risk_guard, self._default_risk_guard, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
 
-    def risk_guard(self, i, step_dt, hierarchy: dict, indicator_pool: dict, sim_data: dict, port_returns: dict, key) -> List[str]:
-        # Orchestrates rank -> filter -> selection
-        # Returns ordered list of active models
-        return self._call(self._fn_risk_guard, self._default_risk_guard, i, step_dt, hierarchy, indicator_pool, sim_data, port_returns, key)
+    # def main(self, i, step_dt, key) -> bool:
+    #     # Called every datetime for each model and asset
+    #     # Returns True if model can operate now
+    #     return self._call(self._fn_main, self._default_main, i, step_dt, self.portfolio.hierarchy, self.portfolio.indicator_pool, self.portfolio.portfolio_returns, key)
 
-    def main(self, i, step_dt, key) -> bool:
-        # Called every datetime for each model and asset
-        # Returns True if model can operate now
-        return self._call(self._fn_main, self._default_main, i, step_dt, self.portfolio.hierarchy, self.portfolio.indicator_pool, self.portfolio.portfolio_returns, key)
+    def generate_target_allocation(self, 
+                                   candidates: List[dict],
+                                   current_positions: Dict[tuple, dict],
+                                   total_equity: float,
+                                   competition_mode: Literal["proportional", "top_down"]="top_down",
+                                   liquidity_reserve_pct: float=0.0) -> List[dict]:
+        # Receives pre-candidate's list from Portfolio, calculates prerequisites for each one and applies\
+        #cutoff/reduction rules in case of lack of global margin
 
-#||=========================================================================================||
+        if not candidates and not current_positions: return []
+
+        # Applies liquidity reserve
+        usable_capital = total_equity * (1 - liquidity_reserve_pct)
+
+        # Calculates theoretical required capital for each pre-candidate
+        total_requested = 0.0
+        for can in candidates: # Weight is final result from (Portf * Model * Strat * Asset)
+            can["req_capital"] = usable_capital * can["total_weight"]
+            total_requested += can["req_capital"]
+        approved_targets = []
+
+        # Competition and Margin filter
+        if total_requested <= usable_capital or total_requested == 0.0:
+            approved_targets = candidates # Has margin for all pre-candidates 
+        else: # Lacks margin for all, then filters
+    
+            # 1. Distributes usable_capital between all equally
+            if competition_mode == "proportional":
+                reduction_factor = usable_capital / total_requested
+                for can in candidates:
+                    can["req_capital"] *= reduction_factor 
+                    approved_targets.append(can)
+
+            # 2. Orders by score, survival of the fittest
+            elif competition_mode == "top_down":
+                candidates.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+                available = usable_capital
+
+                for can in candidates:
+                    if available <= 0:
+                        can["req_capital"] = 0.0
+                        approved_targets.append(can)
+                        continue
+
+                    if can["req_capital"] <= available:
+                        available -= can["req_capital"]
+                    else:
+                        can["req_capital"] = available
+                        available = 0.0
+
+                    approved_targets.append(can)
+
+        # Order Generation
+        final_orders = []
+        candidate_keys = set()
+
+        for can in approved_targets:
+            c_key = can["c_key"]
+            candidate_keys.add(c_key)
+            
+            req_cap = can["req_capital"]
+            min_margin = can["margin_required"]
+            min_lot = can["min_trade_lot_size"]
+            lot_step = can.get("lot_step", min_lot)
+
+            # Calculates lot target
+            if req_cap > 0 and min_margin > 0:
+                # Uses default leverage/lot_size logic
+                raw_lot = self.calculate_lot_size(min_lot, min_margin, req_cap, lot_step)
+                target_lot = raw_lot
+            else:
+                target_lot = 0.0
+            
+            # Current lot and margin that the system has retained for this asset
+            current_pos = current_positions.get(c_key, {})
+            current_lot = current_pos.get("lot_size", 0.0)
+
+            # NOTE WIP below
+            lot_multiplier = target_lot / min_lot if min_lot > 0 else 0.0
+            actual_margin = lot_multiplier * min_margin
+            delta_lot = target_lot - current_lot
+
+            # Classifies order intention 
+            if target_lot > 0 and current_lot == 0:
+                order_type = "entry"
+            elif target_lot == 0 and current_lot > 0:
+                order_type = "exit"
+            elif delta_lot > 0:
+                order_type = "scale_in"
+            elif delta_lot < 0:
+                order_type = "scale_out"
+            else:
+                order_type = "hold"
+
+            can["order_type"] = order_type
+            can["target_lot"] = target_lot
+            can["delta_lot"] = delta_lot
+            can["allocated_margin"] = actual_margin
+
+            final_orders.append(can)
+
+        # Forced exits handling
+        for c_key, pos_data in current_positions.items():
+            if c_key not in candidate_keys:
+                final_orders.append({
+                    "c_key": c_key,
+                    "target_weight": 0.0,
+                    "target_lot": 0.0,
+                    "delta_lot": -pos_data["lot_size"],
+                    "allocated_margin": 0.0,
+                    "order_type": "exit",
+                    "event": "exit",
+                    "trade_data": {"pnl": 0.0, "perc": 0.0} # Will be injected into real Portfolio value
+                })
+
+        return final_orders
+
+
 
     def update_states(self, active_positions):
         # Updates Equity and Margin available based on pnl
