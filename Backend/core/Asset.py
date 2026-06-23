@@ -97,8 +97,13 @@ class LocalSource(DataSource):
     # Lê parquet de Backend/Assets/{market}/{name}_{timeframe}.parquet
 
     def load(self, name, timeframe, date_start=None, date_end=None, **kwargs) -> pl.DataFrame:
-        market = kwargs.get("market", "")
-        path   = ASSETS_BASE / market / f"{name}_{timeframe}.parquet"
+        market    = kwargs.get("market", "")
+        submarket = kwargs.get("submarket")
+
+        if submarket:
+            path = ASSETS_BASE / market / submarket / f"{name}_{timeframe}.parquet"
+        else:
+            path = ASSETS_BASE / market / f"{name}_{timeframe}.parquet"
 
         if not path.exists():
             raise FileNotFoundError(f"[LocalSource] Parquet not found: {path}")
@@ -144,7 +149,13 @@ class FileSource(DataSource):
         # Salva parquet + atualiza registry
         if kwargs.get("save", True):
             market  = kwargs.get("market", "")
+            submarket = kwargs.get("submarket")
+
             out_dir = ASSETS_BASE / market
+
+            if submarket:
+                out_dir = out_dir / submarket
+
             out_dir.mkdir(parents=True, exist_ok=True)
             out_file = out_dir / f"{name}_{timeframe}.parquet"
             df.write_parquet(out_file)
@@ -288,6 +299,8 @@ class AssetRegistry:
         timeframe:     str,
         df:            pl.DataFrame,
         asset_params:  dict,
+        asset_type:    str,
+        submarket:     str,
         update_reason: str = "manual update",
     ):
         """Cria ou atualiza entrada de um ativo/timeframe no registry."""
@@ -296,6 +309,8 @@ class AssetRegistry:
 
         # Atualiza asset_params se passado
         entry["asset_params"] = asset_params
+        entry["asset_type"] = asset_type
+        entry["submarket"] = submarket
 
         entry["timeframes"][timeframe] = {
             "date_start":         str(df["datetime"].min()),
@@ -380,6 +395,39 @@ class Asset:
             },
         },
         "stock": {
+            "b3": {
+                "generic": {
+                    # 1 tick = 1 centavo. O valor financeiro de 1 tick para 1 ação é R$ 0.01
+                    "tick": 0.01, "tick_fin_val": 0.01, "contract_size": 1.0,
+                    
+                    # Lote padrão da B3 é de 100 em 100
+                    "min_lot": 100, "lot_step": 100, "lot_max": 1000000,
+                    
+                    "coin_pnl": "BRL", "coin_margin": "BRL",
+                    
+                    # Swing trade padrão sem alavancagem (margem 1:1)
+                    "leverage": 1, "margin_rate": 1.0, 
+                    
+                    # Emolumentos da B3 (~0.03%) + Corretagem. O spread típico em blue chips é de 1 a 2 ticks.
+                    "commissions": 0.03, "slippage": 0.02, "spread": 0.01,
+                    
+                    # Não há swap direto para posições compradas (sem juros de margem se leverage=1), 
+                    # mas o short tem o custo de aluguel (BTC) embutido.
+                    "swap_long": 0.0, "swap_short": -0.05, 
+                    
+                    "datetime_candle_references": "open",
+                },
+                "fracionario": {
+                    # Exatamente igual ao generic, mas permite comprar de 1 em 1 ação
+                    "tick": 0.01, "tick_fin_val": 0.01, "contract_size": 1.0,
+                    "min_lot": 1, "lot_step": 1, "lot_max": 99,
+                    "coin_pnl": "BRL", "coin_margin": "BRL",
+                    "leverage": 1, "margin_rate": 1.0,
+                    "commissions": 0.03, "slippage": 0.02, "spread": 0.02, # Spread no fracionário costuma ser levemente maior
+                    "swap_long": 0.0, "swap_short": -0.05,
+                    "datetime_candle_references": "open",
+                }
+            },
             "NASDAQ": {
                 "generic": {
                     "tick": 0.01, "tick_fin_val": 1.0, "contract_size": 1.0, #"lot_value": 100, 
@@ -408,6 +456,7 @@ class Asset:
         name:       str,
         type:       str,
         market:     str,
+        submarket:  str = None,
         date_start: Optional[str] = None,
         date_end:   Optional[str] = None,
         **kwargs,
@@ -415,6 +464,7 @@ class Asset:
         self.name       = name
         self.type       = type
         self.market     = market
+        self.submarket     = submarket
         self.date_start = date_start
         self.date_end   = date_end
 
@@ -429,17 +479,42 @@ class Asset:
     # ── Market params ─────────────────────────────────────────────────────────
 
     def _load_params(self) -> Dict:
+        """Busca parâmetros seguindo a hierarquia: type -> market -> submarket -> name."""
         try:
-            return self.ASSET_PARAMS[self.type][self.market][self.name].copy()
+            # Tenta buscar pelo nome específico do ativo dentro do submercado
+            return self.ASSET_PARAMS[self.type][self.market][self.submarket][self.name].copy()
         except KeyError:
             pass
         try:
-            return self.ASSET_PARAMS[self.type][self.market]["generic"].copy()
+            # Tenta buscar pelo "generic" dentro do submercado
+            return self.ASSET_PARAMS[self.type][self.market][self.submarket]["generic"].copy()
         except KeyError:
             pass
         return self._DEFAULT_PARAMS.copy()
 
     # ── Load (Strategy Pattern) ───────────────────────────────────────────────
+
+    @staticmethod
+    def normalize_timeframe(tf: str) -> str:
+        """Normaliza variações de timeframes para o padrão institucional (D, W, 1M)."""
+        if not tf: 
+            return "UNKNOWN"
+        
+        tf = tf.upper().strip()
+        
+        # Mapeamento para Daily
+        if tf in ["DA", "D", "D1", "1D", "DAILY"]:
+            return "D"
+            
+        # Mapeamento para Weekly
+        if tf in ["WE", "W", "W1", "1W", "WEEKLY"]:
+            return "W"
+            
+        # Mapeamento para Monthly (Forçando 1M para não confundir com M1 de 1 minuto)
+        if tf in ["MO", "M", "MN", "1M", "MONTHLY"]:
+            return "1M"
+            
+        return tf
 
     def load(
         self,
@@ -467,6 +542,8 @@ class Asset:
         asset.load('D1', source='yfinance', date_start='2020-01-01')
         asset.load('M15', source='file', path='raw/EURUSD_M15.csv')
         """
+        timeframe = self.normalize_timeframe(timeframe)
+
         ds  = date_start or self.date_start
         de  = date_end   or self.date_end
 
@@ -483,44 +560,97 @@ class Asset:
             date_start=ds,
             date_end=de,
             market=self.market,
+            submarket=self.submarket,
             **kwargs,
         )
 
         return df
 
+    # @staticmethod
+    # def load_all(base_path: str = None) -> Dict[str, "Asset"]:
+    #     """
+    #     Lê todos os registries em Backend/Assets/{market}/registry.json
+    #     e retorna um dict {name: Asset} pronto para uso.
+
+    #     Uso
+    #     ---
+    #         assets = Asset.load_all()
+    #         assets["EURUSD"].data_get("M15")
+    #         assets["GBPUSD"].load("D1", date_start="2022-01-01")
+    #     """
+    #     root = Path(base_path) if base_path else ASSETS_BASE
+    #     result: Dict[str, Asset] = {}
+
+    #     for registry_file in sorted(root.rglob("registry.json")):
+    #         rel_path = registry_file.relative_to(root)
+    #         parts = rel_path.parts # ex: ('b3', 'registry.json') ou ('b3', 'generic', 'registry.json')
+
+    #         if len(parts) == 2: # No submarket
+    #             market = parts[0]
+    #             submarket = None
+    #         elif len(parts) == 3: # Has submarket
+    #             market = parts[0]
+    #             submarket = parts[1]
+    #         else: # Deep hierarchy
+    #             market = parts[-3]
+    #             submarket = parts[-2]
+
+    #         with open(registry_file, "r") as f:
+    #             data = json.load(f)
+    #         asset_type = data.get("asset_type", "")
+
+    #         for name, meta in data.get("assets", {}).items():
+    #             params = meta.get("sset_params", {})
+    #             result[name] = Asset(
+    #                 name=name,
+    #                 type=asset_type,
+    #                 market=market,
+    #                 submarket=submarket,
+    #                 **params,
+    #             )
+
+    #     print(f"   > [Asset] {len(result)} assets loaded from registry")
+    #     return result
+    
     @staticmethod
     def load_all(base_path: str = None) -> Dict[str, "Asset"]:
         """
-        Lê todos os registries em Backend/Assets/{market}/registry.json
-        e retorna um dict {name: Asset} pronto para uso.
-
-        Uso
-        ---
-            assets = Asset.load_all()
-            assets["EURUSD"].data_get("M15")
-            assets["GBPUSD"].load("D1", date_start="2022-01-01")
+        Lê todos os registries em qualquer subpasta.
+        Usa os metadados gravados DENTRO do JSON para evitar erros de path.
         """
         root = Path(base_path) if base_path else ASSETS_BASE
         result: Dict[str, Asset] = {}
 
         for registry_file in sorted(root.rglob("registry.json")):
-            market = registry_file.parent.name
-
             with open(registry_file, "r") as f:
-                data = json.load(f)
-
-            asset_type = data.get("asset_type", "")
+                try:
+                    data = json.load(f)
+                except json.JSONDecodeError:
+                    print(f" ⚠️ Erro ao ler JSON: {registry_file}")
+                    continue
+            
+            # O market é global por registry, conforme sua estrutura atual
+            market_global = data.get("market", "")
 
             for name, meta in data.get("assets", {}).items():
-                params = meta.get("asset_params", {})
+                params     = meta.get("asset_params", {})
+                
+                # Extrai os dados reais que foram salvos no upsert
+                asset_type = meta.get("asset_type", data.get("asset_type", "unknown"))
+                
+                # Se o JSON antigo não tiver submarket, a gente protege caindo pro market ou generic
+                submarket  = meta.get("submarket", None) 
+                
+                # Instancia o ativo garantindo que a hierarquia está certa
                 result[name] = Asset(
                     name=name,
                     type=asset_type,
-                    market=market,
+                    market=market_global,
+                    submarket=submarket,
                     **params,
                 )
 
-        print(f"   > [Asset] {len(result)} assets loaded from registry")
+        print(f"   > [Asset] {len(result)} assets loaded from registry.")
         return result
 
     # ── data_get: compatibilidade com Operation ───────────────────────────────
@@ -561,11 +691,15 @@ class Asset:
             m = re.search(r"_([A-Z]{1,2}[0-9]*)", source.stem, re.IGNORECASE) #m = re.search(r"_([A-Z][0-9]+)", source.stem, re.IGNORECASE)
             timeframe = m.group(1).upper() if m else "UNKNOWN"
 
+        # Normalizes timeframe DA -> D
+        timeframe = self.normalize_timeframe(timeframe)
+
         # Usa FileSource para carregar + normalizar
         df = FileSource().load(
             name=self.name,
             timeframe=timeframe,
             market=self.market,
+            submarket=self.submarket,
             path=str(source),
             datetime_col=datetime_col,
             datetime_format=datetime_fmt,
@@ -580,11 +714,14 @@ class Asset:
             timeframe=timeframe,
             df=df,
             asset_params=self._load_params(),
+            asset_type=self.type,        
+            submarket=self.submarket,  
             update_reason=update_reason,
         )
 
         # Valida
-        out_file = ASSETS_BASE / self.market / f"{self.name}_{timeframe}.parquet"
+        out_dir = ASSETS_BASE / self.market / (self.submarket or "")
+        out_file = out_dir / f"{self.name}_{timeframe}.parquet"
         self._validate(out_file, df, timeframe)
 
         return out_file
@@ -730,6 +867,7 @@ def mt5_convert_folder(
     source_folder: str,
     asset_type:    str,
     market:        str,
+    submarket:     str = None,
     update_reason: str = "initial import from MT5",
 ):    
     folder = Path(source_folder)
@@ -775,7 +913,7 @@ def mt5_convert_folder(
         df.write_csv(temp_file)
 
         # 6. Converte
-        asset = Asset(name=asset_name, type=asset_type, market=market)
+        asset = Asset(name=asset_name, type=asset_type, market=market, submarket=submarket)
         asset.convert(
             source_path=str(temp_file),
             delimiter=",",

@@ -54,12 +54,6 @@ class Portfolio(BaseClass, BaseManager):
         self.storage = Storage(base_path=portfolio_params.data_storage_base_path)
 
 
-    # NOTE Up Next:
-    # - Transform Portfolio, Model and Strat SM and MM in @dataclass
-    # - Focus all steps (rank, filter, rebalance) on SM and MM 
-
-
-
     def _exits_and_updates(self, idx_datetime): # Exits positions based on previous data and open only [i] data
         if not self.active_positions:
             return True
@@ -1402,9 +1396,23 @@ class Portfolio(BaseClass, BaseManager):
 # XXX SM focam em gerar peso apenas
 # XXX SystemManager permanece como está servindo de repositório de func pai para os níveis
 # XXX Modificar get_data para poder ao invés de usar o AGGR criar um com lookback atual
-# Mover funções de gestão para MM onde vai selecionar entradas concorrentes
-# Dynamic WF in SSM and WF that will need to look for ps_ids even if not selected to Portfolio
+# XXX Mover funções de gestão para MM onde vai selecionar entradas concorrentes
 
+
+# 1. Criar mais uma estratégia para substituir AT30
+
+
+# 2. Testar e retestar todas as funcionalidades de Portfolio, procurar quebras
+
+
+# 3. Desenvolver banco de dados para resultados
+
+
+# 4. Desenvolver frontend básico
+
+
+# WIP Dynamic WF in SSM and WF that will need to look for ps_ids even if not selected to Portfolio
+# WIP Corrigir bugs minimos em Operation
 
 if __name__ == "__main__":
     from MA import MA # type: ignore

@@ -379,7 +379,43 @@ class Walkforward:
             runs = wf_data["windows"]
 
             # Junta e ordena todas as janelas Out-of-Sample em uma única curva
-            full_oos_curve = pl.concat([r["os_curve"] for r in runs]).sort("ts")
+            # primeiro filtra apenas curvas e janelas que realmente executaram trades
+            raw_curves = [r["os_curve"] for r in runs if r["os_curve"].height > 0]
+
+            if len(raw_curves) > 0:
+                # 1. Mapeia o esquema ideal unificado (descobre o tipo real de CADA coluna)
+                unified_schema = {}
+                for curve in raw_curves:
+                    for col_name, col_type in curve.schema.items():
+                        # Se a coluna não está no mapa ou se ela foi marcada como Null anteriormente,
+                        # atualiza com o tipo real/específico encontrado nesta janela (ex: Datetime, Float64)
+                        if col_name not in unified_schema or unified_schema[col_name] == pl.Null:
+                            unified_schema[col_name] = col_type
+
+                # 2. Força todas as curvas a seguirem o mesmo esquema ideal
+                processed_curves = []
+                for curve in raw_curves:
+                    exprs = []
+                    for col_name, target_type in unified_schema.items():
+                        if col_name in curve.columns:
+                            current_type = curve.schema[col_name]
+                            # Se o tipo da coluna for Null ou diferente do tipo real unificado, aplica o cast
+                            if current_type != target_type or current_type == pl.Null:
+                                exprs.append(pl.col(col_name).cast(target_type))
+                    
+                    if exprs:
+                        curve = curve.with_columns(exprs)
+                    processed_curves.append(curve)
+
+                # 3. Executa a concatenação com segurança absoluta
+                full_oos_curve = pl.concat(processed_curves).sort("ts")
+                
+            else:
+                # Fallback absoluto se NENHUMA janela do Walkforward gerou dados
+                full_oos_curve = pl.DataFrame(
+                    {"ts": [], "equity": []}, 
+                    schema={"ts": pl.Datetime("us"), "equity": pl.Float64}
+                )
             equity_curve   = full_oos_curve["pnl"].cum_sum()
 
             # Métricas rápidas necessárias apenas para o Grid de seleção do _finalize

@@ -643,19 +643,19 @@ class Operation(BaseClass):
 
     # || ===================================================================== || III - Portfolio Simulator || ===================================================================== ||
 
-    def _simulate_portfolio(self, portfolio_backtests_dict ='All'):
-        # 1. Selects over all models -> strats -> assets -> param_sets, while iterating verifies if any walkforward operation is present
-        # 2. Either selects 1 specific param_set for each strat/asset, iterates over all param_sets or select wf_param_set and iterates over walkforward param_sets
-        # 3. Selects all unique datetime from selected backtest trades
-        # 4. Iterates over datetimes, ranks param_sets based on previous trades results with some metric (ex: equity, profit factor, etc)
-        # 5. For each datetime checks for entries and exits on each strat/asset/param_set simulating a portfolio with real money management and trade management rules
-        #envelope theorem?
+    # def _simulate_portfolio(self, portfolio_backtests_dict ='All'):
+    #     # 1. Selects over all models -> strats -> assets -> param_sets, while iterating verifies if any walkforward operation is present
+    #     # 2. Either selects 1 specific param_set for each strat/asset, iterates over all param_sets or select wf_param_set and iterates over walkforward param_sets
+    #     # 3. Selects all unique datetime from selected backtest trades
+    #     # 4. Iterates over datetimes, ranks param_sets based on previous trades results with some metric (ex: equity, profit factor, etc)
+    #     # 5. For each datetime checks for entries and exits on each strat/asset/param_set simulating a portfolio with real money management and trade management rules
+    #     #envelope theorem?
 
 
-        if portfolio_backtests_dict == 'All': # Uses all backtests from _results_map, else if dict with paths, uses only those backtests 
-            pass
+    #     if portfolio_backtests_dict == 'All': # Uses all backtests from _results_map, else if dict with paths, uses only those backtests 
+    #         pass
 
-        pass
+    #     pass
 
     def _operation_analysis(self):
         pass
@@ -1439,12 +1439,23 @@ class Operation(BaseClass):
         self._plot_wfm()
 
         # V - Portfolio Simulation
-        print(f"\n>>> V - Portfolio Simulation <<<")
-        self._simulate_portfolio()
+        # print(f"\n>>> V - Portfolio Simulation <<<")
+        # self._simulate_portfolio()
 
         return self._results_map
 
 # || ======================================================================================================================================================================= ||
+
+# 1. First days of the month seasonality
+# 2. RSI overnight
+# 3. VWAP opening day scalp
+# XXX 4. Thursday seasonality
+# 5. Prior week's breakout
+# 6. Grach prior day's breakout
+# 7. Afternoon pullback
+# 8. Keltner trend 
+# 9. MM9D close gap
+# 10. WIN$ AT15
 
 if __name__ == "__main__":
     
@@ -1457,13 +1468,19 @@ if __name__ == "__main__":
     gbpusd = assets.get("GBPUSD")
     usdjpy = assets.get("USDJPY")
     winfut = assets.get("WIN$")
+    bova11 = assets.get("BOVA11")
+
+    print(bova11)
     
-    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 'WIN$': winfut} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
+    global_assets = {'EURUSD': eurusd, 'GBPUSD': gbpusd, 'USDJPY': usdjpy, 
+                     'WIN$': winfut, 'BOVA11': bova11} # Global Assets, loaded when app starts up, has all Asset and Portfolios 
 
     # =======================================================================================================|| Global Above
 
     AT15_model_execution_tf = 'M15'
     AT20_model_execution_tf = 'M10'
+    AT30_model_execution_tf = 'DA'
+    AT2_model_execution_tf = 'M10'
 
     strat_param_sets = {
         'AT15': { 
@@ -1475,15 +1492,13 @@ if __name__ == "__main__":
             'limit_opposite_order_closes_pending': False,
 
             'exit_nb_only_if_pnl_is': 0, 
-            'exit_nb_long': range(3, 10+1, 7),
-            'exit_nb_short': range(3, 10+1, 7),
+            'exit_nb_long': range(0, 0+1, 1),
+            'exit_nb_short': range(0, 0+1, 1),
             
-            'sl_perc': range(2, 10+1, 4), # 3
-            'tp_perc': range(2, 10+1, 4), 
-            'rr': range(2, 2+1, 2), 
-            'param1': range(21, 21+1, 21), #50
-            'param2': range(8, 24+1, 8), # 3
-            'param3': ['sma'] #, 'ema', 'ema'
+            'atr_tr_mult': range(1, 10+1, 1), # 3 
+            'param1': range(40, 280+1, 20), #50
+            'param2': range(10, 80+1, 10), # 3
+            'param3': ['ema'] #, 'ema', 'ema'
         },
         'AT20': { 
             'execution_tf': AT20_model_execution_tf,
@@ -1509,8 +1524,20 @@ if __name__ == "__main__":
             'limit_opposite_order_closes_pending': False,
 
             'exit_nb_only_if_pnl_is': 0, 
-            'exit_nb_long': range(5, 5+1, 7),
-            'exit_nb_short': range(5, 5+1, 7),
+            'exit_nb_long': range(1, 14+1, 1),
+            'exit_nb_short': range(0, 0+1, 7),
+        },
+        'AT2': { 
+            'execution_tf': AT20_model_execution_tf,
+            'backtest_start_idx': 21,
+            'limit_order_exclusion_after_period': 1,
+            'limit_order_perc_treshold_for_order_diff': 0.03,
+            'limit_can_enter_at_market_if_gap': False,
+            'limit_opposite_order_closes_pending': False,
+
+            'exit_nb_only_if_pnl_is': 0, 
+            'exit_nb_long': range(0, 0+1, 7),
+            'exit_nb_short': range(0, 0+1, 7),
         },
     }
 
@@ -1524,8 +1551,8 @@ if __name__ == "__main__":
     # User imput Indicators
     AT15_indicators = { 
         'atr': ATR_SL(asset=None, timeframe=AT15_model_execution_tf, window='param2'),
-        'var': VAR(asset=None, timeframe=AT15_model_execution_tf, window='param2', alpha=0.01, var_type='parametric', price_col='close'),
-        #'ema': MA(asset=None, timeframe=AT15_model_execution_tf, window='param1', ma_type='param3', price_col='close'),
+        #'var': VAR(asset=None, timeframe=AT15_model_execution_tf, window='param2', alpha=0.01, var_type='parametric', price_col='close'),
+        'ema': MA(asset=None, timeframe=AT15_model_execution_tf, window='param1', ma_type='param3', price_col='close'),
         #'ma': MA(asset='USDJPY', timeframe='D1', window='param1', ma_type='param3', price_col='close'),
         # 'htf_ma': MA(asset=None, timeframe='H1', window='param1', ma_type='param3', price_col='close'),
         # 'max': PriorCote(asset=None, timeframe=AT15_model_execution_tf, price_col='high'),
@@ -1533,49 +1560,55 @@ if __name__ == "__main__":
         # 'open_day': DayOpen(assertsset=None, timeframe=AT15_model_execution_tf),
     }
     AT20_indicators = None
-    # {
-    #    'atr': ATR_SL(asset=None, timeframe=AT20_model_execution_tf, window='param1'),
-    #    #'open_day': DayOpen(asset=None, timeframe=AT20_model_execution_tf),
-    # }
+    AT2_indicators = None #{ 'rsi': RSI(asset=None, timeframe=AT20_model_execution_tf, window=2),}
+    AT30_indicators = None
 
     def AT15_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point
 
-        atr = df['atr']
-        var = df['var']
+        close = df.select(pl.col("close")).to_series()
+        atr = df.select(pl.col("atr")).to_series()
+        ema = df.select(pl.col("ema")).to_series()
+        highest = df.select(pl.col("close").rolling_max(window_size=params["param2"])).to_series()
+        lowest = df.select(pl.col("close").rolling_min(window_size=params["param2"])).to_series()
 
-        bull = df['close'] < df['open']
-        bear = df['close'] > df['open']
+        entry_long = (
+            (close == highest) & 
+            (close.shift(1) != highest.shift(1)) & 
+            (close > ema)
+        )
+        entry_short = (
+            (close == lowest) & 
+            (close.shift(1) != lowest.shift(1)) & 
+            (close < ema)
+        )
 
-        entry_long  = bull & bull.shift(1) & bull.shift(2) #& (ema < ema.shift(1))
-        entry_short = bear & bear.shift(1) & bear.shift(2) #& (ema > ema.shift(1))
-
-        exit_tf_long  = bear & bear.shift(1)
-        exit_tf_short = bull & bull.shift(1)
+        exit_tf_long  = None
+        exit_tf_short = None
 
         # Preço da ordem pendente
-        limit_long_price  = df['open'] #'high[1]' #
-        limit_short_price = df['open'] #'low[1]' #
+        limit_long_price  = df['open'] 
+        limit_short_price = df['open'] 
 
-        # Distâncias (definidas ANTES de serem usadas)
-        sl_long_price  = limit_long_price - atr * params['sl_perc'] 
-        sl_short_price = limit_long_price + atr * params['sl_perc'] 
+        # SL Distâncias (definidas ANTES de serem usadas)
+        sl_long_price  = None #limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = None #limit_long_price + atr * params['sl_perc'] 
 
-        # TP absoluto: 2R
-        tp_long_price  = limit_long_price + atr  * params['tp_perc']
-        tp_short_price = limit_long_price - atr * params['tp_perc']
+        # TP Distâncias (definidas ANTES de serem usadas)
+        tp_long_price  = None #limit_long_price + atr  * params['tp_perc']
+        tp_short_price = None #limit_long_price - atr * params['tp_perc']
 
-        # Trailing: 0.5R
-        trail_long_dist  = None #sl_long_dist  * 0.5
-        trail_short_dist = None #sl_short_dist * 0.5
+        # Trailing
+        trail_long_dist  = atr * params['atr_tr_mult'] #sl_long_dist  * 0.5
+        trail_short_dist = atr * params['atr_tr_mult'] #sl_short_dist * 0.5
 
         # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
         be_long_dist  = None #sl_long_dist  * 1.0
         be_short_dist = None #sl_short_dist * 1.0
 
         # Position Sizing
-        var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
-        lot_series = (pl.lit(0.01) / var).clip(0.1, 10.0)
+        # var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
+        lot_series = None #(pl.lit(0.01) / var).clip(0.1, 10.0)
 
         # n = len(df)
         # compound_fract_vals = np.ones(n, dtype=np.float64)
@@ -1631,8 +1664,9 @@ if __name__ == "__main__":
             'compound_fract_series': compound_fract_series,
             'dist_signal_ref': dist_signal_ref,
 
-            '__sig_key_params': ['param2', 'sl_perc', 'tp_perc']
+            '__sig_key_params': ['atr_tr_mult', 'param1', 'param2', 'param3']
         }  
+    
     def AT20_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point
 
@@ -1727,24 +1761,23 @@ if __name__ == "__main__":
 
             '__sig_key_params': ['tp_pts', 'sl_pts']
         }
-    def AT30_Signals(df: pl.DataFrame, params: dict) -> dict:
-        # Can use columns df['high'] or str 'high' to point
-        close = df['close']
-        high = df['high']
-        low = df['low']
+    
+    def AT30_Signals(df: pl.DataFrame, params: dict) -> dict: 
+        datetime = df.select(pl.col("datetime")).to_series()
+        mes_mudou = datetime.dt.month() != datetime.shift(1).dt.month()
 
-        entry_long  = close < low.shift(1) 
-        entry_short = close > high.shift(1)
+        entry_long  = mes_mudou
+        entry_short = None #proximo_eh_ultimo & 
 
-        exit_tf_long  = close > high.shift(1) 
-        exit_tf_short = close < low.shift(1) 
+        exit_tf_long  = None #close > high.shift(1) 
+        exit_tf_short = None #close < low.shift(1) 
 
         # Preço da ordem pendente
         limit_long_price  = df['open'] #'high[1]' #
         limit_short_price = df['open'] #'low[1]' #
 
         # Distâncias (definidas ANTES de serem usadas)
-        sl_long_price  = None# limit_long_price - atr * params['sl_perc'] 
+        sl_long_price  = None #limit_long_price - atr * params['sl_perc'] 
         sl_short_price = None #limit_long_price + atr * params['sl_perc'] 
 
         # TP absoluto: 2R
@@ -1761,6 +1794,113 @@ if __name__ == "__main__":
 
         # Position Sizing
         #var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
+        lot_series = None #(pl.lit(0.01) / var).clip(0.1, 10.0)
+
+        # n = len(df)
+        # compound_fract_vals = np.ones(n, dtype=np.float64)
+        # compound_fract_vals[10000:] = 0.1
+        # compound_fract_series = pl.Series("compound_fract_series", compound_fract_vals)
+        compound_fract_series = None
+        dist_signal_ref = None
+        
+        #if entry_long is not None and not isinstance(entry_long, str): entry_long = entry_long.shift(1)
+        if entry_short is not None and not isinstance(entry_short, str): entry_short = entry_short.shift(1)
+        if exit_tf_long is not None and not isinstance(exit_tf_long, str): exit_tf_long = exit_tf_long.shift(1)
+        if exit_tf_short is not None and not isinstance(exit_tf_short, str): exit_tf_short = exit_tf_short.shift(1)
+        
+        if tp_long_price is not None and not isinstance(tp_long_price, str): tp_long_price = tp_long_price.shift(1)
+        if tp_short_price is not None and not isinstance(tp_short_price, str): tp_short_price = tp_short_price.shift(1)
+        if sl_long_price is not None and not isinstance(sl_long_price, str): sl_long_price = sl_long_price.shift(1)
+        if sl_short_price is not None and not isinstance(sl_short_price, str): sl_short_price = sl_short_price.shift(1)
+        
+        if limit_long_price is not None and not isinstance(limit_long_price, str): limit_long_price = limit_long_price.shift(1)
+        if limit_short_price is not None and not isinstance(limit_short_price, str): limit_short_price = limit_short_price.shift(1)
+        
+        if trail_long_dist is not None and not isinstance(trail_long_dist, str): trail_long_dist = trail_long_dist.shift(1)
+        if trail_short_dist is not None and not isinstance(trail_short_dist, str): trail_short_dist = trail_short_dist.shift(1)
+        
+        if be_long_dist is not None and not isinstance(be_long_dist, str): be_long_dist = be_long_dist.shift(1)
+        if be_short_dist is not None and not isinstance(be_short_dist, str): be_short_dist = be_short_dist.shift(1)
+
+        if lot_series is not None and not isinstance(lot_series, str): lot_series = lot_series.shift(1)
+        if compound_fract_series is not None and not isinstance(compound_fract_series, str): compound_fract_series = compound_fract_series.shift(1)
+        if dist_signal_ref is not None and not isinstance(dist_signal_ref, str): dist_signal_ref = dist_signal_ref.shift(1)
+        return {
+            'entry_long':       entry_long,
+            'entry_short':      entry_short,
+            'exit_long':        exit_tf_long,
+            'exit_short':       exit_tf_short,
+
+            'sl_price_long':    sl_long_price,
+            'sl_price_short':   sl_short_price,
+            'tp_price_long':    tp_long_price,
+            'tp_price_short':   tp_short_price,
+
+            'limit_long':       limit_long_price,
+            'limit_short':      limit_short_price,
+
+            'trail_long':       trail_long_dist,
+            'trail_short':      trail_short_dist,
+
+            'be_trigger_long':  be_long_dist,
+            'be_trigger_short': be_short_dist,
+
+            'custom_lot_size_long':  lot_series,
+            'custom_lot_size_short': lot_series,
+            'compound_fract_series': compound_fract_series,
+            'dist_signal_ref': dist_signal_ref,
+
+            '__sig_key_params': []
+        }
+
+    def AT2_Signals(df: pl.DataFrame, params: dict) -> dict:
+        # Can use columns df['high'] or str 'high' to point
+
+        close = df.select(pl.col("close")).to_series()
+        atr = df.select(pl.col("atr")).to_series()
+        ema = df.select(pl.col("ema")).to_series()
+        datetime = df.select(pl.col("datetime")).to_series()
+        dia_mudou = datetime.shift(-1).dt.date() != datetime.dt.date()
+        proximo_eh_ultimo = dia_mudou.shift(-1).fill_null(False)
+
+        # Gets prior day's daily data with intraday data
+
+        entry_long = (
+            proximo_eh_ultimo & 
+            (close.shift(1) != highest.shift(1)) & 
+            (close > ema)
+        )
+        entry_short = (
+            proximo_eh_ultimo & 
+            (close.shift(1) != lowest.shift(1)) & 
+            (close < ema)
+        )
+
+        exit_tf_long  = None
+        exit_tf_short = None
+
+        # Preço da ordem pendente
+        limit_long_price  = df['open'] 
+        limit_short_price = df['open'] 
+
+        # SL Distâncias (definidas ANTES de serem usadas)
+        sl_long_price  = None #limit_long_price - atr * params['sl_perc'] 
+        sl_short_price = None #limit_long_price + atr * params['sl_perc'] 
+
+        # TP Distâncias (definidas ANTES de serem usadas)
+        tp_long_price  = None #limit_long_price + atr  * params['tp_perc']
+        tp_short_price = None #limit_long_price - atr * params['tp_perc']
+
+        # Trailing
+        trail_long_dist  = atr * params['atr_tr_mult'] #sl_long_dist  * 0.5
+        trail_short_dist = atr * params['atr_tr_mult'] #sl_short_dist * 0.5
+
+        # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
+        be_long_dist  = None #sl_long_dist  * 1.0
+        be_short_dist = None #sl_short_dist * 1.0
+
+        # Position Sizing
+        # var = df['var'].abs().clip(lower_bound=0.0001)  # evita divisão por zero
         lot_series = None #(pl.lit(0.01) / var).clip(0.1, 10.0)
 
         # n = len(df)
@@ -1817,9 +1957,9 @@ if __name__ == "__main__":
             'compound_fract_series': compound_fract_series,
             'dist_signal_ref': dist_signal_ref,
 
-            '__sig_key_params': []
-        }
-
+            '__sig_key_params': ['atr_tr_mult', 'param1', 'param2', 'param3']
+        }  
+    
 
     AT15 = Strat(
         StratParams(
@@ -1902,6 +2042,29 @@ if __name__ == "__main__":
             signals=AT30_Signals
         )
     )
+    AT2 = Strat(
+        StratParams(
+            name="AT30",
+            operation=Walkforward(
+                wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
+                wfm_is_always_higher_or_equal_to_oos=True, add_trades_matrix_updates=True,
+                matrix_resolution='weekly', time_mode = 'calendar_days',
+                is_metric='pnl', is_top_n=1, is_logic='highest', is_order='des',
+                wf_selection_metric='wfe', wf_selection_analysis_radius_n=1,
+                wf_selection_logic='highest_stable', wf_returns_mode='selected'
+            ),
+            execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
+                order_type='market', limit_order_base_calc_ref_price='open', 
+                slippage=0.0, commission=0.0, # * Tick 
+                day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
+                day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
+                fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
+                backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
+            params=strat_param_sets['AT2'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
+            indicators={},
+            signals=AT2_Signals
+        )
+    )
 
     model_1 = Model(
         ModelParams(
@@ -1909,18 +2072,14 @@ if __name__ == "__main__":
             assets=['EURUSD', "GBPUSD", 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT15': AT15},
             execution_timeframe=AT15_model_execution_tf,
-            #model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_1_mm")),
-            #model_system_manager=None  # Optional - will use default system management
         )
     )
     model_2 = Model(
         ModelParams(
-            name='FX Mean Reversion',
-            assets=['EURUSD', "GBPUSD", "USDJPY"], # CURR_ASSET refers to this one in strat_support_assets
+            name='Bova Seasonality',
+            assets=["BOVA11"], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT30': AT30},
-            execution_timeframe=AT15_model_execution_tf,
-            #model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_2_mm")),
-            #model_system_manager=None  # Optional - will use default system management
+            execution_timeframe=AT30_model_execution_tf,
         )
     )
     model_3 = Model(
@@ -1929,18 +2088,24 @@ if __name__ == "__main__":
             assets=['WIN$'], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT20': AT20},
             execution_timeframe=AT20_model_execution_tf,
-            #model_money_manager=ModelMoneyManager(ModelMoneyManagerParams(name="model_3_mm")),
-            #model_system_manager=None  # Optional - will use default system management
+        )
+    )
+    model_4 = Model(
+        ModelParams(
+            name='Bova RSI Overnight',
+            assets=["BOVA11"], # CURR_ASSET refers to this one in strat_support_assets
+            strat={'AT2': AT2},
+            execution_timeframe=AT2_model_execution_tf,
         )
     )
 
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_3], # model_1, model_2, 
+            data=[model_2], # model_1, , model_3, model_4
             assets=global_assets,
             #operation_timeframe=AT15_model_execution_tf, # NOTE maybe unnecessary, remove later
-            date_start=None, #'2020-01-01',
+            date_start=None,
             date_end=None, #
             save=True,
         )
@@ -1968,6 +2133,10 @@ if __name__ == "__main__":
 
 # XXX - Modernize Classes
 # XXX - Adicionar novo Backtester para Close-Close, Open-Open.
+
+# - Corrigir registry.json dos Assets b3/futures e b3/stock estão misturados
+# - Colocar slippage está causando erros ao executar o walkforward por conta da data? (AT15 com comission=0.001)
+# - Bug with date_start in Operation and calculating indicators enside entry_signal
 
 # - Move operation_timeframe from Model to Strat
 # - SM and MM for Portfolio and Models
