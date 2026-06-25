@@ -20,7 +20,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-03-30 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5016,
@@ -75,7 +75,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-03-24 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5016,
@@ -130,7 +130,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-03-17 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5026,
@@ -185,7 +185,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-04-01 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5015,
@@ -240,7 +240,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-04-01 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5013,
@@ -295,7 +295,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-03-30 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5012,
@@ -350,7 +350,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-04-01 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5014,
@@ -405,7 +405,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-04-01 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5014,
@@ -460,7 +460,7 @@
                 "datetime_candle_references": "open"
             },
             "timeframes": {
-                "D1": {
+                "D": {
                     "date_start": "2009-03-19 00:00:00",
                     "date_end": "2025-04-11 00:00:00",
                     "rows": 5018,

@@ -1898,12 +1898,8 @@ class Operation(BaseClass):
             key = (self.name, model, strat, asset)
             
             try:
-                # Tenta utilizar o carregador v2; se não disponível, aplica fallback para load_pnl_matrix
-                #if hasattr(storage, 'load_walkforward_matrix_v2'):
-                data = self.storage.load_walkforward_matrix_v2(key)
-                #else:
-                #    res_dict = storage.load_pnl_matrix(self.name, model, strat, asset, kind="pnl")
-                #    data = res_dict.get(f"{model}/{strat}/{asset}", None)
+                data = self.storage.load_walkforward_matrix_v2(key, "pnl")
+
             except Exception as e:
                 print(f"      > [WFM Plot] Erro ao carregar dados do disco para {asset}: {e}")
                 return
@@ -2058,21 +2054,21 @@ class Operation(BaseClass):
 
         # II - Data Pre-Processing and Execution
         print(f"\n>>> II - Data Pre-Processing, Calculating Param Sets, Indicators, Signals and Backtests <<<")
-        self._operation()
+        #self._operation()
 
         # III - Pos-Processing, Saving and Cleaning
         print(f"\n>>> III - Pos-Processing, Saving and Cleaning <<<")
-        self._save_and_clean()
+        #self._save_and_clean()
 
         # IV - Operation Analysis and Metrics
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
-        self._run_walkforward(True)
+        #self._run_walkforward(True)
 
         #self._plot_summary(plot='aggr_ps_id')
         #self._plot_pnl_curves()
-        self._init_data()
-        self._plot_summary_total()
-        self._plot_wfm()
+        #self._init_data()
+        #self._plot_summary_total()
+        #self._plot_wfm()
 
         # V - Portfolio Simulation
         # print(f"\n>>> V - Portfolio Simulation <<<")
@@ -2710,7 +2706,7 @@ if __name__ == "__main__":
     model_1 = Model(
         ModelParams(
             name='FX MA Trend Following',
-            assets=['EURUSD', "GBPUSD", 'USDJPY'], # CURR_ASSET refers to this one in strat_support_assets
+            assets=['EURUSD'], # CURR_ASSET refers to this one in strat_support_assets
             strat={'AT15': AT15},
             execution_timeframe=AT15_model_execution_tf,
         )
@@ -2743,7 +2739,7 @@ if __name__ == "__main__":
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_4], # model_1, model_2, model_3, 
+            data=[model_1], # , model_2, model_3, model_4
             assets=global_assets,
             #operation_timeframe=AT15_model_execution_tf, # NOTE maybe unnecessary, remove later
             date_start=None,

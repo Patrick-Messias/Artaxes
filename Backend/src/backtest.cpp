@@ -398,6 +398,7 @@ SimulationOutput Backtest::run_simulation(
             t.max_fav_price  = is_pct_mode ? 0.0 : fill;
             t.max_adv_price  = is_pct_mode ? 0.0 : fill;
             t.daily_pnl_accum  = is_pct_mode ? 0.0 : fill;
+            t.last_price_ref  = is_pct_mode ? 0.0 : fill;
  
             // Trailing (só faz sentido em modos price absoluto)
             if (!is_pct_mode) {
@@ -450,7 +451,7 @@ SimulationOutput Backtest::run_simulation(
             bool hit_tp = (tp != 0.0 && t.profit >= tp);
             return hit_sl || hit_tp;
         };
-        
+
         // ═════════════════════════════════════════════════════════════════════
         // MAIN LOOP
         // ═════════════════════════════════════════════════════════════════════
@@ -721,43 +722,33 @@ SimulationOutput Backtest::run_simulation(
                     if (trade.bars_held > 1) { // Temp fix, to avoid entry and update at same datetime
                         bool is_long = (trade.lot_size > 0);
 
-                        double dv_pnl;  // $ return
-                        double dv_perc; // % return
-
                         // Updates MAE/MFE metrics
                         if (is_daily_res) {
                             update_mae_mfe(trade, is_long, is_pct_mode, close[i], close[i]);
                         } else {
                             update_mae_mfe(trade, is_long, is_pct_mode, high[i], low[i]);
                         }
-    
-                        // Pnl and Percentage return delta calculation
+
+                        double delta_price = close[i] - trade.last_price_ref;
+                        double pnl = 0.0;
+                        double perc = 0.0;
+
                         if (is_pct_mode) {
-                            dv_perc = trade.daily_pnl_accum ;  // retorno acumulado do período
-                            trade.daily_pnl_accum  = 0.0; // reseta para próximo período diário
-
-                            if (method == "neutral") { // Equilizes based on allocated capital (notional exposure)
-                                double notional_exposure = cap_ref * leverage;
-                                dv_pnl = (dv_perc / 100.0) * notional_exposure;
-                            } else { // Método 'perc' ou outros: PnL financeiro bruto não se aplica em pct_mode
-                                dv_pnl = dv_perc;
-                            }
-                        } else { // Absolute price
-                            double prev_p = trade.daily_pnl_accum;
-                            double curr_p = close[i];
-                        
-                            dv_perc = ((curr_p - prev_p) / prev_p) * 100.0 * (is_long ? 1.0 : -1.0);
-                            trade.daily_pnl_accum = curr_p;
-
+                            double delta_pct = (delta_price / trade.entry_price) * 100.0 * (is_long ? 1.0 : -1.0);
+                            pnl = (delta_pct / 100.0) * cap_ref;
+                            perc = delta_pct;
+                        } else {
                             if (method == "neutral") {
-                                double delta_ticks = (curr_p - prev_p) / tick_size;
-                                double pnl_cash_periodic = delta_ticks * tick_val * trade.lot_size ;//std::abs(trade.lot_size) * (is_long ? 1.0 : -1.0);
-
-                                dv_pnl = pnl_cash_periodic; //dv_pnl = pnl_cash_periodic * trade.scaling_factor;
+                                double delta_ticks = delta_price / tick_size;
+                                pnl = delta_ticks * tick_val * trade.lot_size * (is_long ? 1.0 : -1.0);
+                                double notional = trade.entry_price * contract_size * std::abs(trade.lot_size);
+                                perc = (pnl / notional) * 100;
                             } else {
-                                dv_pnl = dv_perc;
+                                pnl = delta_price * trade.lot_size * (is_long ? 1.0 : -1.0);
+                                perc = (delta_price / trade.entry_price) * 100.0 * (is_long ? 1.0 : -1.0);
                             }
                         }
+                        trade.last_price_ref = close[i];
 
                         // Dinamic required margin calculation
                         double current_margin = 0.0;
@@ -773,8 +764,8 @@ SimulationOutput Backtest::run_simulation(
                         // Saves update to structure
                         daily_results_matrix.push_back({
                             format_datetime_to_int_from_parts(bar_dates[i], bar_times[i]),
-                            dv_pnl,
-                            dv_perc,
+                            pnl,
+                            perc,
                             current_margin,
                             trade.lot_size,
                             trade.max_adv_price,

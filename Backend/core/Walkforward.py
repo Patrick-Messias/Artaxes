@@ -308,7 +308,9 @@ class Walkforward:
             working_df = working_df.with_columns(pl.col("ts").cast(pl.Datetime))
 
         # ── ps_cols = todas as colunas menos ts ──────────────────────────────
-        ps_cols = [c for c in working_df.columns if c != "ts"]
+        
+        ps_cols = [c for c in working_df.columns if c not in {"ts", "ts_orig_min", "ts_orig_max"}]
+        ps_cols_only = [c for c in ps_cols if c not in {"ts_orig_min", "ts_orig_max"}]
 
         # ── Agregação e resolução ─────────────────────────────────────────────
         if self.time_mode == 'calendar_days':
@@ -317,7 +319,7 @@ class Walkforward:
                 working_df.sort("ts")
                 .group_by_dynamic("ts", every="1d", closed="left")
                 .agg(
-                    [pl.col(c).sum() for c in ps_cols] +
+                    [pl.col(c).sum() for c in ps_cols_only] +
                     [pl.col("ts").min().alias("ts_orig_min"),
                      pl.col("ts").max().alias("ts_orig_max")]
                 )

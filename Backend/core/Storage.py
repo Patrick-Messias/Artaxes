@@ -178,7 +178,7 @@ class Storage:
     # Retorna um DataFrame com colunas datetime e wf_id com res_price de cada walkforward 
     def load_walkforward_matrix_v2(self,
                                    key, # tuple (op, model, strat, asset) or 4 individual strings
-                                   res_price: str="perc",
+                                   res_price: str="pnl",
                                    side_val: str="BOTH",
                                    wf_ids: Optional[Union[str, list]] = None,
                                    timeline_df: Optional[pl.DataFrame] = None, # Permite passar a timeline já processada para evitar recálculos
@@ -216,6 +216,12 @@ class Storage:
 
         # Lazy historical and temporal preparation and optimization
         timeline_lazy = timeline_df.lazy()
+
+        
+        # if "event" in timeline_df.columns:
+        #     timeline_lazy = timeline_lazy.filter(
+        #         pl.col("event").is_in(["exit", "flash_trade"])
+        #     )
         
         if start_dt:
             timeline_lazy = timeline_lazy.filter(pl.col("datetime") >= start_dt)

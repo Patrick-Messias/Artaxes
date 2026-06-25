@@ -2,14 +2,14 @@
     "date_start": null,
     "date_end": null,
     "models": {
-        "Opening Range VWAP": {
+        "FX MA Trend Following": {
             "execution_timeframe": "M15",
             "date_start": null,
             "date_end": null,
             "strats": {
-                "AT21": {
+                "AT15": {
                     "assets": [
-                        "WIN$"
+                        "EURUSD"
                     ]
                 }
             }
