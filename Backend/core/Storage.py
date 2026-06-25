@@ -216,12 +216,6 @@ class Storage:
 
         # Lazy historical and temporal preparation and optimization
         timeline_lazy = timeline_df.lazy()
-
-        
-        # if "event" in timeline_df.columns:
-        #     timeline_lazy = timeline_lazy.filter(
-        #         pl.col("event").is_in(["exit", "flash_trade"])
-        #     )
         
         if start_dt:
             timeline_lazy = timeline_lazy.filter(pl.col("datetime") >= start_dt)
