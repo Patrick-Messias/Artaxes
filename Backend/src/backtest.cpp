@@ -490,6 +490,7 @@ SimulationOutput Backtest::run_simulation(
 
                     // pct_mode: acumula retorno PRIMEIRO, depois verifica saídas
                     if (is_pct_mode) {
+                        it->bars_held++;
                         bool hit = update_pct_pnl(*it, is_long, close[i]);
                         if (hit) {
                             std::string r = (it->profit <= it->stop_loss) ? "SL" : "TP";
@@ -671,7 +672,7 @@ SimulationOutput Backtest::run_simulation(
 
                     if (is_pct_mode) {
                         // já processado na Seção 1 — só incrementa bars_held
-                        it->bars_held++;
+                        //it->bars_held++;
                         ++it;
                     } else {
                         update_trailing(*it, is_long, is_long ? check_high : check_low, i);

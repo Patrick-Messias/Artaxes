@@ -2,7 +2,7 @@ import polars as pl, numpy as np, json, sys, uuid, math, psutil, re, itertools
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend\indicators')
 sys.path.append(r'C:\Users\Patrick\Desktop\ART_Backtesting_Platform\Backend')
 
-from typing import Union, Dict, Optional, Any
+from typing import Union, Dict, Optional, Any, Literal
 from dataclasses import dataclass, field, asdict
 from Model import ModelParams, Model
 from Asset import Asset
@@ -10,6 +10,7 @@ from BaseClass import BaseClass
 from Strat import Strat, StratParams, ExecutionSettings
 from Walkforward import Walkforward
 from Indicator import Indicator
+from Storage import Storage
 
 import duckdb, tempfile, os, psutil
 
@@ -105,15 +106,16 @@ class Operation(BaseClass):
         self._curr_tf_context: Optional[str] = None
         self._curr_datetime_references: Optional[str] = None
 
+        self.storage = Storage(base_path="Backend/results")        
+
+
     # || ===================================================================== || I - Operation Validation || ===================================================================== ||
 
     def _validate_operation(self): 
         pass
 
     def _init_data(self):
-        from Storage import Storage
-        storage = Storage(base_path="Backend/results")
-        meta = storage.load_operation_meta(self.name)
+        meta = self.storage.load_operation_meta(self.name)
 
         if meta:
             print(f"   > Found saved results for '{self.name}', loading data...")
@@ -128,7 +130,7 @@ class Operation(BaseClass):
                     assets_list = strat_data.get("assets", [])
 
                     for asset_name in assets_list:
-                        asset_data = storage.load(self.name, model_name, strat_name, asset_name)
+                        asset_data = self.storage.load(self.name, model_name, strat_name, asset_name)
                         self._results_map[self.name]["models"][model_name]["strats"][strat_name]["assets"][asset_name] = {
                             "timeline": asset_data.get("timeline"),
                             "trades": asset_data.get("trades"), # Apenas o DF de trades
@@ -491,7 +493,7 @@ class Operation(BaseClass):
                         mm_params["reference_capital"]      = self.reference_capital
                         mm_params["reference_capital_coin"] = self.reference_capital_coin
                         mm_params["leverage"]               = getattr(asset_class, "leverage", 1.0)
-
+                        
                         sim_signal_refs = dict(ps_signal_refs[ps_name])
                         if mm_params.get("method") == "signal":
                             if "custom_lot_size_long" in indicators_pool:
@@ -774,13 +776,11 @@ class Operation(BaseClass):
             wfm_con.execute("INSERT INTO wfm_raw SELECT * FROM batch_df")
 
     def _save_asset_results(self, m_name, s_name, a_name, matrix_df, default_path="Backend/results"):
-        from Storage import Storage
-        storage = Storage(default_path)
 
         # Salva a matriz no formato vertical (Long Format)
         # Se o seu storage.save_matrix_data exigir dois DFs, recomendo 
         # atualizar o storage para aceitar o formato longo em uma única chamada.
-        storage.save_matrix_data(
+        self.storage.save_matrix_data(
             op=self.name,
             model=m_name,
             strat=s_name,
@@ -794,7 +794,7 @@ class Operation(BaseClass):
                for name, obj in param_sets.items() if obj.get("trades") is not None]
 
         if dfs:
-            storage.save_batch_trades(
+            self.storage.save_batch_trades(
                 op=self.name,
                 model=m_name,
                 strat=s_name,
@@ -962,9 +962,6 @@ class Operation(BaseClass):
 
     # Saves Model-Strat-Asset-Parset/WF results  
     def _save_and_clean(self):
-        from Storage import Storage
-        storage = Storage(base_path="Backend/results")
-
         models_dict = self._get_all_models()  # objetos Model reais
         models_map  = self._results_map.get(self.name, {}).get("models", {})
         meta = {
@@ -988,7 +985,7 @@ class Operation(BaseClass):
                 asset_names = list(s_obj.get("assets", {}).keys())
                 meta["models"][m_name]["strats"][s_name] = {"assets": asset_names}
 
-        storage.save_operation_meta(self.name, meta)
+        self.storage.save_operation_meta(self.name, meta)
         self._deep_clean_memory(models_map)
         print(f"   > [Operation] All results saved and memory cleared for {self.name}")
 
@@ -1022,127 +1019,34 @@ class Operation(BaseClass):
 
     # || ===================================================================== || Metrics Functions || ===================================================================== ||
 
-    def _report_pnl_summary(
+    def _plot_summary_total(
         self,
         model:             Optional[str] = None,
         strat:             Optional[str] = None,
         asset:             Optional[str] = None,
-        load_from_storage: bool = True,):
-        """
-        Imprime resumo de performance por parset.
-        Filtros opcionais: model, strat, asset.
-        Se load_from_storage=True, carrega trades do parquet quando não estão em memória.
-
-        Uso:
-            operation._report_pnl_summary()                          # todos, memória
-            operation._report_pnl_summary(load_from_storage=True)   # todos, parquet
-            operation._report_pnl_summary(asset="EURUSD", load_from_storage=True)
-        """
-        from Storage import Storage
-        storage = Storage(base_path="results")
-
-        print("\n" + "="*95)
-        print(f"{'Performance Summary - Operation: ' + self.name:^95}")
-        print("="*95)
-
-        models = self._results_map.get(self.name, {}).get("models", {})
-        if not models:
-            print("No models found in results map.")
-            return
-
-        for model_name, model_data in models.items():
-            if model and model_name != model: continue
-            print(f"\nModel: {model_name}")
-
-            for strat_name, strat_data in model_data.get("strats", {}).items():
-                if strat and strat_name != strat: continue
-                print(f"  └── Strat: {strat_name}")
-
-                for asset_name, asset_data in strat_data.get("assets", {}).items():
-                    if asset and asset_name != asset: continue
-                    print(f"      └── Asset: {asset_name}")
-
-                    for param_key, param_data in asset_data.get("param_sets", {}).items():
-                        trades = param_data.get("trades")
-
-                        # Carrega do parquet se não está em memória
-                        if trades is None or (isinstance(trades, pl.DataFrame) and trades.is_empty()):
-                            if load_from_storage:
-                                df = storage.load_trades(
-                                    self.name,
-                                    model=model_name, strat=strat_name,
-                                    asset=asset_name, ps_name=param_key
-                                )
-                                if df.is_empty():
-                                    print(f"          └── {param_key}: No trades.")
-                                    continue
-                            else:
-                                print(f"          └── {param_key}: No trades.")
-                                continue
-                        else:
-                            df = trades if isinstance(trades, pl.DataFrame) else pl.DataFrame(trades)
-
-                        def calc_metrics(mask=None):
-                            sub = df.filter(mask) if mask is not None else df
-                            if sub.is_empty():
-                                return {"pnl": 0.0, "wr": 0.0, "cnt": 0, "avg": 0.0}
-                            cnt     = len(sub)
-                            pnl_sum = sub["profit"].sum()
-                            wins    = (sub["profit"] > 0).sum()
-                            return {
-                                "pnl": pnl_sum,
-                                "wr":  (wins / cnt) * 100,
-                                "cnt": cnt,
-                                "avg": pnl_sum / cnt,
-                            }
-
-                        m_all   = calc_metrics()
-                        m_long  = calc_metrics(pl.col("lot_size") > 0)
-                        m_short = calc_metrics(pl.col("lot_size") < 0)
-                        best    = df["profit"].max()
-                        worst   = df["profit"].min()
-
-                        print(f"          └── Param Set: {param_key}")
-                        print(f"              {'-'*80}")
-                        print(f"              {'METRICA':<15} | {'GERAL':<15} | {'COMPRA (L)':<15} | {'VENDA (S)':<15}")
-                        print(f"              {'-'*80}")
-                        print(f"              {'Total Trades':<15} | {m_all['cnt']:<15} | {m_long['cnt']:<15} | {m_short['cnt']:<15}")
-                        print(f"              {'PnL %':<15} | {m_all['pnl']:>14.2f}% | {m_long['pnl']:>14.2f}% | {m_short['pnl']:>14.2f}%")
-                        print(f"              {'Winrate':<15} | {m_all['wr']:>14.2f}% | {m_long['wr']:>14.2f}% | {m_short['wr']:>14.2f}%")
-                        print(f"              {'Avg Trade':<15} | {m_all['avg']:>14.4f}% | {m_long['avg']:>14.4f}% | {m_short['avg']:>14.4f}%")
-                        print(f"              {'-'*80}")
-                        print(f"              Best Trade: {best:.2f}%  |  Worst Trade: {worst:.2f}%\n")
-
-        print("\n" + "="*95)
-
-    def _plot_pnl_curves(
-        self,
-        model:             Optional[str] = None,
-        strat:             Optional[str] = None,
-        asset:             Optional[str] = None,
+        models_dict        = None,
+        plot_curves:       Literal["ps_id", "aggr_ps_id"] = "ps_id",
+        plot_column:       str = 'pnl',
         load_from_storage: bool = True,
-        mode:              str = 'param_sets',
     ):
-        """
-        Plota curvas de PnL acumulado por parset.
-        Filtros opcionais: model, strat, asset.
-        Se load_from_storage=True, carrega trades do parquet quando não estão em memória.
+        import polars as pl
+        import pandas as pd
+        import json
+        import tempfile
+        import webbrowser
+        import os
+        from typing import Literal, Optional
 
-        Uso:
-            operation._plot_pnl_curves()                                      # todos, memória
-            operation._plot_pnl_curves(load_from_storage=True)               # todos, parquet
-            operation._plot_pnl_curves(asset="EURUSD", load_from_storage=True)
-            operation._plot_pnl_curves(model="MA Trend Following", strat="AT15")
-        """
-        import matplotlib.pyplot as plt
-        from Storage import Storage
-        from functools import reduce
-        storage = Storage(base_path="results")
+        print("> Compiling massive HTML report. Gathering data...")
 
-        all_series = []
-        models = self._results_map.get(self.name, {}).get("models", {})
+        # ==========================================
+        # 1. COLETA E NORMALIZAÇÃO DOS DADOS
+        # ==========================================
+        all_dfs = []
+        if not models_dict:
+            models_dict = self._results_map.get(self.name, {}).get("models", {})
 
-        for m_name, m_data in models.items():
+        for m_name, m_data in models_dict.items():
             if model and m_name != model: continue
 
             for s_name, s_data in m_data.get("strats", {}).items():
@@ -1151,61 +1055,798 @@ class Operation(BaseClass):
                 for a_name, a_data in s_data.get("assets", {}).items():
                     if asset and a_name != asset: continue
 
-                    for p_name, p_data in a_data.get("param_sets", {}).items():
-                        trades = p_data.get("trades")
+                    data_node = a_data.get("trades")
 
-                        # Carrega do parquet se não está em memória
-                        if trades is None or (isinstance(trades, pl.DataFrame) and trades.is_empty()):
+                    if data_node is None or (isinstance(data_node, pl.DataFrame) and data_node.is_empty()):
+                        if load_from_storage:
+                            df = self.storage.load_trades(self.name, model=m_name, strat=s_name, asset=a_name)
+                            if df is None or df.is_empty(): continue
+                        else:
+                            continue
+                    else:
+                        df = pl.DataFrame(data_node) if isinstance(data_node, list) else data_node
+                        if df.is_empty(): continue
+
+                    if "ps_id" not in df.columns: continue
+
+                    # Prioriza entry_datetime (momento real do trade), fallback exit_datetime
+                    dt_col = None
+                    for candidate in ("entry_datetime", "exit_datetime", "datetime"):
+                        if candidate in df.columns:
+                            dt_col = candidate
+                            break
+                    if dt_col is None:
+                        dt_cols = [c for c, t in df.schema.items() if t in (pl.Datetime, pl.Date)]
+                        if dt_cols: dt_col = dt_cols[0]
+                        else: continue
+
+                    # Converte i64 (YYYYmmdd HHMMSS) ou String → pl.Datetime
+                    col_type = df.schema[dt_col]
+                    if col_type in (pl.Int64, pl.Int32):
+                        df = df.with_columns(
+                            pl.col(dt_col)
+                            .cast(pl.Utf8)
+                            .str.to_datetime("%Y%m%d %H%M%S", strict=False)
+                            .alias(dt_col)
+                        )
+                    elif col_type in (pl.String, pl.Utf8):
+                        df = df.with_columns(
+                            pl.col(dt_col).str.to_datetime("%Y%m%d %H%M%S", strict=False)
+                        )
+                    # se já for pl.Datetime, não faz nada
+
+                    df_clean = df.with_columns([
+                        pl.col(dt_col).alias("norm_datetime"),
+                        pl.lit(m_name).alias("model_name"),
+                        pl.lit(s_name).alias("strat_name"),
+                        pl.lit(a_name).alias("asset_name"),
+                        (pl.lit(f"{s_name}_{a_name}_") + pl.col("ps_id")).alias("curve_id")
+                    ])
+                    all_dfs.append(df_clean)
+
+        if not all_dfs:
+            print("< No trade data found to generate total summary.")
+            return
+
+        df_master = pl.concat(all_dfs)
+
+        val_col = plot_column if plot_column in df_master.columns else "pnl"
+        dir_col = "lot_size" if "lot_size" in df_master.columns else ("volume" if "volume" in df_master.columns else None)
+
+        # ==========================================
+        # 2. MOTOR DE CÁLCULO DE MÉTRICAS (POLARS)
+        # ==========================================
+        def _calc_metrics(df_slice: pl.DataFrame) -> dict:
+            if df_slice.is_empty():
+                return {"Trades": 0, "Net PnL": 0.0, "Win Rate %": 0.0, "Profit Factor": 0.0, "Avg Trade": 0.0}
+
+            vals = df_slice[val_col].cast(pl.Float64)
+            total_trades = len(vals)
+            net_pnl = vals.sum()
+
+            wins = vals.filter(vals > 0)
+            losses = vals.filter(vals <= 0)
+            gross_profit = wins.sum()
+            gross_loss = abs(losses.sum())
+
+            win_rate = (len(wins) / total_trades * 100) if total_trades > 0 else 0.0
+            profit_factor = (gross_profit / gross_loss) if gross_loss != 0 else float('inf')
+            avg_trade = net_pnl / total_trades if total_trades > 0 else 0.0
+
+            return {
+                "Trades": total_trades,
+                "Net PnL": round(net_pnl, 2),
+                "Win Rate %": round(win_rate, 2),
+                "Profit Factor": round(profit_factor, 2),
+                "Avg Trade": round(avg_trade, 2)
+            }
+
+        # ==========================================
+        # 3. GERAÇÃO DE BLOCOS HTML POR MODELO
+        # ==========================================
+        html_models_sections = ""
+        unique_models = df_master["model_name"].unique().to_list()
+
+        for idx, m_name in enumerate(unique_models):
+            print(f"   > Processing Model: {m_name}")
+            df_model = df_master.filter(pl.col("model_name") == m_name)
+
+            # --- A. Dados para o Gráfico (Plotly JS) ---
+            traces = []
+
+            if plot_curves == "aggr_ps_id":
+                df_grouped = (
+                    df_model
+                    .group_by("norm_datetime")
+                    .agg(pl.col(val_col).sum())
+                    .sort("norm_datetime")
+                    .with_columns(
+                        pl.col("norm_datetime").dt.strftime("%Y-%m-%d %H:%M:%S").alias("dt_str")
+                    )
+                )
+                x_data = df_grouped["dt_str"].to_list()
+                y_data = df_grouped[val_col].cum_sum().to_list()
+                traces.append({"x": x_data, "y": y_data, "name": "Aggregated PnL",
+                                "type": "scatter", "mode": "lines", "line": {"width": 2}})
+            else:
+                unique_curves = df_model["curve_id"].unique().to_list()
+
+                if len(unique_curves) > 500:
+                    print(f"   > [WARN] {m_name}: {len(unique_curves)} curves exceed limit (500) → falling back to aggr")
+                    df_grouped = (
+                        df_model
+                        .group_by("norm_datetime")
+                        .agg(pl.col(val_col).sum())
+                        .sort("norm_datetime")
+                        .with_columns(
+                            pl.col("norm_datetime").dt.strftime("%Y-%m-%d %H:%M:%S").alias("dt_str")
+                        )
+                    )
+                    x_data = df_grouped["dt_str"].to_list()
+                    y_data = df_grouped[val_col].cum_sum().to_list()
+                    traces.append({"x": x_data, "y": y_data, "name": "Aggregated PnL (auto)",
+                                   "type": "scatter", "mode": "lines", "line": {"width": 2}})
+                else:
+                    for cid in unique_curves:
+                        df_cid = (
+                            df_model
+                            .filter(pl.col("curve_id") == cid)
+                            .sort("norm_datetime")
+                            .with_columns(
+                                pl.col("norm_datetime").dt.strftime("%Y-%m-%d %H:%M:%S").alias("dt_str")
+                            )
+                        )
+                        x_data = df_cid["dt_str"].to_list()
+                        y_data = df_cid[val_col].cum_sum().to_list()
+                        traces.append({"x": x_data, "y": y_data, "name": cid,
+                                       "type": "scatter", "mode": "lines", "line": {"width": 1}})
+
+            traces_json = json.dumps(traces)
+
+            # --- B. Tabela Resumo (Agregado) ---
+            metrics_both = _calc_metrics(df_model)
+            if dir_col:
+                metrics_long  = _calc_metrics(df_model.filter(pl.col(dir_col) > 0))
+                metrics_short = _calc_metrics(df_model.filter(pl.col(dir_col) < 0))
+            else:
+                metrics_long, metrics_short = metrics_both.copy(), metrics_both.copy()
+
+            df_summary = pd.DataFrame({"BOTH": metrics_both, "LONG": metrics_long, "SHORT": metrics_short}).reset_index()
+            df_summary.rename(columns={"index": "Metric"}, inplace=True)
+            html_summary = df_summary.to_html(index=False, border=0, classes="quant-table summary-table")
+
+            # --- C. Tabela Detalhada (ps_ids) ---
+            unique_ids = df_model["curve_id"].unique().to_list()
+            rows = []
+            for uid in unique_ids:
+                m = _calc_metrics(df_model.filter(pl.col("curve_id") == uid))
+                m["ID"] = uid
+                rows.append(m)
+
+            df_detailed = pd.DataFrame(rows)
+            cols = ["ID"] + [c for c in df_detailed.columns if c != "ID"]
+            df_detailed = df_detailed[cols]
+            html_detailed = df_detailed.to_html(index=False, border=0, table_id=f"table_{idx}", classes="quant-table detailed-table")
+
+            # --- D. Montagem do Bloco HTML do Modelo ---
+            section_html = f"""
+            <div class="model-container">
+                <h2 class="model-title">Model: {m_name}</h2>
+
+                <div class="chart-container" id="chart_{idx}"></div>
+                <script>
+                    var traces_{idx} = {traces_json};
+                    var layout_{idx} = {{
+                        paper_bgcolor: '#050A12', plot_bgcolor: '#0C1929',
+                        font: {{color: '#E2E8F0'}},
+                        margin: {{l: 50, r: 20, t: 30, b: 40}},
+                        xaxis: {{gridcolor: '#1B365D', showgrid: true}},
+                        yaxis: {{gridcolor: '#1B365D', showgrid: true}},
+                        showlegend: {'true' if len(traces) < 40 else 'false'}
+                    }};
+                    Plotly.newPlot('chart_{idx}', traces_{idx}, layout_{idx}, {{responsive: true}});
+                </script>
+
+                <div class="tables-wrapper">
+                    <div class="summary-box">
+                        <h3>Directional Summary</h3>
+                        {html_summary}
+                    </div>
+
+                    <div class="detailed-box">
+                        <div class="table-controls">
+                            <h3>Parameter Sets Detail</h3>
+                            <input type="text" id="search_{idx}" onkeyup="filterTable({idx})" placeholder="Search by ID...">
+                        </div>
+                        <div class="scroll-table">
+                            {html_detailed}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """
+            html_models_sections += section_html
+
+        # ==========================================
+        # 4. TEMPLATE HTML FINAL & CSS & JS
+        # ==========================================
+        title_str = f"Total Performance Report — {getattr(self, 'name', 'Portfolio')}"
+
+        full_html = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title_str}</title>
+            <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+            <style>
+                body {{ background-color: #020408; color: #E2E8F0; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; }}
+                h1 {{ text-align: center; color: #60A5FA; letter-spacing: 1px; margin-bottom: 30px; }}
+
+                .model-container {{ background-color: #050A12; border: 1px solid #1A2E4C; border-radius: 8px; margin-bottom: 40px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }}
+                .model-title {{ border-bottom: 2px solid #1B365D; padding-bottom: 10px; margin-top: 0; }}
+
+                .chart-container {{ height: 500px; width: 100%; margin-bottom: 20px; border-radius: 4px; overflow: hidden; }}
+
+                .tables-wrapper {{ display: flex; gap: 20px; flex-wrap: wrap; }}
+                .summary-box {{ flex: 1; min-width: 300px; }}
+                .detailed-box {{ flex: 3; min-width: 600px; }}
+
+                .table-controls {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }}
+                .table-controls input {{ background-color: #0C1929; border: 1px solid #1B365D; color: #E2E8F0; padding: 8px; border-radius: 4px; width: 250px; outline: none; }}
+                .table-controls input:focus {{ border-color: #60A5FA; }}
+
+                .scroll-table {{ max-height: 400px; overflow-y: auto; border: 1px solid #1A2E4C; border-radius: 4px; }}
+
+                .quant-table {{ width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }}
+                .quant-table th {{ background-color: #1B365D; padding: 10px; cursor: pointer; position: sticky; top: 0; z-index: 2; user-select: none; border-bottom: 1px solid #050A12; }}
+                .quant-table th:hover {{ background-color: #2c5282; }}
+                .quant-table td {{ padding: 8px; border-bottom: 1px solid #1A2E4C; }}
+                .quant-table tr:nth-child(even) {{ background-color: #0F2036; }}
+                .quant-table tr:nth-child(odd)  {{ background-color: #0C1929; }}
+                .quant-table tr:hover {{ background-color: #1e3a5f; }}
+                .quant-table td:first-child {{ font-weight: bold; text-align: left; padding-left: 15px; }}
+            </style>
+        </head>
+        <body>
+            <h1>{title_str}</h1>
+
+            {html_models_sections}
+
+            <script>
+                function filterTable(idx) {{
+                    var input = document.getElementById("search_" + idx);
+                    var filter = input.value.toUpperCase();
+                    var table = document.getElementById("table_" + idx);
+                    var tr = table.getElementsByTagName("tr");
+                    for (var i = 1; i < tr.length; i++) {{
+                        var td = tr[i].getElementsByTagName("td")[0];
+                        if (td) {{
+                            var txtValue = td.textContent || td.innerText;
+                            if (txtValue.toUpperCase().indexOf(filter) > -1) {{
+                                tr[i].style.display = "";
+                            }} else {{
+                                tr[i].style.display = "none";
+                            }}
+                        }}
+                    }}
+                }}
+
+                document.querySelectorAll('.detailed-table th').forEach((header, index) => {{
+                    header.addEventListener('click', () => {{
+                        const table = header.closest('table');
+                        const tbody = table.querySelector('tbody');
+                        const rows = Array.from(tbody.querySelectorAll('tr'));
+                        const isAscending = header.classList.contains('sort-asc');
+
+                        document.querySelectorAll('th').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+                        header.classList.toggle('sort-asc', !isAscending);
+                        header.classList.toggle('sort-desc', isAscending);
+
+                        rows.sort((a, b) => {{
+                            const aText = a.children[index].innerText.trim();
+                            const bText = b.children[index].innerText.trim();
+                            const aNum = parseFloat(aText.replace(/[^0-9.-]+/g,""));
+                            const bNum = parseFloat(bText.replace(/[^0-9.-]+/g,""));
+                            if (!isNaN(aNum) && !isNaN(bNum)) {{
+                                return isAscending ? aNum - bNum : bNum - aNum;
+                            }} else {{
+                                return isAscending ? aText.localeCompare(bText) : bText.localeCompare(aText);
+                            }}
+                        }});
+
+                        tbody.append(...rows);
+                    }});
+                }});
+            </script>
+        </body>
+        </html>
+        """
+
+        # ==========================================
+        # 5. GRAVAÇÃO E EXECUÇÃO
+        # ==========================================
+        fd, path = tempfile.mkstemp(suffix=".html", prefix=f"ART_Total_Report_{self.name}_")
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(full_html)
+
+        print(f"   > Success! Opening interactive browser report: {path}")
+        webbrowser.open(f"file://{path}")
+
+
+    def _plot_summary(
+        self,
+        trades_df:         Optional[pl.DataFrame] = None,
+        model:             Optional[str] = None,
+        strat:             Optional[str] = None,
+        asset:             Optional[str] = None,
+        plot:              Literal["ps_id", "aggr_ps_id", "wf"] = "aggr_ps_id",
+        plot_column:       str = 'pnl',
+        load_from_storage: bool = True,
+    ):
+        """
+        Gera uma tabela visual estilo Excel com o resumo de performance.
+        Pode receber um DataFrame de trades direto (para uso no Portfolio) ou 
+        varrer o _results_map interno da classe.
+        """
+        import matplotlib.pyplot as plt
+        import polars as pl
+        import pandas as pd
+        from typing import Literal, Optional
+
+        # ==========================================
+        # 1. COLETA E NORMALIZAÇÃO DOS DADOS
+        # ==========================================
+        if trades_df is not None:
+            # Modo Compatibilidade (Portfolio ou DataFrame Injetado)
+            df_master = trades_df
+        else:
+            # Modo Varredura Interna (_results_map)
+            all_dfs = []
+            models_dict = self._results_map.get(self.name, {}).get("models", {})
+
+            for m_name, m_data in models_dict.items():
+                if model and m_name != model: continue
+
+                for s_name, s_data in m_data.get("strats", {}).items():
+                    if strat and s_name != strat: continue
+
+                    for a_name, a_data in s_data.get("assets", {}).items():
+                        if asset and a_name != asset: continue
+
+                        data_node = a_data.get("trades")
+
+                        if data_node is None or (isinstance(data_node, pl.DataFrame) and data_node.is_empty()):
                             if load_from_storage:
-                                df = storage.load_trades(
-                                    self.name,
-                                    model=m_name, strat=s_name,
-                                    asset=a_name, ps_name=p_name
-                                )
-                                if df.is_empty(): continue
+                                df = self.storage.load_trades(self.name, model=m_name, strat=s_name, asset=a_name)
+                                if df is None or df.is_empty(): continue
                             else:
                                 continue
                         else:
-                            df = pl.DataFrame(trades) if isinstance(trades, list) else trades
+                            df = pl.DataFrame(data_node) if isinstance(data_node, list) else data_node
                             if df.is_empty(): continue
 
-                        df = df.filter(pl.col("exit_datetime").is_not_null())
-                        if df.is_empty(): continue
+                        if "ps_id" not in df.columns:
+                            continue
 
-                        df_trades = df.select([
-                            pl.col("exit_datetime").str.to_datetime("%Y%m%d %H%M%S").alias("datetime"),
-                            pl.col("profit").cast(pl.Float64)
+                        # Injeta metadados para garantir que os IDs sejam únicos
+                        df_clean = df.with_columns([
+                            pl.lit(m_name).alias("model_name"),
+                            pl.lit(s_name).alias("strat_name"),
+                            pl.lit(a_name).alias("asset_name"),
+                            (pl.lit(f"{s_name}_{a_name}_") + pl.col("ps_id")).alias("curve_id")
                         ])
-                        df_trades = df_trades.group_by("datetime").agg(
-                            pl.col("profit").sum()
-                        ).sort("datetime")
+                        all_dfs.append(df_clean)
 
-                        serie_name = f"{s_name}_{a_name}_{p_name}" if mode == 'param_sets' else f"{s_name}_{a_name}"
-                        all_series.append(df_trades.rename({"profit": serie_name}))
+            if not all_dfs:
+                print("< No trade data found to generate summary.")
+                return
+            
+            df_master = pl.concat(all_dfs)
 
-        if not all_series:
-            print("< No trades found for plotting.")
+        # Identificação da coluna de valor (pnl, profit, etc)
+        val_col = plot_column
+        if val_col not in df_master.columns:
+            for fallback in ["profit", "pnl", "value", "equity"]:
+                if fallback in df_master.columns:
+                    val_col = fallback
+                    break
+            else:
+                print(f"< Error: Value column '{plot_column}' not found in trades DataFrame.")
+                return
+
+        # ==========================================
+        # 2. MOTOR DE CÁLCULO DE MÉTRICAS (POLARS)
+        # ==========================================
+        def _calc_metrics(df_slice: pl.DataFrame) -> dict:
+            if df_slice.is_empty():
+                return {"Trades": 0, "Net PnL": 0.0, "Win Rate %": 0.0, "Profit Factor": 0.0, "Avg Trade": 0.0}
+            
+            # Garante que é numérico
+            vals = df_slice[val_col].cast(pl.Float64)
+            
+            total_trades = len(vals)
+            net_pnl = vals.sum()
+            
+            wins = vals.filter(vals > 0)
+            losses = vals.filter(vals <= 0)
+            
+            gross_profit = wins.sum()
+            gross_loss = abs(losses.sum())
+            
+            win_rate = (len(wins) / total_trades * 100) if total_trades > 0 else 0.0
+            profit_factor = (gross_profit / gross_loss) if gross_loss != 0 else float('inf')
+            avg_trade = net_pnl / total_trades if total_trades > 0 else 0.0
+            
+            return {
+                "Trades": total_trades,
+                "Net PnL": round(net_pnl, 2),
+                "Win Rate %": round(win_rate, 2),
+                "Profit Factor": round(profit_factor, 2),
+                "Avg Trade": round(avg_trade, 2)
+            }
+
+        # ==========================================
+        # 3. CONSTRUÇÃO DA TABELA (PANDAS) POR MODO
+        # ==========================================
+        if plot == "aggr_ps_id":
+            # Modo Padrão: 3 colunas verticais (BOTH, LONG, SHORT)
+            
+            # Tenta descobrir qual coluna identifica a direção (lot_size ou volume)
+            dir_col = "lot_size" if "lot_size" in df_master.columns else ("volume" if "volume" in df_master.columns else None)
+            
+            metrics_both = _calc_metrics(df_master)
+            
+            if dir_col:
+                metrics_long = _calc_metrics(df_master.filter(pl.col(dir_col) > 0))
+                metrics_short = _calc_metrics(df_master.filter(pl.col(dir_col) < 0))
+            else:
+                metrics_long = {k: "N/A" for k in metrics_both.keys()}
+                metrics_short = {k: "N/A" for k in metrics_both.keys()}
+
+            # Monta o DataFrame visual
+            pdf_table = pd.DataFrame({
+                "BOTH": metrics_both,
+                "LONG": metrics_long,
+                "SHORT": metrics_short
+            })
+            # Transforma as chaves em uma coluna real para ficar bonito na tabela
+            pdf_table.reset_index(inplace=True)
+            pdf_table.rename(columns={"index": "Metric"}, inplace=True)
+
+        elif plot == "ps_id":
+            # Modo Detalhado: 1 linha por ps_id, colunas são as métricas
+            
+            id_col = "curve_id" if "curve_id" in df_master.columns else "ps_id"
+            unique_ids = df_master[id_col].unique().to_list()
+            
+            rows = []
+            for idx, uid in enumerate(unique_ids):
+                slice_df = df_master.filter(pl.col(id_col) == uid)
+                m = _calc_metrics(slice_df)
+                m["ID"] = uid #int(idx) # # Insere o ID como primeira coluna visualmente
+                rows.append(m)
+                
+            pdf_table = pd.DataFrame(rows)
+            # Reordena para ID ser a primeira coluna
+            cols = ["ID"] + [c for c in pdf_table.columns if c != "ID"]
+            pdf_table = pdf_table[cols]
+
+        elif plot == "wf":
+            print("< Walkforward summary plot not yet implemented.")
             return
 
-        combined = reduce(lambda a, b: a.join(b, on="datetime", how="full", coalesce=True), all_series)
-        combined = combined.sort("datetime").fill_null(0.0)
-        cum_cols = [c for c in combined.columns if c != "datetime"]
-        combined = combined.with_columns([pl.col(c).cum_sum().alias(c) for c in cum_cols])
+        # ==========================================
+        # 4. RENDERIZAÇÃO EM HTML NATIVO (Zero Lag)
+        # ==========================================
+        import tempfile
+        import webbrowser
+        import os
 
-        pdf = combined.to_pandas()
-        pdf.set_index("datetime", inplace=True)
-        plt.figure(figsize=(14, 6))
-        nums = 0
-        for col in pdf.columns:
-            nums += 1
-            plt.plot(pdf.index, pdf[col], label=col, linewidth=0.8)
-        plt.title(f"PnL Curves — {self.name}")
-        plt.xlabel("Date")
-        plt.ylabel("Cumulative PnL %")
-        print(f"   > Plotting {nums} curves")
-        if nums < 41: plt.legend(fontsize=2, ncol=4)
-        plt.tight_layout()
-        plt.show()
+        # O Pandas já tem uma função nativa para cuspir o DataFrame como HTML
+        html_table = pdf_table.to_html(index=False, border=0, classes="quant-table", justify="center")
+
+        title_str = f"Performance Summary — {getattr(self, 'name', 'Portfolio / Custom')}"
+
+        # Injeção de CSS para o Dark Quant Theme e Scroll Dinâmico
+        html_content = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title_str}</title>
+            <style>
+                body {{
+                    background-color: #050A12;
+                    color: #E2E8F0;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    padding: 30px;
+                    margin: 0;
+                }}
+                h2 {{
+                    text-align: center;
+                    font-weight: 600;
+                    letter-spacing: 1px;
+                    margin-bottom: 20px;
+                    color: #E2E8F0;
+                }}
+                .table-container {{
+                    max-height: 85vh; /* Habilita o scroll vertical se a tabela for longa */
+                    overflow-y: auto;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+                    border: 1px solid #1A2E4C;
+                }}
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: {'11px' if plot == 'ps_id' else '14px'};
+                }}
+                th {{
+                    background-color: #1B365D;
+                    color: #E2E8F0;
+                    padding: 12px;
+                    position: sticky; /* Fixa o cabeçalho no topo durante o scroll */
+                    top: 0;
+                    z-index: 10;
+                    border-bottom: 2px solid #050A12;
+                }}
+                td {{
+                    padding: 10px;
+                    border-bottom: 1px solid #1A2E4C;
+                    text-align: center;
+                }}
+                /* Zebra Striping: Cores alternadas nas linhas */
+                tr:nth-child(even) {{ background-color: #0F2036; }}
+                tr:nth-child(odd)  {{ background-color: #0C1929; }}
+                
+                /* Efeito Hover: Destaca a linha inteira ao passar o mouse */
+                tr:hover {{ 
+                    background-color: #1e3a5f; 
+                    cursor: default; 
+                }}
+                
+                /* Deixa a primeira coluna (ID ou Métrica) em negrito e alinhada à esquerda */
+                td:first-child {{ 
+                    font-weight: bold; 
+                    text-align: left; 
+                    padding-left: 20px; 
+                }}
+            </style>
+        </head>
+        <body>
+            <h2>{title_str}</h2>
+            <div class="table-container">
+                {html_table}
+            </div>
+        </body>
+        </html>
+        """
+
+        # Cria um arquivo temporário seguro no seu sistema
+        fd, path = tempfile.mkstemp(suffix=".html", prefix="ART_summary_")
+        
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
+        print(f"   > Opening HTML report natively: {path}")
+        
+        # Abre o arquivo automaticamente no Chrome/Edge/Firefox
+        webbrowser.open(f"file://{path}")
+    
+    def _plot_pnl_curves(
+        self,
+        model:             Optional[str] = None,
+        strat:             Optional[str] = None,
+        asset:             Optional[str] = None,
+        models_dict        = None,
+        plot_timeline:     bool = True,
+        plot_what:         Literal['plot_all_models_aggr', 'plot_all_models', 'plot_each_models'] = 'plot_each_models',
+        plot_column:       str = 'pnl',
+        load_from_storage: bool = True,
+        cumulative:        bool = True,
+    ):
+        """
+        Plota curvas de performance navegando pelo mapa interno '_results_map'.
+        O DataFrame de cada ativo já contém a coluna 'ps_id'.
+        """
+        import matplotlib.pyplot as plt
+        import polars as pl
+        from typing import Literal, Optional
+
+        all_dfs = []
+        if not models_dict:
+            models_dict = self._results_map.get(self.name, {}).get("models", {})
+
+        # 1. Navegação na árvore estruturada até o nível de Ativo
+        for m_name, m_data in models_dict.items():
+            if model and m_name != model: 
+                continue
+
+            for s_name, s_data in m_data.get("strats", {}).items():
+                if strat and s_name != strat: 
+                    continue
+
+                for a_name, a_data in s_data.get("assets", {}).items():
+                    if asset and a_name != asset: 
+                        continue
+
+                    # Define a chave correta baseada no plot_timeline
+                    key_type = "timeline" if plot_timeline else "trades"
+                    data_node = a_data.get(key_type)
+
+                    # Carrega do storage se a memória estiver vazia
+                    if data_node is None or (isinstance(data_node, pl.DataFrame) and data_node.is_empty()):
+                        if load_from_storage:
+                            if plot_timeline:
+                                load_func = getattr(self.storage, 'load_timeline', self.storage.load_trades)
+                                df = load_func(self.name, model=m_name, strat=s_name, asset=a_name)
+                            else:
+                                df = self.storage.load_trades(self.name, model=m_name, strat=s_name, asset=a_name)
+                            
+                            if df is None or df.is_empty(): 
+                                continue
+                        else:
+                            continue
+                    else:
+                        df = pl.DataFrame(data_node) if isinstance(data_node, list) else data_node
+                        if df.is_empty(): 
+                            continue
+
+                    # Identificação dinâmica da coluna de Datetime
+                    dt_col = "datetime" if plot_timeline else ("exit_datetime" if "exit_datetime" in df.columns else "datetime")
+                    if dt_col not in df.columns:
+                        dt_cols = [c for c, t in df.schema.items() if t in (pl.Datetime, pl.Date)]
+                        if dt_cols: dt_col = dt_cols[0]
+                        else: continue
+
+                    # Normalização caso a data venha como String (comum em logs do MT5)
+                    if df.schema[dt_col] == pl.String:
+                        df = df.with_columns(pl.col(dt_col).str.to_datetime("%Y%m%d %H%M%S", strict=False))
+
+                    df = df.filter(pl.col(dt_col).is_not_null())
+                    if df.is_empty(): 
+                        continue
+
+                    # Identificação dinâmica da coluna de valor/PnL
+                    val_col = plot_column
+                    if val_col not in df.columns:
+                        for fallback in ["profit", "pnl", "equity", "value"]:
+                            if fallback in df.columns:
+                                val_col = fallback
+                                break
+                        else:
+                            continue
+
+                    # Garante que a coluna ps_id existe no DataFrame
+                    if "ps_id" not in df.columns:
+                        continue
+
+                    # Cria um identificador único para a curva combinando estratégia e ativo ao ps_id
+                    # Isso evita colisões se múltiplos ativos possuírem param_sets com nomes idênticos
+                    df_clean = df.select([
+                        pl.col(dt_col).alias("datetime"),
+                        pl.col(val_col).cast(pl.Float64).alias("value"),
+                        pl.col("ps_id")
+                    ]).with_columns([
+                        pl.lit(m_name).alias("model_name"),
+                        (pl.lit(f"{s_name}_{a_name}_") + pl.col("ps_id")).alias("curve_id")
+                    ])
+
+                    all_dfs.append(df_clean)
+
+        if not all_dfs:
+            print(f"< No data found for plotting (plot_timeline={plot_timeline}).")
+            return
+
+        # Consolida todos os dados de todos os ativos em um único DataFrame plano master
+        df_master = pl.concat(all_dfs)
+
+        # Função auxiliar de renderização gráfica
+        def _render_chart(df_plot_data: pl.DataFrame, target_cols: list, title_str: str):
+            pdf = df_plot_data.to_pandas()
+            pdf.set_index("datetime", inplace=True)
+
+            # 🎨 Definição da Paleta Azul Petróleo - Preto
+            bg_figure  = "#050A12"  # Preto com sutil tom azulado (Fundo externo)
+            bg_axes    = "#0C1929"  # Azul Petróleo Escuro (Fundo do gráfico)
+            text_color = "#E2E8F0"  # Branco acinzentado (Legível e confortável)
+            grid_color = "#1B365D"  # Azul petróleo médio para as linhas de grade
+            spine_color= "#1A2E4C"  # Cor das bordas do gráfico
+
+            # Inicializa a figura aplicando a cor de fundo externa
+            fig, ax = plt.subplots(figsize=(14, 6), facecolor=bg_figure)
+            ax.set_facecolor(bg_axes) # Aplica o azul petróleo no fundo interno
+            
+            num_curves = len(target_cols)
+            
+            # Plota as curvas de PnL
+            for col in pdf.columns:
+                ax.plot(pdf.index, pdf[col], label=col, linewidth=0.9)
+
+            # Customização de Títulos e Labels (Injetando as cores do tema)
+            ax.set_title(title_str, color=text_color, fontsize=12, fontweight='bold', pad=15)
+            ax.set_xlabel("Date", color=text_color, fontsize=10)
+            ax.set_ylabel(
+                f"Value ({plot_column if plot_column in df_master.columns else 'Result'})", 
+                color=text_color, 
+                fontsize=10
+            )
+
+            # Altera a cor dos números (ticks) dos eixos X e Y
+            ax.tick_params(colors=text_color, labelsize=9)
+            
+            # Grade estilizada para não poluir o visual escuro
+            ax.grid(True, linestyle="--", alpha=0.5, color=grid_color)
+
+            # Ajusta as bordas (spines) para casar com o tom do gráfico
+            for spine in ax.spines.values():
+                spine.set_color(spine_color)
+
+            print(f"   > Plotting {num_curves} curves for: '{title_str}'")
+
+            # Customização da Legenda (Fundo azul petróleo + texto claro)
+            if num_curves < 41:
+                leg = ax.legend(
+                    fontsize=7, 
+                    ncol=4, 
+                    loc="upper left", 
+                    facecolor=bg_axes,      # Fundo da legenda igual ao do gráfico
+                    edgecolor=grid_color,   # Borda combinando com a grade
+                )
+                # Força os textos da legenda a ficarem claros
+                for text in leg.get_texts():
+                    text.set_color(text_color)
+
+            plt.tight_layout()
+            plt.show()
+
+        # 2. Lógica de Agrupamento e Pivotação Baseada no 'plot_what'
+        
+        if plot_what == 'plot_all_models_aggr':
+            # 1 curva por MODELO (Soma de todos os ps_ids de cada modelo por datetime)
+            df_grouped = df_master.group_by(["datetime", "model_name"]).agg(pl.col("value").sum())
+            df_pivoted = df_grouped.pivot(
+                on="model_name", index="datetime", values="value", aggregate_function="sum"
+            ).sort("datetime").fill_null(0.0)
+
+            curve_cols = [c for c in df_pivoted.columns if c != "datetime"]
+            if cumulative:
+                df_pivoted = df_pivoted.with_columns([pl.col(c).cum_sum() for c in curve_cols])
+
+            _render_chart(df_pivoted, curve_cols, f"All Models Aggregated — {self.name}")
+
+        elif plot_what == 'plot_all_models':
+            # Todos os modelos no mesmo gráfico, mantendo todas as curvas (ps_ids) individuais
+            df_grouped = df_master.group_by(["datetime", "curve_id"]).agg(pl.col("value").sum())
+            df_pivoted = df_grouped.pivot(
+                on="curve_id", index="datetime", values="value", aggregate_function="sum"
+            ).sort("datetime").fill_null(0.0)
+
+            curve_cols = [c for c in df_pivoted.columns if c != "datetime"]
+            if cumulative:
+                df_pivoted = df_pivoted.with_columns([pl.col(c).cum_sum() for c in curve_cols])
+
+            _render_chart(df_pivoted, curve_cols, f"All Models & Param Sets — {self.name}")
+
+        elif plot_what == 'plot_each_models':
+            # Um gráfico para cada modelo separadamente (Sequencial ao fechar a janela)
+            unique_models = df_master["model_name"].unique().to_list()
+            
+            for m_name in unique_models:
+                df_sub = df_master.filter(pl.col("model_name") == m_name)
+                df_grouped = df_sub.group_by(["datetime", "curve_id"]).agg(pl.col("value").sum())
+                df_pivoted = df_grouped.pivot(
+                    on="curve_id", index="datetime", values="value", aggregate_function="sum"
+                ).sort("datetime").fill_null(0.0)
+
+                curve_cols = [c for c in df_pivoted.columns if c != "datetime"]
+                if cumulative:
+                    df_pivoted = df_pivoted.with_columns([pl.col(c).cum_sum() for c in curve_cols])
+
+                _render_chart(df_pivoted, curve_cols, f"Model: {m_name} — {self.name}")
 
     def _plot_wfm(
         self,
@@ -1221,10 +1862,6 @@ class Operation(BaseClass):
         import polars as pl
         from pathlib import Path
         from Walkforward import Walkforward
-        from Storage import Storage
-
-        # Instancia o storage no escopo principal para reaproveitamento nas funções internas
-        storage = Storage(base_path="Backend/results")
 
         # ── CASO 1: SE OS RESULTADOS JÁ VIERAM DIRETAMENTE DA MEMÓRIA ─────────
         if wf_results is not None:
@@ -1263,7 +1900,7 @@ class Operation(BaseClass):
             try:
                 # Tenta utilizar o carregador v2; se não disponível, aplica fallback para load_pnl_matrix
                 #if hasattr(storage, 'load_walkforward_matrix_v2'):
-                data = storage.load_walkforward_matrix_v2(key)
+                data = self.storage.load_walkforward_matrix_v2(key)
                 #else:
                 #    res_dict = storage.load_pnl_matrix(self.name, model, strat, asset, kind="pnl")
                 #    data = res_dict.get(f"{model}/{strat}/{asset}", None)
@@ -1297,7 +1934,7 @@ class Operation(BaseClass):
             return
 
         # ── CASO 3: TODOS PARAMS NONE -> VARREDURA VIA OPERAÇÃO METADATA ─────
-        meta = storage.load_operation_meta(self.name)
+        meta = self.storage.load_operation_meta(self.name)
         
         if not meta or 'models' not in meta:
             print(f"      > [WFM Plot] Metadado indisponível para a operação: {self.name}")
@@ -1311,9 +1948,6 @@ class Operation(BaseClass):
     # || ===================================================================== || Walkforward || ===================================================================== ||
 
     def _run_walkforward(self, load_from_storage: bool = True, base_path: str="Backend/results"):
-        from Storage import Storage
-        storage = Storage(base_path=base_path)
-
         models = self._get_all_models()
         
         for m_name, m_obj in models.items():
@@ -1330,7 +1964,7 @@ class Operation(BaseClass):
                     # ── Data  ─────────────────────────────
                 
                     if load_from_storage:
-                        data = storage.load(self.name, m_name, s_name, a_name)
+                        data = self.storage.load(self.name, m_name, s_name, a_name)
                         timeline_df = data.get("timeline")
                     else:
                         asset_map = self._results_map[self.name]["models"][m_name]["strats"][s_name]["assets"][a_name]
@@ -1341,7 +1975,7 @@ class Operation(BaseClass):
                         continue
        
                     wfm_engine = s_obj.operation
-                    pnl_matrix = storage.load_wf_prep(timeline_df, price=wfm_engine.price)
+                    pnl_matrix = self.storage.load_wf_prep(timeline_df, price=wfm_engine.price)
            
 
                     if pnl_matrix is None or pnl_matrix.is_empty():
@@ -1367,7 +2001,7 @@ class Operation(BaseClass):
                             print(f"      < [Operation._run_walkforward]: No OOS data found in config {config_key}, skipping save.")
                             continue
                         
-                        storage.save_walkforward(
+                        self.storage.save_walkforward(
                             op=self.name, 
                             model=m_name, 
                             strat=s_name, 
@@ -1407,7 +2041,7 @@ class Operation(BaseClass):
 
 
 
-    # - Corrigir bugs no Walkforward (GEMINI)
+    # - XXX Corrigir bugs no Walkforward (GEMINI)
     # - Criar novo método validado em Metrics.py para calcular para um DataFrame de uso
     # - Modificar o _ensure_results para usar esse método (acima)
     # - Adicionar cache em Portfolio para manter o timeline_df, wf_map e wf_results caso não tenha
@@ -1434,8 +2068,10 @@ class Operation(BaseClass):
         print(f"\n>>> IV - Operation Analysis and Metrics <<<")
         self._run_walkforward(True)
 
-        #self._report_pnl_summary()
+        #self._plot_summary(plot='aggr_ps_id')
         #self._plot_pnl_curves()
+        self._init_data()
+        self._plot_summary_total()
         self._plot_wfm()
 
         # V - Portfolio Simulation
@@ -1446,10 +2082,10 @@ class Operation(BaseClass):
 
 # || ======================================================================================================================================================================= ||
 
-# 1. First days of the month seasonality
+# XXX 30. First days of the month seasonality
 # 2. RSI overnight
-# 3. VWAP opening day scalp
-# XXX 4. Thursday seasonality
+# XXX 21. VWAP opening day scalp
+# XXX 20. Thursday seasonality
 # 5. Prior week's breakout
 # 6. Grach prior day's breakout
 # 7. Afternoon pullback
@@ -1479,8 +2115,8 @@ if __name__ == "__main__":
 
     AT15_model_execution_tf = 'M15'
     AT20_model_execution_tf = 'M10'
-    AT30_model_execution_tf = 'DA'
-    AT2_model_execution_tf = 'M10'
+    AT30_model_execution_tf = 'D'
+    AT21_model_execution_tf = 'M15'
 
     strat_param_sets = {
         'AT15': { 
@@ -1527,8 +2163,8 @@ if __name__ == "__main__":
             'exit_nb_long': range(1, 14+1, 1),
             'exit_nb_short': range(0, 0+1, 7),
         },
-        'AT2': { 
-            'execution_tf': AT20_model_execution_tf,
+        'AT21': { 
+            'execution_tf': AT21_model_execution_tf,
             'backtest_start_idx': 21,
             'limit_order_exclusion_after_period': 1,
             'limit_order_perc_treshold_for_order_diff': 0.03,
@@ -1538,11 +2174,16 @@ if __name__ == "__main__":
             'exit_nb_only_if_pnl_is': 0, 
             'exit_nb_long': range(0, 0+1, 7),
             'exit_nb_short': range(0, 0+1, 7),
+
+            'vwap_range_pts': range(250, 1000+1, 250),
+            'sl_pts': range(200, 1000+1, 200),
+            'tp_pts': range(400, 2000+1, 400),
         },
     }
 
     from MA import MA # type: ignore
     from VAR import VAR # type: ignore
+    from VWAP import VWAP # type: ignore
     from ATR_SL import ATR_SL # type: ignore
     from RawData import RawData # type: ignore
     from PriorCote import PriorCote # type: ignore
@@ -1560,7 +2201,7 @@ if __name__ == "__main__":
         # 'open_day': DayOpen(assertsset=None, timeframe=AT15_model_execution_tf),
     }
     AT20_indicators = None
-    AT2_indicators = None #{ 'rsi': RSI(asset=None, timeframe=AT20_model_execution_tf, window=2),}
+    AT21_indicators = { 'vwap': VWAP(asset=None, timeframe=AT21_model_execution_tf), }
     AT30_indicators = None
 
     def AT15_Signals(df: pl.DataFrame, params: dict) -> dict:
@@ -1765,8 +2406,11 @@ if __name__ == "__main__":
     def AT30_Signals(df: pl.DataFrame, params: dict) -> dict: 
         datetime = df.select(pl.col("datetime")).to_series()
         mes_mudou = datetime.dt.month() != datetime.shift(1).dt.month()
+        #close = df.select(pl.col("close")).to_series()
 
-        entry_long  = mes_mudou
+        #ma = df.select(pl.col("close").rolling_max(window_size=params["param1"])).to_series()
+
+        entry_long  = mes_mudou #& (close > ma)
         entry_short = None #proximo_eh_ultimo & 
 
         exit_tf_long  = None #close > high.shift(1) 
@@ -1853,47 +2497,44 @@ if __name__ == "__main__":
             '__sig_key_params': []
         }
 
-    def AT2_Signals(df: pl.DataFrame, params: dict) -> dict:
+    def AT21_Signals(df: pl.DataFrame, params: dict) -> dict:
         # Can use columns df['high'] or str 'high' to point
 
         close = df.select(pl.col("close")).to_series()
-        atr = df.select(pl.col("atr")).to_series()
-        ema = df.select(pl.col("ema")).to_series()
+        open = df.select(pl.col("open")).to_series()
+        vwap = df.select(pl.col("vwap")).to_series()
         datetime = df.select(pl.col("datetime")).to_series()
-        dia_mudou = datetime.shift(-1).dt.date() != datetime.dt.date()
-        proximo_eh_ultimo = dia_mudou.shift(-1).fill_null(False)
-
-        # Gets prior day's daily data with intraday data
+        dia_novo = datetime.shift(1).dt.date() != datetime.dt.date()
 
         entry_long = (
-            proximo_eh_ultimo & 
-            (close.shift(1) != highest.shift(1)) & 
-            (close > ema)
+            dia_novo & 
+            (close > open) &
+            (close.shift(1) < vwap.shift(1)-params["vwap_range_pts"]) 
         )
         entry_short = (
-            proximo_eh_ultimo & 
-            (close.shift(1) != lowest.shift(1)) & 
-            (close < ema)
+            dia_novo & 
+            (close < open) &
+            (close.shift(1) > vwap.shift(1)+params["vwap_range_pts"]) 
         )
 
         exit_tf_long  = None
         exit_tf_short = None
 
         # Preço da ordem pendente
-        limit_long_price  = df['open'] 
-        limit_short_price = df['open'] 
+        limit_long_price  = df['high'] 
+        limit_short_price = df['low'] 
 
         # SL Distâncias (definidas ANTES de serem usadas)
-        sl_long_price  = None #limit_long_price - atr * params['sl_perc'] 
-        sl_short_price = None #limit_long_price + atr * params['sl_perc'] 
+        sl_long_price  = limit_long_price - params['sl_pts'] # atr * params['sl_perc'] 
+        sl_short_price = limit_long_price + params['sl_pts'] # atr * params['sl_perc'] 
 
         # TP Distâncias (definidas ANTES de serem usadas)
-        tp_long_price  = None #limit_long_price + atr  * params['tp_perc']
-        tp_short_price = None #limit_long_price - atr * params['tp_perc']
+        tp_long_price  = limit_long_price + params['tp_pts'] # atr  * params['tp_perc']
+        tp_short_price = limit_long_price - params['tp_pts'] # atr * params['tp_perc']
 
         # Trailing
-        trail_long_dist  = atr * params['atr_tr_mult'] #sl_long_dist  * 0.5
-        trail_short_dist = atr * params['atr_tr_mult'] #sl_short_dist * 0.5
+        trail_long_dist  = None #atr * params['atr_tr_mult'] #sl_long_dist  * 0.5
+        trail_short_dist = None #atr * params['atr_tr_mult'] #sl_short_dist * 0.5
 
         # BE: distância de 1R para ativar (C++ faz: price >= entry + be_dist)
         be_long_dist  = None #sl_long_dist  * 1.0
@@ -1957,7 +2598,7 @@ if __name__ == "__main__":
             'compound_fract_series': compound_fract_series,
             'dist_signal_ref': dist_signal_ref,
 
-            '__sig_key_params': ['atr_tr_mult', 'param1', 'param2', 'param3']
+            '__sig_key_params': ['vwap_range_pts', 'sl_pts', 'tp_pts']
         }  
     
 
@@ -2042,9 +2683,9 @@ if __name__ == "__main__":
             signals=AT30_Signals
         )
     )
-    AT2 = Strat(
+    AT21 = Strat(
         StratParams(
-            name="AT30",
+            name="AT21",
             operation=Walkforward(
                 wfm_configs=[[is_len, os_len, os_len] for is_len, os_len in itertools.product([1, 2, 4, 12, 16, 24, 36, 48], [1, 2, 4, 12, 16, 24, 36, 48])], #([3000], [3000])], #
                 wfm_is_always_higher_or_equal_to_oos=True, add_trades_matrix_updates=True,
@@ -2054,15 +2695,15 @@ if __name__ == "__main__":
                 wf_selection_logic='highest_stable', wf_returns_mode='selected'
             ),
             execution_settings=ExecutionSettings(hedge=False, strat_num_pos=[1,1], strat_max_num_pos_per_day=[999,999],
-                order_type='market', limit_order_base_calc_ref_price='open', 
+                order_type='limit', limit_order_base_calc_ref_price='open', 
                 slippage=0.0, commission=0.0, # * Tick 
                 day_trade=True, timeTI=None, timeEF=None, timeTF=None, next_index_day_close=False, # "0:00"
                 day_of_week_close_and_stop_trade=[], timeExcludeHours=None, dateExcludeTradingDays=None, dateExcludeMonths=None, 
                 fill_method='ffill', fillna=0, trade_pnl_resolution='daily', 
                 backtest_mode="ohlc", convert_sltp_to_pct=False, print_logs=False),
-            params=strat_param_sets['AT2'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
-            indicators={},
-            signals=AT2_Signals
+            params=strat_param_sets['AT21'], # SE signal_params então iterar apenas nos parametros do signal_params para criar sets, else usa apenas sets do indicadores, else sem sets
+            indicators=AT21_indicators,
+            signals=AT21_Signals
         )
     )
 
@@ -2092,17 +2733,17 @@ if __name__ == "__main__":
     )
     model_4 = Model(
         ModelParams(
-            name='Bova RSI Overnight',
-            assets=["BOVA11"], # CURR_ASSET refers to this one in strat_support_assets
-            strat={'AT2': AT2},
-            execution_timeframe=AT2_model_execution_tf,
+            name='Opening Range VWAP',
+            assets=["WIN$"], # CURR_ASSET refers to this one in strat_support_assets
+            strat={'AT21': AT21},
+            execution_timeframe=AT21_model_execution_tf,
         )
     )
 
     operation = Operation(
         OperationParams(
             name='operation_test',
-            data=[model_2], # model_1, , model_3, model_4
+            data=[model_4], # model_1, model_2, model_3, 
             assets=global_assets,
             #operation_timeframe=AT15_model_execution_tf, # NOTE maybe unnecessary, remove later
             date_start=None,
@@ -2134,7 +2775,9 @@ if __name__ == "__main__":
 # XXX - Modernize Classes
 # XXX - Adicionar novo Backtester para Close-Close, Open-Open.
 
+# - Corrigir, AT30 parece indiferente para exit by number of bars
 # - Corrigir registry.json dos Assets b3/futures e b3/stock estão misturados
+# - _build_timeline e Operation adicionar tratamento para caso sem trades
 # - Colocar slippage está causando erros ao executar o walkforward por conta da data? (AT15 com comission=0.001)
 # - Bug with date_start in Operation and calculating indicators enside entry_signal
 

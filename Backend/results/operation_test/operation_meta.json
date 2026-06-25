@@ -2,12 +2,12 @@
     "date_start": null,
     "date_end": null,
     "models": {
-        "WIN Day Sazonality": {
-            "execution_timeframe": "M10",
+        "Opening Range VWAP": {
+            "execution_timeframe": "M15",
             "date_start": null,
             "date_end": null,
             "strats": {
-                "AT20": {
+                "AT21": {
                     "assets": [
                         "WIN$"
                     ]
